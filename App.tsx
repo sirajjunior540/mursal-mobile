@@ -14,47 +14,45 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 import { DriverProvider } from './src/contexts/DriverContext';
 import { OrderProvider } from './src/contexts/OrderContext';
+import ErrorBoundary from './src/components/ErrorBoundary';
 import { RootStackParamList, TabParamList } from './src/types';
+import './src/utils/DevUtils'; // Import for development utilities
 import LoginScreen from './src/screens/auth/LoginScreen';
+import DashboardScreen from './src/screens/DashboardScreen';
+import OrderDetailsScreen from './src/screens/OrderDetailsScreen';
+import HistoryScreen from './src/screens/HistoryScreen';
+import ProfileScreen from './src/screens/ProfileScreen';
+import Ionicons from 'react-native-vector-icons/Ionicons';
+import { COLORS } from './src/constants';
 
 // Create navigation stacks
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<TabParamList>();
 
-// Placeholder screens
-
-const DashboardScreen = () => (
-  <View style={styles.screenContainer}>
-    <Text style={styles.title}>Dashboard</Text>
-    <Text>Driver dashboard with active orders will be implemented here</Text>
-  </View>
-);
-
-const HistoryScreen = () => (
-  <View style={styles.screenContainer}>
-    <Text style={styles.title}>Order History</Text>
-    <Text>Order history will be displayed here</Text>
-  </View>
-);
-
-const ProfileScreen = () => (
-  <View style={styles.screenContainer}>
-    <Text style={styles.title}>Driver Profile</Text>
-    <Text>Driver profile and settings will be implemented here</Text>
-  </View>
-);
-
-const OrderDetailsScreen = () => (
-  <View style={styles.screenContainer}>
-    <Text style={styles.title}>Order Details</Text>
-    <Text>Order details will be displayed here</Text>
-  </View>
-);
 
 // Main tab navigator
 const MainTabs = () => {
   return (
-    <Tab.Navigator>
+    <Tab.Navigator
+      screenOptions={({ route }) => ({
+        headerShown: false,
+        tabBarIcon: ({ focused, color, size }) => {
+          let iconName: keyof typeof Ionicons.glyphMap = 'home';
+
+          if (route.name === 'Dashboard') {
+            iconName = focused ? 'home' : 'home-outline';
+          } else if (route.name === 'History') {
+            iconName = focused ? 'time' : 'time-outline';
+          } else if (route.name === 'Profile') {
+            iconName = focused ? 'person' : 'person-outline';
+          }
+
+          return <Ionicons name={iconName} size={size} color={color} />;
+        },
+        tabBarActiveTintColor: COLORS.primary.default,
+        tabBarInactiveTintColor: COLORS.text.secondary,
+      })}
+    >
       <Tab.Screen name="Dashboard" component={DashboardScreen} />
       <Tab.Screen name="History" component={HistoryScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
@@ -64,7 +62,10 @@ const MainTabs = () => {
 
 // Main navigation container with authentication flow
 const AppNavigator = () => {
-  const { isLoading, isLoggedIn } = useAuth();
+  const { isLoading, isLoggedIn, user } = useAuth();
+
+  // Debug authentication state
+  console.log('Auth State:', { isLoading, isLoggedIn, username: user?.username });
 
   if (isLoading) {
     return (
@@ -74,6 +75,8 @@ const AppNavigator = () => {
       </View>
     );
   }
+
+  console.log('Rendering navigation - isLoggedIn:', isLoggedIn);
 
   return (
     <NavigationContainer>
@@ -100,16 +103,18 @@ function App() {
   const isDarkMode = useColorScheme() === 'dark';
 
   return (
-    <SafeAreaProvider>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-      <AuthProvider>
-        <DriverProvider>
-          <OrderProvider>
-            <AppNavigator />
-          </OrderProvider>
-        </DriverProvider>
-      </AuthProvider>
-    </SafeAreaProvider>
+    <ErrorBoundary>
+      <SafeAreaProvider>
+        <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
+        <AuthProvider>
+          <DriverProvider>
+            <OrderProvider>
+              <AppNavigator />
+            </OrderProvider>
+          </DriverProvider>
+        </AuthProvider>
+      </SafeAreaProvider>
+    </ErrorBoundary>
   );
 }
 
@@ -125,17 +130,6 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 10,
     fontSize: 16,
-  },
-  screenContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 20,
   },
 });
 

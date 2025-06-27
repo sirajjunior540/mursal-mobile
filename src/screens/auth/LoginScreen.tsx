@@ -16,24 +16,22 @@ import { Picker } from '@react-native-picker/picker';
 
 const LoginScreen = () => {
   const { login, isLoading, error } = useAuth();
-  const [email, setEmail] = useState('driver@test.com');
-  const [password, setPassword] = useState('password');
-  const [selectedTenant, setSelectedTenant] = useState('default');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [selectedTenant, setSelectedTenant] = useState('sirajjunior');
 
   const tenants = [
-    { id: 'default', name: 'Default Restaurant' },
-    { id: 'restaurant1', name: 'Restaurant One' },
-    { id: 'restaurant2', name: 'Restaurant Two' },
+    { id: 'sirajjunior', name: 'Siraj Junior Restaurant' },
   ];
 
   const handleLogin = async () => {
-    if (!email || !password) {
-      Alert.alert('Error', 'Please enter email and password');
+    if (!username || !password) {
+      Alert.alert('Error', 'Please enter username and password');
       return;
     }
 
     try {
-      await login(email, password, selectedTenant);
+      await login(username, password, selectedTenant);
     } catch (err) {
       console.error('Login error:', err);
       // Error is handled by the context and displayed below
@@ -70,13 +68,12 @@ const LoginScreen = () => {
           </View>
 
           <View style={styles.inputContainer}>
-            <Text style={styles.label}>Email</Text>
+            <Text style={styles.label}>Username</Text>
             <TextInput
               style={styles.input}
-              value={email}
-              onChangeText={setEmail}
-              placeholder="Enter your email"
-              keyboardType="email-address"
+              value={username}
+              onChangeText={setUsername}
+              placeholder="Enter your username"
               autoCapitalize="none"
               editable={!isLoading}
             />
@@ -109,7 +106,7 @@ const LoginScreen = () => {
           </TouchableOpacity>
 
           <Text style={styles.helpText}>
-            Use driver@test.com / password for testing
+            Enter your driver credentials
           </Text>
         </View>
       </ScrollView>

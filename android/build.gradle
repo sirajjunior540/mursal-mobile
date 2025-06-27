@@ -19,3 +19,12 @@ buildscript {
 }
 
 apply plugin: "com.facebook.react.rootproject"
+
+allprojects {
+    tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).all {
+        kotlinOptions {
+            freeCompilerArgs += ["-Xjvm-default=all", "-Xopt-in=kotlin.RequiresOptIn"]
+            allWarningsAsErrors = false
+        }
+    }
+}

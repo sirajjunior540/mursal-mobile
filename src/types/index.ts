@@ -10,6 +10,7 @@ export interface Tenant {
 
 export interface AuthUser {
   id: string;
+  username: string;
   email: string;
   firstName: string;
   lastName: string;
@@ -33,6 +34,7 @@ export interface Driver {
     model: string;
     licensePlate: string;
   };
+  distance?: number; // Distance in kilometers for nearby drivers
 }
 
 export interface DriverBalance {
@@ -76,11 +78,16 @@ export interface Address {
 
 export type OrderStatus = 
   | 'pending' 
-  | 'accepted' 
+  | 'confirmed'
+  | 'preparing'
+  | 'ready'
+  | 'assigned'
   | 'picked_up' 
   | 'in_transit' 
   | 'delivered' 
-  | 'cancelled';
+  | 'cancelled'
+  | 'returned'
+  | 'failed';
 
 export type PaymentMethod = 'cash' | 'card' | 'digital_wallet';
 
@@ -106,6 +113,10 @@ export interface Order {
   deliveredTime?: Date;
   tenantId?: string;
   tenant?: Tenant;
+  // Delivery-specific fields when order comes from delivery endpoint
+  deliveryId?: string;
+  driverId?: string;
+  driverName?: string;
 }
 
 export interface BalanceTransaction {
@@ -164,7 +175,7 @@ export interface ApiResponse<T> {
 }
 
 export interface LoginRequest {
-  email: string;
+  username: string;
   password: string;
   tenantId?: string;
 }

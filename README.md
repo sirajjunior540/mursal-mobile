@@ -84,7 +84,63 @@ You've successfully run and modified your React Native App. :partying_face:
 
 # Troubleshooting
 
-If you're having issues getting the above steps to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
+## Missing Packages
+
+### @react-native-picker/picker
+
+If you encounter an error about the `@react-native-picker/picker` package not being found, you need to install the project dependencies:
+
+```sh
+# Using npm
+npm install
+
+# OR using Yarn
+yarn install
+```
+
+This package is required for the tenant selection dropdown in the login screen.
+
+### @expo/vector-icons
+
+If you encounter an error about the `@expo/vector-icons` package not being found, you need to install the project dependencies:
+
+```sh
+# Using npm
+npm install
+
+# OR using Yarn
+yarn install
+```
+
+This package is required for the icons in the bottom tab navigation.
+
+### expo-font
+
+If you encounter an error about the `expo-font` package not being found, you need to install the project dependencies:
+
+```sh
+# Using npm
+npm install
+
+# OR using Yarn
+yarn install
+```
+
+This package is required by @expo/vector-icons for font loading functionality.
+
+If you're still encountering issues after installing the dependencies, try cleaning the Metro bundler cache and rebuilding the project:
+
+```sh
+# Clean Metro bundler cache
+npx react-native start --reset-cache
+
+# Then in another terminal, rebuild the app
+npm run android
+# OR
+npm run ios
+```
+
+If you're having other issues getting the above steps to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
 
 # Learn More
 

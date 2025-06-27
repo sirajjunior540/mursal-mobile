@@ -98,11 +98,15 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({ children }) => {
   const [state, dispatch] = useReducer(orderReducer, initialState);
   const { isLoggedIn } = useAuth();
 
-  // Load cached data on mount
+  // Load cached data on mount only if authenticated
   useEffect(() => {
     if (isLoggedIn) {
+      console.log('User is logged in, loading cached orders and refreshing');
       loadCachedData();
+      // Also try to refresh from API
+      refreshOrders();
     } else {
+      console.log('User not logged in, clearing order data');
       dispatch({ type: 'CLEAR_DATA' });
     }
   }, [isLoggedIn]);
@@ -139,22 +143,30 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({ children }) => {
 
   const refreshOrders = async (): Promise<void> => {
     if (state.isLoading) return;
+    if (!isLoggedIn) {
+      console.log('Cannot refresh orders: user not logged in');
+      return;
+    }
 
+    console.log('Refreshing orders from API...');
     dispatch({ type: 'SET_LOADING', payload: true });
 
     try {
       const response = await apiService.getActiveOrders();
 
       if (response.success && response.data) {
+        console.log('Orders fetched successfully:', response.data.length, 'orders');
         dispatch({ type: 'SET_ORDERS', payload: response.data });
         
         // Cache the data
         await Storage.setItem(STORAGE_KEYS.ACTIVE_ORDERS, response.data);
       } else {
+        console.error('Failed to fetch orders:', response.error);
         throw new Error(response.error || 'Failed to fetch orders');
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to fetch orders';
+      console.error('Order refresh error:', message);
       dispatch({ type: 'SET_ERROR', payload: message });
     }
   };

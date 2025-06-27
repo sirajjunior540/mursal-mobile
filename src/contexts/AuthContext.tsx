@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
 import { AuthContextType, AuthUser, Driver, Tenant } from '../types';
 import { STORAGE_KEYS, TENANT_CONFIG } from '../constants';
-import { Storage } from '../utils';
+import { Storage, SecureStorage } from '../utils';
 import { apiService } from '../services/api';
 
 // Action Types
@@ -113,22 +113,47 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   useEffect(() => {
     const restoreAuth = async () => {
       try {
+        // Check if we have a valid token first
+        const token = await SecureStorage.getAuthToken();
+        
+        if (!token) {
+          console.log('No token found, showing login screen');
+          dispatch({ type: 'LOGOUT' });
+          return;
+        }
+
         const [userData, driverData, tenantData] = await Promise.all([
           Storage.getItem<AuthUser>(STORAGE_KEYS.USER_DATA),
           Storage.getItem<Driver>(STORAGE_KEYS.DRIVER_DATA),
           Storage.getItem<Tenant>('@tenant_data'),
         ]);
 
-        if (userData && driverData) {
-          dispatch({
-            type: 'RESTORE_AUTH',
-            payload: { 
-              user: userData, 
-              driver: driverData,
-              tenant: tenantData || undefined
-            },
-          });
+        if (userData && driverData && token) {
+          console.log('Restoring auth session for user:', userData.username);
+          // Verify token is still valid by making a test API call
+          try {
+            const profileResponse = await apiService.getDriverProfile();
+            if (profileResponse.success) {
+              dispatch({
+                type: 'RESTORE_AUTH',
+                payload: { 
+                  user: { ...userData, token },
+                  driver: driverData,
+                  tenant: tenantData || undefined
+                },
+              });
+            } else {
+              console.log('Token invalid, clearing auth data');
+              await SecureStorage.clearAll();
+              dispatch({ type: 'LOGOUT' });
+            }
+          } catch (error) {
+            console.log('Auth verification failed, clearing auth data');
+            await SecureStorage.clearAll();
+            dispatch({ type: 'LOGOUT' });
+          }
         } else {
+          console.log('Incomplete auth data, showing login screen');
           dispatch({ type: 'LOGOUT' });
         }
       } catch (error) {
@@ -140,18 +165,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     restoreAuth();
   }, []);
 
-  const login = async (email: string, password: string, tenantId?: string): Promise<void> => {
+  const login = async (username: string, password: string, tenantId?: string): Promise<void> => {
     dispatch({ type: 'LOGIN_START' });
 
     try {
-      const response = await apiService.login({ email, password, tenantId });
+      const response = await apiService.login({ username, password, tenantId });
 
       if (response.success && response.data) {
         const { user, driver, tenant } = response.data;
 
-        // Store auth data
+        // Store auth data (token securely, other data in regular storage)
         const storagePromises = [
-          Storage.setItem(STORAGE_KEYS.AUTH_TOKEN, user.token),
+          SecureStorage.setAuthToken(user.token),
           Storage.setItem(STORAGE_KEYS.USER_DATA, user),
           Storage.setItem(STORAGE_KEYS.DRIVER_DATA, driver),
         ];
@@ -215,12 +240,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       console.error('Logout API error:', error);
     } finally {
       // Clear stored data regardless of API success
-      await Storage.removeItems([
-        STORAGE_KEYS.AUTH_TOKEN,
-        STORAGE_KEYS.USER_DATA,
-        STORAGE_KEYS.DRIVER_DATA,
-        STORAGE_KEYS.ACTIVE_ORDERS,
-        STORAGE_KEYS.ORDER_HISTORY,
+      await Promise.all([
+        SecureStorage.clearAll(), // Clear secure tokens
+        Storage.removeItems([
+          STORAGE_KEYS.USER_DATA,
+          STORAGE_KEYS.DRIVER_DATA,
+          STORAGE_KEYS.ACTIVE_ORDERS,
+          STORAGE_KEYS.ORDER_HISTORY,
+        ])
       ]);
 
       dispatch({ type: 'LOGOUT' });

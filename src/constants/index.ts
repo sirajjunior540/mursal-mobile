@@ -1,18 +1,28 @@
+import Config from 'react-native-config';
+
 export * from './theme';
+export * from './colors';
+
+// Export spacing as SPACING for consistency
+export { spacing as SPACING } from './theme';
 
 // API Configuration
 export const API_CONFIG = {
-  BASE_URL: 'https://api.mursal.com',
-  TIMEOUT: 10000,
+  BASE_URL: Config.API_BASE_URL || 'http://10.0.2.2:8000',
+  HOST: Config.API_HOST || 'sirajjunior.localhost',
+  TIMEOUT: parseInt(Config.API_TIMEOUT || '30000', 10),
   RETRY_ATTEMPTS: 3,
 };
 
 // Tenant Configuration
 export const TENANT_CONFIG = {
-  DEFAULT_TENANT: 'default',
+  DEFAULT_TENANT: Config.DEFAULT_TENANT || 'sirajjunior',
   TENANT_HEADER: 'X-Tenant-ID',
   TENANT_STORAGE_KEY: '@tenant_id',
 };
+
+// Environment
+export const ENVIRONMENT = Config.ENVIRONMENT || 'development';
 
 // Storage Keys
 export const STORAGE_KEYS = {
