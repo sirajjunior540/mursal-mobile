@@ -148,8 +148,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
               dispatch({ type: 'LOGOUT' });
             }
           } catch (error) {
-            console.log('Auth verification failed, clearing auth data');
-            await SecureStorage.clearAll();
+            console.log('⚠️ Auth verification failed, clearing auth data:', error);
+            try {
+              await SecureStorage.clearAll();
+            } catch (clearError) {
+              console.error('Error clearing auth data:', clearError);
+            }
             dispatch({ type: 'LOGOUT' });
           }
         } else {
@@ -157,7 +161,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           dispatch({ type: 'LOGOUT' });
         }
       } catch (error) {
-        console.error('Error restoring auth:', error);
+        console.error('💥 Critical error restoring auth:', error);
+        try {
+          await SecureStorage.clearAll();
+        } catch (clearError) {
+          console.error('Error clearing auth data after failure:', clearError);
+        }
         dispatch({ type: 'LOGOUT' });
       }
     };

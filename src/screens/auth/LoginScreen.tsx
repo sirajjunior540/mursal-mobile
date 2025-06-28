@@ -12,21 +12,25 @@ import {
   Platform,
 } from 'react-native';
 import { useAuth } from '../../contexts/AuthContext';
-import { Picker } from '@react-native-picker/picker';
+import Ionicons from 'react-native-vector-icons/Ionicons';
 
 const LoginScreen = () => {
   const { login, isLoading, error } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [selectedTenant, setSelectedTenant] = useState('sirajjunior');
-
-  const tenants = [
-    { id: 'sirajjunior', name: 'Siraj Junior Restaurant' },
-  ];
+  const [deliveryProvider, setDeliveryProvider] = useState('');
+  
+  // Default tenant for backend compatibility
+  const selectedTenant = 'sirajjunior';
 
   const handleLogin = async () => {
     if (!username || !password) {
       Alert.alert('Error', 'Please enter username and password');
+      return;
+    }
+    
+    if (!deliveryProvider.trim()) {
+      Alert.alert('Error', 'Please enter your delivery provider');
       return;
     }
 
@@ -45,50 +49,59 @@ const LoginScreen = () => {
     >
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         <View style={styles.formContainer}>
-          <Text style={styles.title}>Driver Login</Text>
-          <Text style={styles.subtitle}>Multi-tenant Delivery App</Text>
+          {/* Header */}
+          <View style={styles.header}>
+            <View style={styles.logoContainer}>
+              <Ionicons name="car-sport" size={40} color="#4CAF50" />
+            </View>
+            <Text style={styles.title}>Mursal Driver</Text>
+            <Text style={styles.subtitle}>Sign in to start delivering</Text>
+          </View>
 
+          {/* Input Fields */}
           <View style={styles.inputContainer}>
-            <Text style={styles.label}>Select Restaurant</Text>
-            <View style={styles.pickerContainer}>
-              <Picker
-                selectedValue={selectedTenant}
-                onValueChange={(itemValue) => setSelectedTenant(itemValue)}
-                style={styles.picker}
-              >
-                {tenants.map((tenant) => (
-                  <Picker.Item
-                    key={tenant.id}
-                    label={tenant.name}
-                    value={tenant.id}
-                  />
-                ))}
-              </Picker>
+            <Text style={styles.label}>Delivery Provider</Text>
+            <View style={styles.inputWrapper}>
+              <Ionicons name="business-outline" size={20} color="#666" style={styles.inputIcon} />
+              <TextInput
+                style={styles.inputWithIcon}
+                value={deliveryProvider}
+                onChangeText={setDeliveryProvider}
+                placeholder="e.g., Uber Eats, DoorDash, Grubhub"
+                autoCapitalize="words"
+                editable={!isLoading}
+              />
             </View>
           </View>
 
           <View style={styles.inputContainer}>
             <Text style={styles.label}>Username</Text>
-            <TextInput
-              style={styles.input}
-              value={username}
-              onChangeText={setUsername}
-              placeholder="Enter your username"
-              autoCapitalize="none"
-              editable={!isLoading}
-            />
+            <View style={styles.inputWrapper}>
+              <Ionicons name="person-outline" size={20} color="#666" style={styles.inputIcon} />
+              <TextInput
+                style={styles.inputWithIcon}
+                value={username}
+                onChangeText={setUsername}
+                placeholder="Enter your username"
+                autoCapitalize="none"
+                editable={!isLoading}
+              />
+            </View>
           </View>
 
           <View style={styles.inputContainer}>
             <Text style={styles.label}>Password</Text>
-            <TextInput
-              style={styles.input}
-              value={password}
-              onChangeText={setPassword}
-              placeholder="Enter your password"
-              secureTextEntry
-              editable={!isLoading}
-            />
+            <View style={styles.inputWrapper}>
+              <Ionicons name="lock-closed-outline" size={20} color="#666" style={styles.inputIcon} />
+              <TextInput
+                style={styles.inputWithIcon}
+                value={password}
+                onChangeText={setPassword}
+                placeholder="Enter your password"
+                secureTextEntry
+                editable={!isLoading}
+              />
+            </View>
           </View>
 
           {error && <Text style={styles.errorText}>{error}</Text>}
@@ -99,14 +112,20 @@ const LoginScreen = () => {
             disabled={isLoading}
           >
             {isLoading ? (
-              <ActivityIndicator color="#fff" />
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator color="#fff" size="small" />
+                <Text style={styles.loadingText}>Signing in...</Text>
+              </View>
             ) : (
-              <Text style={styles.loginButtonText}>Login</Text>
+              <View style={styles.buttonContent}>
+                <Text style={styles.loginButtonText}>Sign In</Text>
+                <Ionicons name="arrow-forward" size={20} color="#fff" style={styles.buttonIcon} />
+              </View>
             )}
           </TouchableOpacity>
 
           <Text style={styles.helpText}>
-            Enter your driver credentials
+            New driver? Contact your delivery provider to get started
           </Text>
         </View>
       </ScrollView>
@@ -134,8 +153,21 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
+  header: {
+    alignItems: 'center',
+    marginBottom: 40,
+  },
+  logoContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#f0f8f0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
   title: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: 'bold',
     color: '#333',
     textAlign: 'center',
@@ -145,7 +177,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
     textAlign: 'center',
-    marginBottom: 30,
   },
   inputContainer: {
     marginBottom: 20,
@@ -155,37 +186,65 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     color: '#333',
   },
-  input: {
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
     borderWidth: 1,
     borderColor: '#ddd',
-    borderRadius: 8,
-    paddingHorizontal: 15,
-    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: '#fafafa',
+  },
+  inputIcon: {
+    paddingLeft: 15,
+    paddingRight: 10,
+  },
+  inputWithIcon: {
+    flex: 1,
+    paddingVertical: 15,
+    paddingRight: 15,
     fontSize: 16,
-  },
-  pickerContainer: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    overflow: 'hidden',
-  },
-  picker: {
-    height: 50,
+    color: '#333',
   },
   loginButton: {
     backgroundColor: '#4CAF50',
-    borderRadius: 8,
-    paddingVertical: 15,
+    borderRadius: 12,
+    paddingVertical: 18,
     alignItems: 'center',
-    marginTop: 10,
+    justifyContent: 'center',
+    marginTop: 20,
+    shadowColor: '#4CAF50',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
   disabledButton: {
     backgroundColor: '#a5d6a7',
   },
+  buttonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   loginButtonText: {
     color: '#fff',
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: '600',
+    marginRight: 8,
+  },
+  buttonIcon: {
+    marginLeft: 4,
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    color: '#fff',
+    fontSize: 16,
+    marginLeft: 10,
+    fontWeight: '500',
   },
   errorText: {
     color: '#f44336',
@@ -193,10 +252,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   helpText: {
-    marginTop: 20,
+    marginTop: 24,
     textAlign: 'center',
     color: '#666',
     fontSize: 14,
+    lineHeight: 20,
   },
 });
 

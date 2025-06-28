@@ -8,7 +8,8 @@ import {
   BalanceTransaction,
   LoginRequest,
   LoginResponse,
-  Tenant
+  Tenant,
+  TenantSettings
 } from '../types';
 import { API_CONFIG, TENANT_CONFIG, STORAGE_KEYS } from '../constants';
 import { Storage, SecureStorage } from '../utils';
@@ -88,11 +89,14 @@ class HttpClient {
       };
     } catch (error) {
       console.error(`API Error [${endpoint}]:`, error);
-      console.error('Request details:', { url, headers: defaultHeaders });
+      console.error('Request URL:', url);
+      console.error('Request headers:', defaultHeaders);
 
       let errorMessage = 'Unknown error';
       if (error instanceof Error) {
         errorMessage = error.message;
+        console.error('Error stack:', error.stack);
+
         // Provide user-friendly messages for common errors
         if (error.message.includes('timeout')) {
           errorMessage = 'Request timed out. Please check your internet connection and try again.';
@@ -100,6 +104,8 @@ class HttpClient {
           errorMessage = 'Network error. Please check your internet connection and try again.';
         } else if (error.message.includes('fetch')) {
           errorMessage = 'Connection failed. Please check if the server is running and try again.';
+        } else if (error.message.includes('ERR_NETWORK')) {
+          errorMessage = 'Network connection failed. Check if server is accessible at ' + this.baseURL;
         }
       }
 
@@ -317,14 +323,16 @@ class ApiService {
       };
     }
 
-    // Use the correct endpoint - toggle_availability action
-    return this.client.patch<void>(`/api/v1/auth/drivers/${driverId}/toggle_availability/`);
+    // Use the new update_status endpoint with explicit online status
+    return this.client.post<void>(`/api/v1/auth/drivers/${driverId}/update_status/`, {
+      is_online: isOnline
+    });
   }
 
   // Orders
   async getActiveOrders(): Promise<ApiResponse<Order[]>> {
-    // Use the custom action endpoint for active deliveries
-    const response = await this.client.get<any[]>('/api/v1/delivery/deliveries/active/');
+    // Get deliveries assigned to the current driver (both new assignments and active)
+    const response = await this.client.get<any[]>('/api/v1/delivery/deliveries/by_driver/');
 
     // Transform backend response to match our Order type
     if (response.success && response.data) {
@@ -415,15 +423,55 @@ class ApiService {
     const order = isDelivery ? backendData.order : backendData;
     const delivery = isDelivery ? backendData : null;
 
+    console.log('🔍 Transforming order data:', {
+      isDelivery,
+      hasOrder: !!order,
+      orderId: order?.id,
+      hasCustomer: !!(order?.customer || order?.customer_details),
+      backendDataKeys: Object.keys(backendData),
+      orderKeys: order ? Object.keys(order) : []
+    });
+
+    // Enhanced customer data extraction with debugging
+    const customerData = order.customer || 
+                        order.customer_details || 
+                        delivery?.customer || 
+                        delivery?.customer_details || 
+                        {};
+    
+    // Fallback customer data if missing
+    const customer = {
+      id: customerData.id || order.customer_id || delivery?.customer_id || `customer_${order.id || 'unknown'}`,
+      name: customerData.name || 
+            customerData.full_name || 
+            order.customer_name || 
+            delivery?.customer_name ||
+            `${customerData.first_name || ''} ${customerData.last_name || ''}`.trim() ||
+            'Unknown Customer',
+      phone: customerData.phone || 
+             customerData.phone_number || 
+             order.customer_phone || 
+             delivery?.customer_phone ||
+             '',
+      email: customerData.email || 
+             order.customer_email || 
+             delivery?.customer_email ||
+             ''
+    };
+
+    // Log if customer data is missing for debugging
+    if (!customer.name || customer.name === 'Unknown Customer') {
+      console.warn('⚠️ Missing customer data in order:', {
+        orderId: order.id,
+        backendData: JSON.stringify(backendData, null, 2),
+        extractedCustomer: customer
+      });
+    }
+
     return {
       id: order.id || '',
-      orderNumber: order.order_number || order.orderNumber || '',
-      customer: {
-        id: order.customer?.id || order.customer_details?.id || '',
-        name: order.customer?.name || order.customer_details?.name || order.customer_name || '',
-        phone: order.customer?.phone || order.customer_details?.phone || '',
-        email: order.customer?.email || order.customer_details?.email || ''
-      },
+      orderNumber: order.order_number || order.orderNumber || `#${order.id}`,
+      customer,
       items: (order.items || order.order_items || []).map((item: any) => ({
         id: item.id || '',
         name: item.product_details?.name || item.product?.name || item.name || '',
@@ -482,9 +530,25 @@ class ApiService {
     return this.client.post<void>(`/api/v1/delivery/deliveries/${orderId}/update_status/`, { status });
   }
 
+  // Get specific order details by ID
+  async getOrderDetails(orderId: string): Promise<ApiResponse<Order>> {
+    const response = await this.client.get<any>(`/api/v1/delivery/deliveries/${orderId}/`);
+    
+    if (response.success && response.data) {
+      const order = this.transformOrder(response.data);
+      return {
+        success: true,
+        data: order,
+        message: response.message
+      };
+    }
+    
+    return response as ApiResponse<Order>;
+  }
+
   // Balance Management
   async getDriverBalance(): Promise<ApiResponse<DriverBalance>> {
-    return this.client.get<DriverBalance>('/api/v1/driver/balance/');
+    return this.client.get<DriverBalance>('/api/v1/auth/drivers/balance/');
   }
 
   async addDeposit(amount: number): Promise<ApiResponse<void>> {
@@ -505,23 +569,32 @@ class ApiService {
 
   // Location tracking
   async updateLocation(latitude: number, longitude: number): Promise<ApiResponse<void>> {
+    console.log(`📍 API: Updating location to ${latitude}, ${longitude}`);
+
     // Get the current driver ID
     const cachedDriver = await Storage.getItem<Driver>(STORAGE_KEYS.DRIVER_DATA);
     let driverId = cachedDriver?.id;
 
+    console.log('Cached driver ID:', driverId);
+
     if (!driverId) {
+      console.log('No cached driver ID, trying to extract from token...');
       const token = await SecureStorage.getAuthToken();
       if (token) {
         try {
           const payload = JSON.parse(atob(token.split('.')[1]));
           driverId = payload.user_id || payload.id || payload.driver_id;
+          console.log('Driver ID from token:', driverId);
         } catch (error) {
           console.warn('Failed to decode token for driver ID:', error);
         }
+      } else {
+        console.error('No auth token found');
       }
     }
 
     if (!driverId) {
+      console.error('❌ Cannot update location: Driver ID not found');
       return {
         success: false,
         data: null as any,
@@ -529,24 +602,46 @@ class ApiService {
       };
     }
 
-    return this.client.post<void>(`/api/v1/auth/drivers/${driverId}/update_location/`, {
+    const endpoint = `/api/v1/auth/drivers/${driverId}/update_location/`;
+    console.log(`🎯 Calling location endpoint: ${endpoint}`);
+
+    const result = await this.client.post<void>(endpoint, {
       latitude: latitude.toString(),
       longitude: longitude.toString()
     });
+
+    if (result.success) {
+      console.log('✅ Location update API call successful');
+    } else {
+      console.error('❌ Location update API call failed:', result.error);
+    }
+
+    return result;
   }
 
   // Real-time order updates
   async pollNewOrders(): Promise<ApiResponse<Order[]>> {
-    // Get new orders assigned to the current driver
-    const response = await this.client.get<any[]>('/api/v1/delivery/deliveries/new_assignments/');
-    
+    console.log('🔄 Polling for new available orders...');
+
+    // Get available broadcast orders that drivers can accept
+    const response = await this.client.get<any[]>('/api/v1/delivery/deliveries/available_orders/');
+
     if (response.success && response.data) {
+      console.log(`📦 Raw response data:`, response.data);
       const orders: Order[] = response.data.map(this.transformOrder);
+      console.log(`📎 Found ${orders.length} available orders`);
+
+      orders.forEach((order, index) => {
+        console.log(`  📄 Order ${index + 1}: ${order.id} - ${order.customer.name} - $${order.total}`);
+      });
+
       return {
         success: true,
         data: orders,
         message: response.message
       };
+    } else {
+      console.log('⚠️ No orders available or polling failed:', response.error);
     }
 
     return response as ApiResponse<Order[]>;
@@ -554,7 +649,7 @@ class ApiService {
 
   async getNearbyDrivers(latitude: number, longitude: number, radius: number = 5): Promise<ApiResponse<Driver[]>> {
     const response = await this.client.get<any[]>(`/api/v1/auth/drivers/nearby_drivers/?latitude=${latitude}&longitude=${longitude}&radius=${radius}`);
-    
+
     if (response.success && response.data) {
       const drivers: Driver[] = response.data.map((driverData: any) => ({
         id: driverData.id || '',
@@ -573,7 +668,7 @@ class ApiService {
         } : undefined,
         distance: driverData.distance_km
       }));
-      
+
       return {
         success: true,
         data: drivers,
@@ -582,6 +677,62 @@ class ApiService {
     }
 
     return response as ApiResponse<Driver[]>;
+  }
+
+  // Tenant Settings
+  async getTenantSettings(): Promise<ApiResponse<TenantSettings>> {
+    return this.client.get<TenantSettings>('/api/v1/tenants/settings/');
+  }
+
+  // Firebase Cloud Messaging
+  async updateFcmToken(token: string): Promise<ApiResponse<void>> {
+    console.log(`🔔 API: Updating FCM token: ${token.substring(0, 10)}...`);
+
+    // Get the current driver ID
+    const cachedDriver = await Storage.getItem<Driver>(STORAGE_KEYS.DRIVER_DATA);
+    let driverId = cachedDriver?.id;
+
+    console.log('Cached driver ID:', driverId);
+
+    if (!driverId) {
+      console.log('No cached driver ID, trying to extract from token...');
+      const authToken = await SecureStorage.getAuthToken();
+      if (authToken) {
+        try {
+          const payload = JSON.parse(atob(authToken.split('.')[1]));
+          driverId = payload.user_id || payload.id || payload.driver_id;
+          console.log('Driver ID from token:', driverId);
+        } catch (error) {
+          console.warn('Failed to decode token for driver ID:', error);
+        }
+      } else {
+        console.error('No auth token found');
+      }
+    }
+
+    if (!driverId) {
+      console.error('❌ Cannot update FCM token: Driver ID not found');
+      return {
+        success: false,
+        data: null as any,
+        error: 'Driver ID not found'
+      };
+    }
+
+    const endpoint = `/api/v1/auth/drivers/${driverId}/update_fcm_token/`;
+    console.log(`🎯 Calling FCM token endpoint: ${endpoint}`);
+
+    const result = await this.client.post<void>(endpoint, {
+      fcm_token: token
+    });
+
+    if (result.success) {
+      console.log('✅ FCM token update API call successful');
+    } else {
+      console.error('❌ FCM token update API call failed:', result.error);
+    }
+
+    return result;
   }
 }
 

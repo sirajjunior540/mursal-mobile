@@ -1,5 +1,12 @@
-import { Alert, Platform } from 'react-native';
-// import Sound from 'react-native-sound';
+import { Alert, Platform, Vibration } from 'react-native';
+
+// Conditional import for react-native-sound - will be null if not installed
+let Sound: any = null;
+try {
+  Sound = require('react-native-sound');
+} catch (e) {
+  console.warn('react-native-sound not available - using vibration only for notifications');
+}
 
 export interface SoundConfig {
   enabled: boolean;
@@ -21,20 +28,29 @@ class SoundService {
 
   private initializeSound() {
     try {
-      // Enable sound for the app
-      // Sound.setCategory('Playback');
-      
-      // For now, we'll use a simple alert sound
-      // In a real app, you would load a custom sound file:
-      // this.orderSound = new Sound('order_notification.mp3', Sound.MAIN_BUNDLE, (error) => {
-      //   if (error) {
-      //     console.log('Failed to load the sound', error);
-      //   }
-      // });
-      
-      console.log('Sound service initialized');
+      if (Sound) {
+        // Enable sound for the app
+        Sound.setCategory('Playback');
+
+        // Load the notification sound
+        this.orderSound = new Sound('order_notification.mp3', Sound.MAIN_BUNDLE, (error) => {
+          if (error) {
+            console.log('Failed to load the sound', error);
+            // Fallback to system sound if custom sound fails to load
+            this.orderSound = null;
+          } else {
+            console.log('Sound loaded successfully');
+          }
+        });
+
+        console.log('Sound service initialized with audio support');
+      } else {
+        console.log('Sound service initialized with vibration only (react-native-sound not available)');
+        this.orderSound = null;
+      }
     } catch (error) {
       console.error('Error initializing sound service:', error);
+      this.orderSound = null;
     }
   }
 
@@ -47,25 +63,32 @@ class SoundService {
     }
 
     try {
-      // For now, we'll use the system notification sound
-      // In a real implementation, you would:
-      // if (this.orderSound) {
-      //   this.orderSound.setVolume(this.config.volume);
-      //   this.orderSound.play((success) => {
-      //     if (!success) {
-      //       console.log('Failed to play sound');
-      //     }
-      //   });
-      // }
+      // Play the notification sound
+      if (this.orderSound) {
+        this.orderSound.setVolume(this.config.volume);
+        this.orderSound.play((success) => {
+          if (!success) {
+            console.log('Failed to play sound');
+          } else {
+            console.log('Sound played successfully');
+          }
+        });
+      } else {
+        console.log('No sound loaded, using fallback');
+        // Fallback to system sound if custom sound is not available
+        if (Platform.OS === 'ios') {
+          // On iOS, we can use the system sound
+          Vibration.vibrate();
+        }
+      }
 
       // Trigger vibration if enabled
       if (this.config.vibration) {
         this.vibrate();
       }
 
-      // For demo purposes, we'll just log
       console.log('🔊 Playing order notification sound');
-      
+
     } catch (error) {
       console.error('Error playing notification sound:', error);
     }
@@ -79,13 +102,11 @@ class SoundService {
       // Simple vibration pattern for order notifications
       // Pattern: short-long-short
       if (Platform.OS === 'android') {
-        // const { Vibration } = require('react-native');
-        // Vibration.vibrate([0, 200, 100, 300, 100, 200]);
+        Vibration.vibrate([0, 200, 100, 300, 100, 200]);
         console.log('📳 Vibrating for order notification');
       } else {
         // iOS vibration
-        // const { Vibration } = require('react-native');
-        // Vibration.vibrate();
+        Vibration.vibrate();
         console.log('📳 Vibrating for order notification (iOS)');
       }
     } catch (error) {
@@ -119,9 +140,8 @@ class SoundService {
     try {
       console.log('✅ Playing success sound');
       // Simple vibration for success
-      if (this.config.vibration && Platform.OS === 'android') {
-        // const { Vibration } = require('react-native');
-        // Vibration.vibrate(100);
+      if (this.config.vibration) {
+        Vibration.vibrate(100);
       }
     } catch (error) {
       console.error('Error playing success sound:', error);
@@ -139,9 +159,8 @@ class SoundService {
     try {
       console.log('❌ Playing error sound');
       // Different vibration pattern for errors
-      if (this.config.vibration && Platform.OS === 'android') {
-        // const { Vibration } = require('react-native');
-        // Vibration.vibrate([0, 100, 50, 100]);
+      if (this.config.vibration) {
+        Vibration.vibrate([0, 100, 50, 100]);
       }
     } catch (error) {
       console.error('Error playing error sound:', error);
@@ -174,7 +193,7 @@ class SoundService {
   dispose(): void {
     try {
       if (this.orderSound) {
-        // this.orderSound.release();
+        this.orderSound.release();
         this.orderSound = null;
       }
     } catch (error) {

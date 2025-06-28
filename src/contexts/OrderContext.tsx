@@ -1,9 +1,11 @@
-import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useState, ReactNode } from 'react';
 import { OrderContextType, Order, OrderStatus, HistoryFilter } from '../types';
 import { STORAGE_KEYS, APP_SETTINGS } from '../constants';
 import { Storage } from '../utils';
 import { apiService } from '../services/api';
 import { useAuth } from './AuthContext';
+import { realtimeService } from '../services/realtimeService';
+import { soundService } from '../services/soundService';
 
 // Action Types
 type OrderAction =
@@ -13,6 +15,7 @@ type OrderAction =
   | { type: 'SET_ORDER_HISTORY'; payload: Order[] }
   | { type: 'UPDATE_ORDER'; payload: Order }
   | { type: 'REMOVE_ORDER'; payload: string }
+  | { type: 'ADD_NEW_ORDER'; payload: Order }
   | { type: 'CLEAR_DATA' };
 
 // State Type
@@ -74,6 +77,21 @@ const orderReducer = (state: OrderState, action: OrderAction): OrderState => {
         ...state,
         orders: state.orders.filter(order => order.id !== action.payload),
       };
+    case 'ADD_NEW_ORDER':
+      // Add new order if it doesn't already exist and is pending/available
+      const orderExists = state.orders.some(order => order.id === action.payload.id);
+      const isAvailableOrder = action.payload.status === 'pending' || action.payload.status === 'assigned';
+
+      if (orderExists || !isAvailableOrder) {
+        console.log(`⚠️ Skipping duplicate or non-available order: ${action.payload.id}, status: ${action.payload.status}`);
+        return state;
+      }
+
+      console.log(`✅ Adding new available order: ${action.payload.id}`);
+      return {
+        ...state,
+        orders: [action.payload, ...state.orders],
+      };
     case 'CLEAR_DATA':
       return {
         ...state,
@@ -95,31 +113,193 @@ interface OrderProviderProps {
 }
 
 export const OrderProvider: React.FC<OrderProviderProps> = ({ children }) => {
+  console.log('🏗️ OrderProvider: Creating OrderProvider instance');
   const [state, dispatch] = useReducer(orderReducer, initialState);
-  const { isLoggedIn } = useAuth();
+  const [authReady, setAuthReady] = useState(false);
+  const [contextError, setContextError] = useState<string | null>(null);
 
-  // Load cached data on mount only if authenticated
+  // Safely get auth context with error handling
+  let authContext;
+  let isLoggedIn = false;
+  
+  try {
+    authContext = useAuth();
+    isLoggedIn = authContext?.isLoggedIn || false;
+    
+    // Clear any previous context errors if auth is working
+    if (contextError) {
+      setContextError(null);
+    }
+  } catch (error) {
+    console.error('❌ OrderProvider: Auth context error:', error);
+    authContext = null;
+    isLoggedIn = false;
+    setContextError(error instanceof Error ? error.message : 'Auth context unavailable');
+  }
+
+  // Mark auth as ready if we got a valid context
   useEffect(() => {
+    if (authContext && !authReady) {
+      setAuthReady(true);
+    }
+  }, [authContext, authReady]);
+
+  // Load cached data on mount only if authenticated and auth is ready
+  useEffect(() => {
+    if (!authReady) {
+      console.log('⏳ Waiting for auth context to be ready...');
+      return;
+    }
+
     if (isLoggedIn) {
-      console.log('User is logged in, loading cached orders and refreshing');
+      console.log('🔑 User is logged in, loading cached orders');
       loadCachedData();
-      // Also try to refresh from API
-      refreshOrders();
+
+      // Delay API refresh to ensure authentication is fully complete
+      const timer = setTimeout(() => {
+        console.log('🔄 Starting delayed order refresh');
+        refreshOrders().catch(error => {
+          console.error('⚠️ Initial order refresh failed:', error);
+          // Don't throw - just log the error
+        });
+      }, 1000); // 1 second delay
+
+      return () => clearTimeout(timer);
     } else {
-      console.log('User not logged in, clearing order data');
+      console.log('🚪 User not logged in, clearing order data');
       dispatch({ type: 'CLEAR_DATA' });
     }
-  }, [isLoggedIn]);
+  }, [isLoggedIn, authReady]);
 
-  // Auto-refresh orders
+  // Auto-refresh orders with delay after login
   useEffect(() => {
     if (!isLoggedIn) return;
 
-    const interval = setInterval(() => {
-      refreshOrders();
-    }, APP_SETTINGS.ORDER_REFRESH_INTERVAL);
+    // Wait 5 seconds after login before starting auto-refresh
+    const startTimer = setTimeout(() => {
+      console.log('🔄 Starting auto-refresh timer');
 
-    return () => clearInterval(interval);
+      const interval = setInterval(() => {
+        console.log('⏰ Auto-refreshing orders...');
+        refreshOrders().catch(error => {
+          console.error('⚠️ Auto-refresh failed:', error);
+        });
+      }, APP_SETTINGS.ORDER_REFRESH_INTERVAL);
+
+      // Store interval ID for cleanup
+      return () => {
+        console.log('🛑 Stopping auto-refresh timer');
+        clearInterval(interval);
+      };
+    }, 5000);
+
+    return () => {
+      clearTimeout(startTimer);
+    };
+  }, [isLoggedIn]);
+
+  // Initialize realtime service for order notifications with delay
+  useEffect(() => {
+    if (!isLoggedIn) {
+      console.log('🛑 Stopping realtime service - user not logged in');
+      realtimeService.stop();
+      return;
+    }
+
+    // Delay realtime service initialization to ensure auth is complete
+    const timer = setTimeout(() => {
+      console.log('🚀 Initializing realtime service...');
+
+      const setupRealtimeService = async () => {
+        try {
+          // Ensure user is still logged in when timer fires
+          if (!isLoggedIn) {
+            console.log('⚠️ User no longer logged in, skipping realtime setup');
+            return;
+          }
+
+          // Initialize the service
+          await realtimeService.initialize();
+
+          // Set up callbacks for new orders
+          realtimeService.setCallbacks({
+            onNewOrder: (order: Order) => {
+              console.log('🆕 New order received via realtime:', order.id);
+
+              // Ensure order data is valid before dispatching
+              if (!order || !order.id) {
+                console.error('❌ Invalid order data received:', order);
+                return;
+              }
+
+              // Log order details for debugging
+              console.log('📦 Order details:', {
+                id: order.id,
+                orderNumber: order.orderNumber,
+                customer: order.customer ? {
+                  name: order.customer.name,
+                  phone: order.customer.phone
+                } : 'No customer data',
+                address: order.deliveryAddress ? 
+                  (typeof order.deliveryAddress === 'string' ? 
+                    order.deliveryAddress : 
+                    order.deliveryAddress.street) : 
+                  'No address data',
+                total: order.total,
+                status: order.status
+              });
+
+              // Add the order to the state
+              dispatch({ type: 'ADD_NEW_ORDER', payload: order });
+
+              // Play notification sound
+              console.log('🔔 Playing notification sound for new order');
+              soundService.playOrderNotification();
+            },
+            onOrderUpdate: (order: Order) => {
+              console.log('📝 Order update received via realtime:', order.id);
+              dispatch({ type: 'UPDATE_ORDER', payload: order });
+            },
+            onConnectionChange: (connected: boolean) => {
+              console.log('🔗 Realtime connection status:', connected ? 'Connected' : 'Disconnected');
+            },
+            onError: (error: string) => {
+              console.error('❌ Realtime service error:', error);
+            }
+          });
+
+          // Enable and start the service (default to polling mode)
+          console.log('🔧 Configuring realtime service...');
+          await realtimeService.setConfig({ 
+            enabled: true, 
+            mode: 'polling',
+            pollingInterval: 10000 // 10 seconds
+          });
+
+          console.log('▶️ Starting realtime service...');
+          realtimeService.start();
+
+          // Verify service is running
+          const isRunning = realtimeService.isRunning();
+          const isConnected = realtimeService.isConnectedToServer();
+          console.log(`🔍 Realtime service status: running=${isRunning}, connected=${isConnected}`);
+
+          console.log('✅ Realtime service initialized and started');
+        } catch (error) {
+          console.error('💥 Failed to setup realtime service:', error);
+          // Don't throw - just log the error
+        }
+      };
+
+      setupRealtimeService();
+    }, 2000); // 2 second delay
+
+    // Cleanup function
+    return () => {
+      clearTimeout(timer);
+      console.log('🧹 Cleaning up realtime service');
+      realtimeService.stop();
+    };
   }, [isLoggedIn]);
 
   const loadCachedData = async () => {
@@ -142,58 +322,85 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({ children }) => {
   };
 
   const refreshOrders = async (): Promise<void> => {
-    if (state.isLoading) return;
-    if (!isLoggedIn) {
-      console.log('Cannot refresh orders: user not logged in');
+    if (state.isLoading) {
+      console.log('⏳ Orders already loading, skipping refresh');
       return;
     }
 
-    console.log('Refreshing orders from API...');
+    if (!isLoggedIn) {
+      console.log('🚫 Cannot refresh orders: user not logged in');
+      return;
+    }
+
+    console.log('🔄 Refreshing orders from API...');
     dispatch({ type: 'SET_LOADING', payload: true });
 
     try {
       const response = await apiService.getActiveOrders();
 
       if (response.success && response.data) {
-        console.log('Orders fetched successfully:', response.data.length, 'orders');
-        dispatch({ type: 'SET_ORDERS', payload: response.data });
-        
-        // Cache the data
-        await Storage.setItem(STORAGE_KEYS.ACTIVE_ORDERS, response.data);
+        console.log('✅ Orders fetched successfully:', response.data.length, 'orders');
+
+        // Filter to only show available orders (pending/assigned) for driver to accept
+        const availableOrders = response.data.filter(order => 
+          order.status === 'pending' || order.status === 'assigned'
+        );
+
+        console.log(`📋 Filtered to ${availableOrders.length} available orders from ${response.data.length} total`);
+        dispatch({ type: 'SET_ORDERS', payload: availableOrders });
+
+        // Cache the filtered data
+        await Storage.setItem(STORAGE_KEYS.ACTIVE_ORDERS, availableOrders);
+
+        // Clear any previous errors
+        dispatch({ type: 'SET_ERROR', payload: null });
       } else {
-        console.error('Failed to fetch orders:', response.error);
-        throw new Error(response.error || 'Failed to fetch orders');
+        console.error('❌ Failed to fetch orders:', response.error);
+        // Don't throw error during login process
+        dispatch({ type: 'SET_ERROR', payload: response.error || 'Failed to fetch orders' });
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to fetch orders';
-      console.error('Order refresh error:', message);
-      dispatch({ type: 'SET_ERROR', payload: message });
+      console.error('💥 Order refresh error:', message);
+
+      // Only show error if not a network/auth related error during startup
+      if (!message.includes('Network') && !message.includes('401') && !message.includes('403')) {
+        dispatch({ type: 'SET_ERROR', payload: message });
+      } else {
+        console.log('🔕 Suppressing network/auth error during startup:', message);
+        dispatch({ type: 'SET_ERROR', payload: null });
+      }
+    } finally {
+      dispatch({ type: 'SET_LOADING', payload: false });
     }
   };
 
-  const acceptOrder = async (orderId: string): Promise<void> => {
+  const acceptOrder = async (orderId: string): Promise<boolean> => {
     try {
       const response = await apiService.acceptOrder(orderId);
 
       if (response.success) {
-        // Update order status locally
-        const updatedOrders = state.orders.map(order =>
-          order.id === orderId 
-            ? { ...order, status: 'accepted' as OrderStatus, acceptedTime: new Date() }
-            : order
-        );
-        
+        // Remove accepted order from active orders list (driver moves to order details)
+        const updatedOrders = state.orders.filter(order => order.id !== orderId);
+
         dispatch({ type: 'SET_ORDERS', payload: updatedOrders });
-        
+
         // Update cache
         await Storage.setItem(STORAGE_KEYS.ACTIVE_ORDERS, updatedOrders);
+
+        // Mark order as handled to stop notifications
+        realtimeService.markOrderAsHandled(orderId);
+        console.log(`✅ Order ${orderId} accepted and removed from active list - notifications stopped`);
+
+        return true;
       } else {
-        throw new Error(response.error || 'Failed to accept order');
+        dispatch({ type: 'SET_ERROR', payload: response.error || 'Failed to accept order' });
+        return false;
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to accept order';
       dispatch({ type: 'SET_ERROR', payload: message });
-      throw error;
+      return false;
     }
   };
 
@@ -204,10 +411,14 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({ children }) => {
       if (response.success) {
         // Remove order from active orders
         dispatch({ type: 'REMOVE_ORDER', payload: orderId });
-        
+
         // Update cache
         const updatedOrders = state.orders.filter(order => order.id !== orderId);
         await Storage.setItem(STORAGE_KEYS.ACTIVE_ORDERS, updatedOrders);
+
+        // Mark order as handled to stop notifications
+        realtimeService.markOrderAsHandled(orderId);
+        console.log(`❌ Order ${orderId} declined - notifications stopped`);
       } else {
         throw new Error(response.error || 'Failed to decline order');
       }
@@ -218,48 +429,49 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({ children }) => {
     }
   };
 
-  const updateOrderStatus = async (orderId: string, status: OrderStatus): Promise<void> => {
+  const updateOrderStatus = async (orderId: string, status: OrderStatus): Promise<boolean> => {
     try {
       const response = await apiService.updateOrderStatus(orderId, status);
 
       if (response.success) {
-        // Update order status locally
-        const now = new Date();
-        const updatedOrders = state.orders.map(order => {
-          if (order.id === orderId) {
-            const updatedOrder = { ...order, status };
-            
-            // Set appropriate timestamp based on status
-            switch (status) {
-              case 'picked_up':
-                updatedOrder.pickedUpTime = now;
-                break;
-              case 'delivered':
-                updatedOrder.deliveredTime = now;
-                break;
-            }
-            
-            return updatedOrder;
-          }
-          return order;
-        });
-        
-        dispatch({ type: 'SET_ORDERS', payload: updatedOrders });
-        
-        // Update cache
-        await Storage.setItem(STORAGE_KEYS.ACTIVE_ORDERS, updatedOrders);
-        
-        // If delivered, move to history
+        console.log(`✅ Order ${orderId} status updated to: ${status}`);
+
+        // If delivered, remove from active orders as it's completed
         if (status === 'delivered') {
+          const updatedOrders = state.orders.filter(order => order.id !== orderId);
+          dispatch({ type: 'SET_ORDERS', payload: updatedOrders });
+          await Storage.setItem(STORAGE_KEYS.ACTIVE_ORDERS, updatedOrders);
+
+          // Refresh order history to include the completed order
           getOrderHistory();
         }
+
+        return true;
       } else {
         throw new Error(response.error || 'Failed to update order status');
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to update order status';
+      console.error('❌ Error updating order status:', message);
       dispatch({ type: 'SET_ERROR', payload: message });
-      throw error;
+      return false;
+    }
+  };
+
+  const getOrderDetails = async (orderId: string): Promise<Order | null> => {
+    try {
+      const response = await apiService.getOrderDetails(orderId);
+
+      if (response.success && response.data) {
+        return response.data;
+      } else {
+        console.error('❌ Failed to get order details:', response.error);
+        return null;
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to get order details';
+      console.error('❌ Error getting order details:', message);
+      return null;
     }
   };
 
@@ -271,7 +483,7 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({ children }) => {
 
       if (response.success && response.data) {
         dispatch({ type: 'SET_ORDER_HISTORY', payload: response.data });
-        
+
         // Cache the data
         await Storage.setItem(STORAGE_KEYS.ORDER_HISTORY, response.data);
       } else {
@@ -293,7 +505,20 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({ children }) => {
     declineOrder,
     updateOrderStatus,
     getOrderHistory,
+    getOrderDetails,
   };
+
+  console.log('🎯 OrderProvider: Rendering with context value ready');
+
+  // If there's a context error, render a fallback
+  if (contextError) {
+    console.error('❌ OrderProvider: Rendering error state due to context error:', contextError);
+    return (
+      <OrderContext.Provider value={contextValue}>
+        {children}
+      </OrderContext.Provider>
+    );
+  }
 
   return (
     <OrderContext.Provider value={contextValue}>
@@ -302,11 +527,15 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({ children }) => {
   );
 };
 
-// Hook
+// Hook with better error handling
 export const useOrders = (): OrderContextType => {
   const context = useContext(OrderContext);
   if (context === undefined) {
-    throw new Error('useOrders must be used within an OrderProvider');
+    console.error('❌ useOrders called outside OrderProvider context');
+    console.error('📍 Stack trace:', new Error().stack);
+    console.error('🔍 Make sure the component using useOrders is wrapped with <OrderProvider>');
+    console.error('🏗️ Provider hierarchy should be: AuthProvider > TenantProvider > DriverProvider > OrderProvider');
+    throw new Error('useOrders must be used within an OrderProvider. Check that your component is properly wrapped with context providers.');
   }
   return context;
 };

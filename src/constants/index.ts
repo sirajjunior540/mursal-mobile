@@ -8,8 +8,8 @@ export { spacing as SPACING } from './theme';
 
 // API Configuration
 export const API_CONFIG = {
-  BASE_URL: Config.API_BASE_URL || 'http://10.0.2.2:8000',
-  HOST: Config.API_HOST || 'sirajjunior.localhost',
+  BASE_URL: Config.API_BASE_URL || 'http://192.168.1.52:8000',
+  HOST: Config.API_HOST || 'sirajjunior.192.168.1.52',  // ✅ Fixed: Removed port number
   TIMEOUT: parseInt(Config.API_TIMEOUT || '30000', 10),
   RETRY_ATTEMPTS: 3,
 };
@@ -47,11 +47,17 @@ export const APP_SETTINGS = {
 // Order Status Colors
 export const ORDER_STATUS_COLORS = {
   pending: '#FF9800',
+  confirmed: '#2196F3',
+  preparing: '#9C27B0',
+  ready: '#3F51B5',
+  assigned: '#2196F3',
   accepted: '#2196F3',
   picked_up: '#9C27B0',
   in_transit: '#3F51B5',
   delivered: '#4CAF50',
   cancelled: '#F44336',
+  returned: '#795548',
+  failed: '#F44336',
 } as const;
 
 // Quick Deposit Amounts
@@ -67,11 +73,17 @@ export const PAYMENT_METHOD_ICONS = {
 // Order Status Labels
 export const ORDER_STATUS_LABELS = {
   pending: 'Pending',
+  confirmed: 'Confirmed',
+  preparing: 'Preparing',
+  ready: 'Ready',
+  assigned: 'Assigned',
   accepted: 'Accepted',
   picked_up: 'Picked Up',
   in_transit: 'In Transit',
   delivered: 'Delivered',
   cancelled: 'Cancelled',
+  returned: 'Returned',
+  failed: 'Failed',
 } as const;
 
 // History Filter Labels

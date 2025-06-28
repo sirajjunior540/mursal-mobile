@@ -6,7 +6,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { StatusBar, StyleSheet, useColorScheme, View, Text, ActivityIndicator } from 'react-native';
+import { StatusBar, StyleSheet, useColorScheme, View, Text, ActivityIndicator, Alert, AppState } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -14,7 +14,9 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 import { DriverProvider } from './src/contexts/DriverContext';
 import { OrderProvider } from './src/contexts/OrderContext';
+import { TenantProvider } from './src/contexts/TenantContext';
 import ErrorBoundary from './src/components/ErrorBoundary';
+import ContextErrorBoundary from './src/components/ContextErrorBoundary';
 import { RootStackParamList, TabParamList } from './src/types';
 import './src/utils/DevUtils'; // Import for development utilities
 import LoginScreen from './src/screens/auth/LoginScreen';
@@ -24,6 +26,9 @@ import HistoryScreen from './src/screens/HistoryScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { COLORS } from './src/constants';
+import { locationService } from './src/services/locationService';
+import { requestNotificationPermissions } from './src/utils/permissions';
+import './src/utils/locationTest'; // Import location testing utilities
 
 // Create navigation stacks
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -101,18 +106,89 @@ const AppNavigator = () => {
 // Root component with providers
 function App() {
   const isDarkMode = useColorScheme() === 'dark';
+  
+  // Initialize location and notification permissions on app start
+  useEffect(() => {
+    const initializeApp = async () => {
+      console.log('🚀 Initializing app permissions and services...');
+      
+      try {
+        // Request location permissions immediately
+        console.log('📍 Requesting location permissions...');
+        const locationPermissionGranted = await locationService.requestLocationPermissions();
+        
+        if (locationPermissionGranted) {
+          console.log('✅ Location permissions granted');
+        } else {
+          console.log('❌ Location permissions denied');
+          Alert.alert(
+            'Location Required',
+            'This app requires location access to track deliveries. Please enable location permissions in your device settings.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Open Settings', onPress: () => {
+                // For production, you might want to use Linking.openSettings()
+                console.log('Opening device settings...');
+              }}
+            ]
+          );
+        }
+        
+        // Request notification permissions
+        console.log('🔔 Requesting notification permissions...');
+        const notificationPermissionGranted = await requestNotificationPermissions();
+        
+        if (notificationPermissionGranted) {
+          console.log('✅ Notification permissions granted');
+        } else {
+          console.log('❌ Notification permissions denied');
+        }
+        
+      } catch (error) {
+        console.error('❌ Error initializing app permissions:', error);
+      }
+    };
+    
+    initializeApp();
+    
+    // Handle app state changes for background/foreground
+    const handleAppStateChange = (nextAppState: string) => {
+      console.log('📱 App state changed to:', nextAppState);
+      
+      if (nextAppState === 'active') {
+        // App came to foreground - check if location tracking should resume
+        console.log('🔄 App became active, checking location tracking...');
+      }
+    };
+    
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    
+    return () => {
+      subscription?.remove();
+    };
+  }, []);
 
   return (
     <ErrorBoundary>
       <SafeAreaProvider>
         <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-        <AuthProvider>
-          <DriverProvider>
-            <OrderProvider>
-              <AppNavigator />
-            </OrderProvider>
-          </DriverProvider>
-        </AuthProvider>
+        <ContextErrorBoundary contextName="AuthProvider">
+          <AuthProvider>
+            <ContextErrorBoundary contextName="TenantProvider">
+              <TenantProvider>
+                <ContextErrorBoundary contextName="DriverProvider">
+                  <DriverProvider>
+                    <ContextErrorBoundary contextName="OrderProvider">
+                      <OrderProvider>
+                        <AppNavigator />
+                      </OrderProvider>
+                    </ContextErrorBoundary>
+                  </DriverProvider>
+                </ContextErrorBoundary>
+              </TenantProvider>
+            </ContextErrorBoundary>
+          </AuthProvider>
+        </ContextErrorBoundary>
       </SafeAreaProvider>
     </ErrorBoundary>
   );

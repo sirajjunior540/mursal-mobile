@@ -163,43 +163,67 @@ export const useRealtimeOrders = (): UseRealtimeOrdersReturn => {
 
   const acceptOrder = useCallback(async (orderId: string) => {
     try {
-      // Remove from new orders list
-      setNewOrders(prevOrders => 
-        prevOrders.filter(order => order.id !== orderId)
-      );
+      // First, get the order from newOrders
+      const order = newOrders.find(o => o.id === orderId);
+      const deliveryId = order?.deliveryId || orderId;
       
-      // You can call API to accept the order here
-      // await apiService.acceptOrder(orderId);
+      // Call API to accept the order
+      const { apiService } = await import('../services/api');
+      const response = await apiService.acceptOrder(deliveryId);
       
-      // Play success sound
-      soundService.playSuccessSound();
-      
-      Alert.alert('Order Accepted', 'You have successfully accepted the delivery order.');
+      if (response.success) {
+        // Remove from new orders list
+        setNewOrders(prevOrders => 
+          prevOrders.filter(order => order.id !== orderId)
+        );
+        
+        // Mark order as handled in realtime service
+        realtimeService.markOrderAsHandled(orderId);
+        
+        // Play success sound
+        soundService.playSuccessSound();
+        
+        Alert.alert('Order Accepted', 'You have successfully accepted the delivery order.');
+      } else {
+        throw new Error(response.error || 'Failed to accept order');
+      }
     } catch (error) {
       console.error('Failed to accept order:', error);
       Alert.alert('Error', 'Failed to accept the order. Please try again.');
     }
-  }, []);
+  }, [newOrders]);
 
   const declineOrder = useCallback(async (orderId: string) => {
     try {
-      // Remove from new orders list
-      setNewOrders(prevOrders => 
-        prevOrders.filter(order => order.id !== orderId)
-      );
+      // First, get the order from newOrders
+      const order = newOrders.find(o => o.id === orderId);
+      const deliveryId = order?.deliveryId || orderId;
       
-      // You can call API to decline the order here
-      // await apiService.declineOrder(orderId);
+      // Call API to decline the order
+      const { apiService } = await import('../services/api');
+      const response = await apiService.declineOrder(deliveryId);
       
-      // Play error sound for decline
-      soundService.playErrorSound();
-      
-      Alert.alert('Order Declined', 'You have declined the delivery order.');
+      if (response.success) {
+        // Remove from new orders list
+        setNewOrders(prevOrders => 
+          prevOrders.filter(order => order.id !== orderId)
+        );
+        
+        // Mark order as handled in realtime service
+        realtimeService.markOrderAsHandled(orderId);
+        
+        // Play error sound for decline
+        soundService.playErrorSound();
+        
+        Alert.alert('Order Declined', 'You have declined the delivery order.');
+      } else {
+        throw new Error(response.error || 'Failed to decline order');
+      }
     } catch (error) {
       console.error('Failed to decline order:', error);
       Alert.alert('Error', 'Failed to decline the order. Please try again.');
     }
-  }, []);
+  }, [newOrders]);
 
   const clearNewOrders = useCallback(() => {
     setNewOrders([]);

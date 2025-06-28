@@ -91,12 +91,73 @@ export const DriverProvider: React.FC<DriverProviderProps> = ({ children }) => {
 
   // Load driver data when logged in
   useEffect(() => {
-    if (isLoggedIn) {
-      getDriverProfile();
-      getDriverBalance();
-    } else {
-      dispatch({ type: 'CLEAR_DATA' });
-    }
+    const initializeDriver = async () => {
+      if (isLoggedIn) {
+        console.log('🚗 Initializing driver context...');
+
+        // Load driver profile and balance
+        await getDriverProfile();
+        await getDriverBalance();
+
+        // Initialize location service
+        try {
+          const { locationService } = await import('../services/locationService');
+          await locationService.initialize();
+          console.log('✅ Location service initialized in DriverContext');
+        } catch (error) {
+          console.error('❌ Error initializing location service:', error);
+        }
+
+        // Initialize push notifications
+        try {
+          const { PushNotificationClient } = await import('../sdk/pushNotificationClient');
+          const pushClient = new PushNotificationClient({});
+
+          pushClient.setCallbacks({
+            onNotification: (data) => {
+              console.log('🔔 Push notification received:', data);
+            },
+            onRegistration: async (token) => {
+              console.log('📱 FCM token received:', token);
+
+              // Send token to backend
+              try {
+                const response = await apiService.updateFcmToken(token);
+                if (response.success) {
+                  console.log('✅ FCM token sent to backend');
+                } else {
+                  console.error('❌ Failed to send FCM token to backend:', response.error);
+                }
+              } catch (error) {
+                console.error('❌ Error sending FCM token to backend:', error);
+              }
+            },
+            onRegistrationError: (error) => {
+              console.warn('⚠️ Push notification registration error (this is expected if Firebase is not fully configured):', error);
+            }
+          });
+
+          await pushClient.start();
+          console.log('✅ Push notification client initialized');
+        } catch (error) {
+          console.warn('⚠️ Push notifications not available (this is expected if Firebase is not fully configured):', error);
+          // Continue without push notifications - the app will use polling/websocket instead
+        }
+      } else {
+        console.log('🚪 Clearing driver data and stopping location tracking...');
+        dispatch({ type: 'CLEAR_DATA' });
+
+        // Stop location tracking when logged out
+        try {
+          const { locationService } = await import('../services/locationService');
+          locationService.stopLocationTracking();
+        } catch (error) {
+          console.error('Error stopping location tracking:', error);
+        }
+      }
+    };
+
+    initializeDriver();
   }, [isLoggedIn]);
 
   const getDriverProfile = async (): Promise<void> => {
@@ -116,7 +177,7 @@ export const DriverProvider: React.FC<DriverProviderProps> = ({ children }) => {
 
       if (response.success && response.data) {
         dispatch({ type: 'SET_DRIVER', payload: response.data });
-        
+
         // Update cache
         await Storage.setItem(STORAGE_KEYS.DRIVER_DATA, response.data);
       } else {
@@ -151,11 +212,42 @@ export const DriverProvider: React.FC<DriverProviderProps> = ({ children }) => {
 
       if (response.success) {
         dispatch({ type: 'UPDATE_ONLINE_STATUS', payload: isOnline });
-        
+
         // Update cached driver data
         if (state.driver) {
           const updatedDriver = { ...state.driver, isOnline };
           await Storage.setItem(STORAGE_KEYS.DRIVER_DATA, updatedDriver);
+        }
+
+        // Start or stop location tracking based on online status
+        const { locationService } = await import('../services/locationService');
+        if (isOnline) {
+          console.log('🚀 Driver going online - starting location tracking');
+          await locationService.startLocationTracking();
+
+          // Force an immediate location update when going online
+          try {
+            console.log('⚡ Forcing immediate location update on going online...');
+            const currentLocation = await locationService.getCurrentLocation();
+            console.log(`📍 Got current location: ${currentLocation.latitude}, ${currentLocation.longitude}`);
+
+            const { apiService } = await import('../services/api');
+            const updateResult = await apiService.updateLocation(
+              currentLocation.latitude, 
+              currentLocation.longitude
+            );
+
+            if (updateResult.success) {
+              console.log('✅ Immediate location update successful');
+            } else {
+              console.error('❌ Immediate location update failed:', updateResult.error);
+            }
+          } catch (error) {
+            console.error('⚠️ Failed to get/update immediate location:', error);
+          }
+        } else {
+          console.log('🛑 Driver going offline - stopping location tracking');
+          locationService.stopLocationTracking();
         }
       } else {
         throw new Error(response.error || 'Failed to update online status');

@@ -8,6 +8,18 @@ export interface Tenant {
   secondaryColor?: string;
 }
 
+export interface TenantSettings {
+  show_driver_balance: boolean;
+  enable_customer_feedback: boolean;
+  enable_delivery_tips: boolean;
+  enable_payment_integration: boolean;
+  enable_fleet_management: boolean;
+  company_name: string;
+  primary_color: string;
+  secondary_color: string;
+  currency: string;
+}
+
 export interface AuthUser {
   id: string;
   username: string;
@@ -147,10 +159,11 @@ export interface OrderContextType {
   isLoading: boolean;
   error: string | null;
   refreshOrders: () => Promise<void>;
-  acceptOrder: (orderId: string) => Promise<void>;
+  acceptOrder: (orderId: string) => Promise<boolean>;
   declineOrder: (orderId: string) => Promise<void>;
-  updateOrderStatus: (orderId: string, status: OrderStatus) => Promise<void>;
+  updateOrderStatus: (orderId: string, status: OrderStatus) => Promise<boolean>;
   getOrderHistory: (filter?: 'today' | 'week' | 'month') => Promise<void>;
+  getOrderDetails: (orderId: string) => Promise<Order | null>;
 }
 
 export interface DriverContextType {
