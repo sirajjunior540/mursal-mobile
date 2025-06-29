@@ -744,6 +744,63 @@ class ApiService {
       };
     }
   }
+
+  // Location Updates
+  async updateLocation(latitude: number, longitude: number): Promise<ApiResponse<void>> {
+    console.log(`📍 API: Updating location: ${latitude}, ${longitude}`);
+
+    try {
+      const result = await this.client.post<void>('/api/v1/auth/drivers/update_location/', {
+        latitude,
+        longitude
+      });
+
+      if (result.success) {
+        console.log('✅ Location update API call successful');
+      } else {
+        console.error('❌ Location update API call failed:', result.error);
+      }
+
+      return result;
+    } catch (error) {
+      console.error('❌ Location update network error:', error);
+      return {
+        success: false,
+        data: null as any,
+        error: error instanceof Error ? error.message : 'Network error updating location'
+      };
+    }
+  }
+
+  // Test polling endpoint
+  async testPollingEndpoint(): Promise<ApiResponse<Order[]>> {
+    console.log('🧪 Testing polling endpoint...');
+    
+    try {
+      const result = await this.client.get<any[]>('/api/v1/delivery/deliveries/available_orders/');
+      
+      if (result.success && result.data) {
+        console.log('✅ Polling endpoint works, got', result.data.length, 'orders');
+        
+        // Transform data if needed
+        const orders: Order[] = result.data.map(this.transformOrder);
+        return {
+          success: true,
+          data: orders,
+          message: 'Polling endpoint test successful'
+        };
+      }
+      
+      return result as ApiResponse<Order[]>;
+    } catch (error) {
+      console.error('❌ Polling endpoint test failed:', error);
+      return {
+        success: false,
+        data: [],
+        error: error instanceof Error ? error.message : 'Polling endpoint test failed'
+      };
+    }
+  }
 }
 
 // Production API Service

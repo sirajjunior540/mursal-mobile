@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useReducer, useEffect, useState, ReactNode } from 'react';
 import { OrderContextType, Order, OrderStatus, HistoryFilter } from '../types';
 import { STORAGE_KEYS, APP_SETTINGS } from '../constants';
-import { Storage } from '../utils';
+import { Storage, SecureStorage } from '../utils';
 import { apiService } from '../services/api';
 import { useAuth } from './AuthContext';
 import { realtimeService } from '../services/realtimeService';
@@ -189,6 +189,7 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({ children }) => {
   const initializeRealtimeService = async (): Promise<void> => {
     try {
       console.log('🚀 Initializing realtime service after authentication...');
+      console.log('🔍 OrderContext: User logged in status:', isLoggedIn);
 
       // Verify user is still logged in
       if (!isLoggedIn) {
@@ -196,7 +197,16 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({ children }) => {
         return;
       }
 
-      // Initialize the service
+      // Double-check we have a valid token before proceeding
+      const token = await SecureStorage.getAuthToken();
+      if (!token) {
+        console.log('❌ No auth token available in OrderContext, cannot initialize realtime');
+        return;
+      }
+
+      console.log('✅ OrderContext: Valid token found, proceeding with realtime initialization');
+
+      // Initialize the service (AuthContext already enabled initialization)
       await realtimeService.initialize();
 
       // Set up callbacks for new orders
@@ -277,6 +287,7 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({ children }) => {
   useEffect(() => {
     if (!isLoggedIn) {
       console.log('🛑 Stopping realtime service - user not logged in');
+      realtimeService.disableInitialization();
       realtimeService.stop();
     }
   }, [isLoggedIn]);

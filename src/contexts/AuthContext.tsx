@@ -202,12 +202,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           payload: { user, driver, tenant },
         });
 
-        // Retry realtime service initialization after successful login
+        // Enable realtime service initialization - OrderContext will handle the actual initialization
         try {
           const { realtimeService } = await import('../services/realtimeService');
-          await realtimeService.retryInitialization();
+          realtimeService.enableInitialization();
+          console.log('✅ AuthContext: Enabled realtime service initialization for OrderContext');
         } catch (realtimeError) {
-          console.warn('Failed to initialize realtime service after login:', realtimeError);
+          console.warn('Failed to enable realtime service initialization:', realtimeError);
         }
       } else {
         throw new Error(response.error || 'Login failed');
@@ -251,6 +252,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const logout = async (): Promise<void> => {
     try {
+      // Disable realtime service
+      try {
+        const { realtimeService } = await import('../services/realtimeService');
+        realtimeService.disableInitialization();
+        realtimeService.stop();
+      } catch (error) {
+        console.warn('Error stopping realtime service:', error);
+      }
+
       // Call logout API
       await apiService.logout();
     } catch (error) {

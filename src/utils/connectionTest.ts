@@ -179,6 +179,36 @@ export class ConnectionTester {
   }
 
   /**
+   * Test polling endpoint specifically
+   */
+  static async testPollingEndpoint(): Promise<ConnectionTestResult> {
+    try {
+      apiDebug('Testing polling endpoint...');
+      
+      const { apiService } = await import('../services/api');
+      const result = await apiService.testPollingEndpoint();
+      
+      return {
+        success: result.success,
+        message: result.success 
+          ? `Polling endpoint works - got ${result.data?.length || 0} orders` 
+          : `Polling endpoint failed: ${result.error}`,
+        details: {
+          endpoint: '/api/v1/delivery/deliveries/available_orders/',
+          orderCount: result.data?.length || 0,
+          error: result.error
+        },
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: `Polling endpoint error: ${error instanceof Error ? error.message : String(error)}`,
+        details: { error },
+      };
+    }
+  }
+
+  /**
    * Run all connection tests
    */
   static async runAllTests(): Promise<{ [key: string]: ConnectionTestResult }> {
@@ -188,6 +218,7 @@ export class ConnectionTester {
       api: await this.testAPIConnection(),
       tenant: await this.testTenantSetup(),
       login: await this.testLoginEndpoint(),
+      polling: await this.testPollingEndpoint(),
     };
 
     apiDebug('Connection test results:', results);

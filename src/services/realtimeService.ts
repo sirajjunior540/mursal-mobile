@@ -40,6 +40,7 @@ class RealtimeService {
   private sdk: RealtimeSDK | null = null;
   private isConnected: boolean = false;
   private initialized: boolean = false;
+  private initializationBlocked: boolean = true; // Block all initialization until explicitly enabled
   private lastPollTime: number = 0;
   private seenOrderIds: Set<string> = new Set();
   private notifiedOrderIds: Set<string> = new Set();
@@ -50,6 +51,24 @@ class RealtimeService {
   async initialize(): Promise<void> {
     try {
       console.log('🚀 Initializing RealtimeService...');
+      console.log('🔍 Call stack:', new Error().stack?.split('\n').slice(1, 4).join('\n'));
+
+      // Check if initialization is blocked (safety measure)
+      if (this.initializationBlocked) {
+        console.log('🚫 RealtimeService initialization is blocked - call enableInitialization() first');
+        this.callbacks.onError?.('Realtime service initialization blocked - login required');
+        return;
+      }
+
+      // Check if already initialized
+      if (this.initialized) {
+        console.log('⚠️ RealtimeService already initialized, skipping');
+        // Still set up callbacks if needed
+        if (this.sdk && Object.keys(this.callbacks).length > 0) {
+          this.setupSdkCallbacks();
+        }
+        return;
+      }
 
       // Load saved configuration
       const savedConfig = await Storage.getItem<RealtimeConfig>('realtime_config');
@@ -65,6 +84,7 @@ class RealtimeService {
       console.log('✅ RealtimeService initialized successfully');
     } catch (error) {
       console.error('❌ RealtimeService initialization failed:', error);
+      this.initialized = false;
       throw error;
     }
   }
@@ -77,13 +97,17 @@ class RealtimeService {
       console.log('🔧 Initializing RealtimeSDK...');
 
       // Get auth token
+      console.log('🔑 Attempting to get auth token...');
       const token = await SecureStorage.getAuthToken();
       if (!token) {
         console.log('⚠️ No authentication token available - cannot initialize realtime service');
         console.log('🔐 Realtime service will be initialized after successful login');
         this.initialized = false;
+        this.callbacks.onError?.('No authentication token available');
         return;
       }
+      
+      console.log('✅ Auth token found, length:', token.length);
       
       // Validate token is not expired (basic check)
       try {
@@ -130,11 +154,8 @@ class RealtimeService {
         authToken: sdkConfig.authToken ? '***' : undefined // Hide token in logs
       });
 
-      // Auto-start if enabled
-      if (this.config.enabled) {
-        console.log('🔄 Auto-starting realtime service after initialization');
-        this.start();
-      }
+      // Don't auto-start - let OrderContext control when to start
+      console.log('📝 RealtimeSDK initialized but not started - waiting for explicit start command');
     } catch (error) {
       console.error('❌ Error initializing RealtimeSDK:', error);
       // Don't throw - just log the error
@@ -153,11 +174,29 @@ class RealtimeService {
   }
 
   /**
+   * Enable initialization (must be called after successful login)
+   */
+  enableInitialization(): void {
+    console.log('🔓 Enabling realtime service initialization');
+    this.initializationBlocked = false;
+  }
+
+  /**
+   * Disable initialization (called on logout)
+   */
+  disableInitialization(): void {
+    console.log('🔒 Disabling realtime service initialization');
+    this.initializationBlocked = true;
+    this.initialized = false;
+  }
+
+  /**
    * Retry initialization (useful after login)
    */
   async retryInitialization(): Promise<void> {
     realtimeDebug('Retrying realtime service initialization...');
     this.initialized = false;
+    this.enableInitialization(); // Allow initialization
     await this.initializeSDK();
   }
 

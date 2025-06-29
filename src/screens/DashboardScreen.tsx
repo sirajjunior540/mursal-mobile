@@ -17,6 +17,7 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import HeartbeatIndicator from '../components/HeartbeatIndicator';
+import ConnectionStatusIndicator from '../components/ConnectionStatusIndicator';
 import OrderNotificationModal from '../components/OrderNotificationModal';
 // import { BlurView } from '@react-native-community/blur'; // Uncomment if blur effects are needed
 
@@ -49,6 +50,7 @@ const DashboardScreen: React.FC = () => {
   const { driver, updateOnlineStatus } = useDriver();
   const [connectionMode, setConnectionMode] = useState<RealtimeMode>('polling');
   const [isConnected, setIsConnected] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<'connected' | 'connecting' | 'disconnected' | 'error'>('connecting');
   const [notificationOrder, setNotificationOrder] = useState<Order | null>(null);
   const [showNotificationModal, setShowNotificationModal] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -87,6 +89,7 @@ const DashboardScreen: React.FC = () => {
         onConnectionChange: (connected: boolean) => {
           console.log('🔌 Dashboard connection change:', connected);
           setIsConnected(connected);
+          setConnectionStatus(connected ? 'connected' : 'connecting');
         },
         onNewOrder: (order: Order) => {
           console.log('🔔 New order notification received in Dashboard:', order.id);
@@ -100,6 +103,12 @@ const DashboardScreen: React.FC = () => {
         },
         onError: (error: string) => {
           console.error('❌ Realtime error in Dashboard:', error);
+          // Don't show authentication errors to user - they're handled elsewhere
+          if (!error.includes('authentication') && !error.includes('blocked')) {
+            // Only log non-auth errors for now
+            console.warn('Non-auth realtime error:', error);
+            setConnectionStatus('error');
+          }
         }
       };
       
@@ -414,17 +423,20 @@ const DashboardScreen: React.FC = () => {
         </View>
       </View>
 
-      {/* Connection Status - Minimal */}
+      {/* Connection Status - Enhanced */}
       <View style={styles.connectionBar}>
         <View style={styles.connectionStatus}>
-          <HeartbeatIndicator 
-            isActive={isConnected} 
-            size={6}
-            color={isConnected ? COLORS.success : COLORS.text.secondary}
-            pulseColor={isConnected ? `${COLORS.success  }30` : 'transparent'}
+          <ConnectionStatusIndicator
+            type={connectionMode}
+            status={connectionStatus}
+            size={8}
+            showLabel={false}
           />
           <Text style={styles.connectionText}>
             {isConnected ? 'Connected' : 'Connecting...'}
+          </Text>
+          <Text style={styles.connectionModeText}>
+            {connectionMode === 'websocket' ? 'WS' : 'API'}
           </Text>
         </View>
         
@@ -647,6 +659,16 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.regular,
     color: COLORS.text.secondary,
     marginLeft: 6,
+  },
+  connectionModeText: {
+    fontSize: 10,
+    fontFamily: FONTS.medium,
+    color: COLORS.text.secondary,
+    marginLeft: 4,
+    backgroundColor: '#F2F2F7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
   },
   connectionToggle: {
     padding: 8,
