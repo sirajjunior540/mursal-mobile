@@ -245,7 +245,7 @@ const HistoryScreen: React.FC = () => {
               </View>
               
               <View style={styles.statusContainer}>
-                <View style={[styles.statusBadge, { backgroundColor: statusColor + '20' }]}>
+                <View style={[styles.statusBadge, { backgroundColor: `${statusColor  }20` }]}>
                   <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
                   <Text style={[styles.statusText, { color: statusColor }]}>
                     {order.status.replace('_', ' ')}
@@ -447,10 +447,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     margin: 20,
     padding: 16,
-    backgroundColor: COLORS.error + '10',
+    backgroundColor: `${COLORS.error  }10`,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: COLORS.error + '20',
+    borderColor: `${COLORS.error  }20`,
   },
   errorText: {
     flex: 1,

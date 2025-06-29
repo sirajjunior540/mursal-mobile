@@ -1,10 +1,10 @@
-import { lightTheme, darkTheme } from './theme';
+import { lightTheme } from './theme';
 
 // Define the COLORS object as expected by the components
 export const COLORS = {
   primary: {
     default: lightTheme.colors.primary,
-    light: lightTheme.colors.primary + '80', // 50% opacity
+    light: `${lightTheme.colors.primary}80`, // 50% opacity
     dark: '#1976D2', // Darker shade of primary
   },
   secondary: lightTheme.colors.secondary,

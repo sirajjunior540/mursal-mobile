@@ -118,24 +118,9 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({ children }) => {
   const [authReady, setAuthReady] = useState(false);
   const [contextError, setContextError] = useState<string | null>(null);
 
-  // Safely get auth context with error handling
-  let authContext;
-  let isLoggedIn = false;
-  
-  try {
-    authContext = useAuth();
-    isLoggedIn = authContext?.isLoggedIn || false;
-    
-    // Clear any previous context errors if auth is working
-    if (contextError) {
-      setContextError(null);
-    }
-  } catch (error) {
-    console.error('❌ OrderProvider: Auth context error:', error);
-    authContext = null;
-    isLoggedIn = false;
-    setContextError(error instanceof Error ? error.message : 'Auth context unavailable');
-  }
+  // Get auth context - hooks must always be called in the same order
+  const authContext = useAuth();
+  const isLoggedIn = authContext?.isLoggedIn || false;
 
   // Mark auth as ready if we got a valid context
   useEffect(() => {
@@ -169,6 +154,7 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({ children }) => {
       console.log('🚪 User not logged in, clearing order data');
       dispatch({ type: 'CLEAR_DATA' });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoggedIn, authReady]);
 
   // Auto-refresh orders with delay after login
@@ -196,6 +182,7 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({ children }) => {
     return () => {
       clearTimeout(startTimer);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoggedIn]);
 
   // Initialize realtime service for order notifications with delay

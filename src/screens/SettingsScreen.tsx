@@ -13,6 +13,19 @@ import { locationService } from '../services/locationService';
 import { realtimeService, RealtimeMode, RealtimeConfig } from '../services/realtimeService';
 import { Storage } from '../utils';
 
+interface ConnectionStatusProps {
+  isConnected: boolean;
+}
+
+const ConnectionStatus: React.FC<ConnectionStatusProps> = ({ isConnected }) => (
+  <View style={styles.statusContainer}>
+    <View style={[styles.statusDot, { backgroundColor: isConnected ? COLORS.success : COLORS.error }]} />
+    <Text style={styles.statusText}>
+      {isConnected ? 'Connected' : 'Disconnected'}
+    </Text>
+  </View>
+);
+
 const SettingsScreen: React.FC = () => {
   const [locationTracking, setLocationTracking] = useState(false);
   const [realtimeConfig, setRealtimeConfig] = useState<RealtimeConfig>({
@@ -44,6 +57,7 @@ const SettingsScreen: React.FC = () => {
         realtimeService.stop();
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const initializeSettings = async () => {
@@ -188,14 +202,6 @@ const SettingsScreen: React.FC = () => {
     }
   };
 
-  const ConnectionStatus = () => (
-    <View style={styles.statusContainer}>
-      <View style={[styles.statusDot, { backgroundColor: isConnected ? COLORS.success : COLORS.error }]} />
-      <Text style={styles.statusText}>
-        {isConnected ? 'Connected' : 'Disconnected'}
-      </Text>
-    </View>
-  );
 
   return (
     <ScrollView style={styles.container}>
@@ -214,7 +220,7 @@ const SettingsScreen: React.FC = () => {
           <Switch
             value={locationTracking}
             onValueChange={toggleLocationTracking}
-            trackColor={{ false: COLORS.gray300, true: COLORS.primary + '40' }}
+            trackColor={{ false: COLORS.gray300, true: `${COLORS.primary  }40` }}
             thumbColor={locationTracking ? COLORS.primary : COLORS.gray500}
           />
         </View>
@@ -231,7 +237,7 @@ const SettingsScreen: React.FC = () => {
             <Switch
               value={locationWebSocket}
               onValueChange={toggleLocationWebSocket}
-              trackColor={{ false: COLORS.gray300, true: COLORS.primary + '40' }}
+              trackColor={{ false: COLORS.gray300, true: `${COLORS.primary  }40` }}
               thumbColor={locationWebSocket ? COLORS.primary : COLORS.gray500}
             />
           </View>
@@ -252,7 +258,7 @@ const SettingsScreen: React.FC = () => {
           <Switch
             value={realtimeConfig.enabled}
             onValueChange={toggleRealtimeOrders}
-            trackColor={{ false: COLORS.gray300, true: COLORS.primary + '40' }}
+            trackColor={{ false: COLORS.gray300, true: `${COLORS.primary  }40` }}
             thumbColor={realtimeConfig.enabled ? COLORS.primary : COLORS.gray500}
           />
         </View>
@@ -269,7 +275,7 @@ const SettingsScreen: React.FC = () => {
             <Switch
               value={orderWebSocket}
               onValueChange={toggleOrderWebSocket}
-              trackColor={{ false: COLORS.gray300, true: COLORS.primary + '40' }}
+              trackColor={{ false: COLORS.gray300, true: `${COLORS.primary  }40` }}
               thumbColor={orderWebSocket ? COLORS.primary : COLORS.gray500}
             />
           </View>
@@ -277,7 +283,7 @@ const SettingsScreen: React.FC = () => {
 
         {realtimeConfig.enabled && (
           <>
-            <ConnectionStatus />
+            <ConnectionStatus isConnected={isConnected} />
             
             {/* Mode Selection */}
             <View style={styles.modeContainer}>

@@ -16,11 +16,118 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 import { useAuth } from '../contexts/AuthContext';
 import { useDriver } from '../contexts/DriverContext';
 import { useTenant } from '../contexts/TenantContext';
 import { COLORS, SPACING } from '../constants';
+
+interface ProfileItemProps {
+  icon: string;
+  label: string;
+  value: string;
+  onPress?: () => void;
+  showDivider?: boolean;
+}
+
+const ProfileItem: React.FC<ProfileItemProps> = ({ icon, label, value, onPress, showDivider = true }) => {
+  const animatedScale = useState(new Animated.Value(1))[0];
+
+  const handlePressIn = () => {
+    if (onPress) {
+      Animated.spring(animatedScale, {
+        toValue: 0.98,
+        useNativeDriver: true,
+      }).start();
+    }
+  };
+
+  const handlePressOut = () => {
+    if (onPress) {
+      Animated.spring(animatedScale, {
+        toValue: 1,
+        useNativeDriver: true,
+      }).start();
+    }
+  };
+
+  return (
+    <Animated.View style={{ transform: [{ scale: animatedScale }] }}>
+      <TouchableOpacity
+        style={styles.profileItem}
+        onPress={onPress}
+        disabled={!onPress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        activeOpacity={1}
+      >
+        <View style={styles.profileItemContent}>
+          <View style={styles.iconContainer}>
+            <Ionicons name={icon as any} size={20} color={COLORS.primary.default} />
+          </View>
+          <View style={styles.profileItemText}>
+            <Text style={styles.profileItemLabel}>{label}</Text>
+            <Text style={styles.profileItemValue}>{value}</Text>
+          </View>
+        </View>
+        {onPress && (
+          <Ionicons name="chevron-forward" size={16} color={COLORS.text.secondary} />
+        )}
+      </TouchableOpacity>
+      {showDivider && <View style={styles.itemDivider} />}
+    </Animated.View>
+  );
+};
+
+interface BalanceCardProps {
+  balance: any;
+  fadeAnim: Animated.Value;
+  slideAnim: Animated.Value;
+}
+
+const BalanceCard: React.FC<BalanceCardProps> = ({ balance, fadeAnim, slideAnim }) => (
+  <Animated.View style={[styles.balanceCard, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+    <View style={styles.balanceHeader}>
+      <Ionicons name="wallet-outline" size={24} color={COLORS.primary.default} />
+      <Text style={styles.balanceCardTitle}>Balance Overview</Text>
+    </View>
+    {balance ? (
+      <View style={styles.balanceGrid}>
+        <View style={styles.balanceItem}>
+          <View style={styles.balanceIconContainer}>
+            <Ionicons name="cash-outline" size={16} color={COLORS.success} />
+          </View>
+          <Text style={styles.balanceValue}>${balance.cashOnHand.toFixed(2)}</Text>
+          <Text style={styles.balanceLabel}>Cash on Hand</Text>
+        </View>
+        <View style={styles.balanceItem}>
+          <View style={styles.balanceIconContainer}>
+            <Ionicons name="card-outline" size={16} color={COLORS.primary.default} />
+          </View>
+          <Text style={styles.balanceValue}>${balance.depositBalance.toFixed(2)}</Text>
+          <Text style={styles.balanceLabel}>Deposit Balance</Text>
+        </View>
+        <View style={styles.balanceItem}>
+          <View style={styles.balanceIconContainer}>
+            <Ionicons name="trending-up-outline" size={16} color={COLORS.warning} />
+          </View>
+          <Text style={styles.balanceValue}>${balance.todayEarnings.toFixed(2)}</Text>
+          <Text style={styles.balanceLabel}>Today's Earnings</Text>
+        </View>
+        <View style={styles.balanceItem}>
+          <View style={styles.balanceIconContainer}>
+            <Ionicons name="calendar-outline" size={16} color={COLORS.text.secondary} />
+          </View>
+          <Text style={styles.balanceValue}>${balance.weekEarnings.toFixed(2)}</Text>
+          <Text style={styles.balanceLabel}>Week Earnings</Text>
+        </View>
+      </View>
+    ) : (
+      <View style={styles.balanceLoading}>
+        <Text style={styles.balanceLoadingText}>Balance information not available</Text>
+      </View>
+    )}
+  </Animated.View>
+);
 
 const ProfileScreen: React.FC = () => {
   const { user, logout } = useAuth();
@@ -100,105 +207,6 @@ const ProfileScreen: React.FC = () => {
     );
   };
 
-  const ProfileItem: React.FC<{
-    icon: string;
-    label: string;
-    value: string;
-    onPress?: () => void;
-    showDivider?: boolean;
-  }> = ({ icon, label, value, onPress, showDivider = true }) => {
-    const animatedScale = useState(new Animated.Value(1))[0];
-
-    const handlePressIn = () => {
-      if (onPress) {
-        Animated.spring(animatedScale, {
-          toValue: 0.98,
-          useNativeDriver: true,
-        }).start();
-      }
-    };
-
-    const handlePressOut = () => {
-      if (onPress) {
-        Animated.spring(animatedScale, {
-          toValue: 1,
-          useNativeDriver: true,
-        }).start();
-      }
-    };
-
-    return (
-      <Animated.View style={{ transform: [{ scale: animatedScale }] }}>
-        <TouchableOpacity 
-          style={styles.profileItem} 
-          onPress={onPress} 
-          disabled={!onPress}
-          onPressIn={handlePressIn}
-          onPressOut={handlePressOut}
-          activeOpacity={1}
-        >
-          <View style={styles.profileItemContent}>
-            <View style={styles.iconContainer}>
-              <Ionicons name={icon as any} size={20} color={COLORS.primary.default} />
-            </View>
-            <View style={styles.profileItemText}>
-              <Text style={styles.profileItemLabel}>{label}</Text>
-              <Text style={styles.profileItemValue}>{value}</Text>
-            </View>
-          </View>
-          {onPress && (
-            <Ionicons name="chevron-forward" size={16} color={COLORS.text.secondary} />
-          )}
-        </TouchableOpacity>
-        {showDivider && <View style={styles.itemDivider} />}
-      </Animated.View>
-    );
-  };
-
-  const BalanceCard: React.FC = () => (
-    <Animated.View style={[styles.balanceCard, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
-      <View style={styles.balanceHeader}>
-        <Ionicons name="wallet-outline" size={24} color={COLORS.primary.default} />
-        <Text style={styles.balanceCardTitle}>Balance Overview</Text>
-      </View>
-      {balance ? (
-        <View style={styles.balanceGrid}>
-          <View style={styles.balanceItem}>
-            <View style={styles.balanceIconContainer}>
-              <Ionicons name="cash-outline" size={16} color={COLORS.success} />
-            </View>
-            <Text style={styles.balanceValue}>${balance.cashOnHand.toFixed(2)}</Text>
-            <Text style={styles.balanceLabel}>Cash on Hand</Text>
-          </View>
-          <View style={styles.balanceItem}>
-            <View style={styles.balanceIconContainer}>
-              <Ionicons name="card-outline" size={16} color={COLORS.primary.default} />
-            </View>
-            <Text style={styles.balanceValue}>${balance.depositBalance.toFixed(2)}</Text>
-            <Text style={styles.balanceLabel}>Deposit Balance</Text>
-          </View>
-          <View style={styles.balanceItem}>
-            <View style={styles.balanceIconContainer}>
-              <Ionicons name="trending-up-outline" size={16} color={COLORS.warning} />
-            </View>
-            <Text style={styles.balanceValue}>${balance.todayEarnings.toFixed(2)}</Text>
-            <Text style={styles.balanceLabel}>Today's Earnings</Text>
-          </View>
-          <View style={styles.balanceItem}>
-            <View style={styles.balanceIconContainer}>
-              <Ionicons name="calendar-outline" size={16} color={COLORS.text.secondary} />
-            </View>
-            <Text style={styles.balanceValue}>${balance.weekEarnings.toFixed(2)}</Text>
-            <Text style={styles.balanceLabel}>Week Earnings</Text>
-          </View>
-        </View>
-      ) : (
-        <View style={styles.balanceLoading}>
-          <Text style={styles.balanceLoadingText}>Balance information not available</Text>
-        </View>
-      )}
-    </Animated.View>
-  );
 
   if (isLoading && !driver) {
     return (
@@ -292,7 +300,7 @@ const ProfileScreen: React.FC = () => {
             <ProfileItem
               icon="person-outline"
               label="Full Name"
-              value={driver ? `${driver.firstName} ${driver.lastName}` : user?.firstName + ' ' + user?.lastName || 'N/A'}
+              value={driver ? `${driver.firstName} ${driver.lastName}` : `${user?.firstName  } ${  user?.lastName}` || 'N/A'}
             />
             <ProfileItem
               icon="mail-outline"
@@ -345,7 +353,7 @@ const ProfileScreen: React.FC = () => {
         {settings?.show_driver_balance && (
           <Animated.View style={[styles.section, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
             <Text style={styles.sectionTitle}>Balance</Text>
-            <BalanceCard />
+            <BalanceCard balance={balance} fadeAnim={fadeAnim} slideAnim={slideAnim} />
           </Animated.View>
         )}
 
@@ -471,10 +479,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     margin: 20,
     padding: 16,
-    backgroundColor: COLORS.error + '10',
+    backgroundColor: `${COLORS.error  }10`,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: COLORS.error + '20',
+    borderColor: `${COLORS.error  }20`,
   },
   errorText: {
     flex: 1,
@@ -674,7 +682,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: COLORS.error + '20',
+    borderColor: `${COLORS.error  }20`,
   },
   logoutButtonText: {
     marginLeft: 8,

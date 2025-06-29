@@ -45,7 +45,7 @@ class HttpClient {
     console.log(`API Call: ${options.method || 'GET'} ${url}`);
     console.log('Host header:', API_CONFIG.HOST);
     if (token) {
-      console.log('Using auth token:', token.substring(0, 20) + '...');
+      console.log('Using auth token:', `${token.substring(0, 20)  }...`);
     } else {
       console.log('No auth token available');
     }
@@ -105,7 +105,7 @@ class HttpClient {
         } else if (error.message.includes('fetch')) {
           errorMessage = 'Connection failed. Please check if the server is running and try again.';
         } else if (error.message.includes('ERR_NETWORK')) {
-          errorMessage = 'Network connection failed. Check if server is accessible at ' + this.baseURL;
+          errorMessage = `Network connection failed. Check if server is accessible at ${  this.baseURL}`;
         }
       }
 
@@ -215,8 +215,8 @@ class ApiService {
       firstName: driverResponse.data.firstName || '',
       lastName: driverResponse.data.lastName || '',
       phone: driverResponse.data.phone || '',
-      token: token,
-      tenantId: tenantId
+      token,
+      tenantId
     };
 
     const tenant: Tenant = {

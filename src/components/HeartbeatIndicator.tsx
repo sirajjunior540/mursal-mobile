@@ -13,7 +13,7 @@ const HeartbeatIndicator: React.FC<HeartbeatIndicatorProps> = ({
   isActive,
   size = 12,
   color = COLORS.success,
-  pulseColor = COLORS.success + '30', // 30% opacity
+  pulseColor = `${COLORS.success}30`, // 30% opacity
 }) => {
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;

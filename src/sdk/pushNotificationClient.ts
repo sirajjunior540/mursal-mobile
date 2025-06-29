@@ -83,7 +83,7 @@ export class PushNotificationClient {
       
       if (granted) {
         // Get token
-        await this.getToken();
+        await this.requestToken();
         
         // Set up listeners
         this.setupListeners();
@@ -193,7 +193,7 @@ export class PushNotificationClient {
   /**
    * Get FCM token
    */
-  private async getToken(): Promise<void> {
+  private async requestToken(): Promise<void> {
     try {
       if (!messaging) {
         console.warn('[PushNotificationClient] Firebase messaging not available');
@@ -338,7 +338,4 @@ export class PushNotificationClient {
     }
   }
   
-  // Firebase message listeners
-  private onTokenRefreshListener?: () => void;
-  private onMessageListener?: () => void;
 }

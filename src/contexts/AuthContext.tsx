@@ -151,8 +151,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             console.log('⚠️ Auth verification failed, clearing auth data:', error);
             try {
               await SecureStorage.clearAll();
-            } catch (clearError) {
-              console.error('Error clearing auth data:', clearError);
+            } catch (_clearError) {
+              console.error('Error clearing auth data:', _clearError);
             }
             dispatch({ type: 'LOGOUT' });
           }
@@ -164,8 +164,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         console.error('💥 Critical error restoring auth:', error);
         try {
           await SecureStorage.clearAll();
-        } catch (clearError) {
-          console.error('Error clearing auth data after failure:', clearError);
+        } catch (_clearError) {
+          console.error('Error clearing auth data after failure:', _clearError);
         }
         dispatch({ type: 'LOGOUT' });
       }
@@ -263,9 +263,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const clearError = () => {
-    dispatch({ type: 'CLEAR_ERROR' });
-  };
 
   const contextValue: AuthContextType = {
     user: state.user,

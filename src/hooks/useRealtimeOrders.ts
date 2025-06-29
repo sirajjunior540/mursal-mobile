@@ -33,6 +33,7 @@ export const useRealtimeOrders = (): UseRealtimeOrdersReturn => {
     return () => {
       cleanup();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const initializeServices = useCallback(async () => {
@@ -63,6 +64,7 @@ export const useRealtimeOrders = (): UseRealtimeOrdersReturn => {
     } catch (error) {
       console.error('Failed to initialize realtime services:', error);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const setupAppStateListener = useCallback(() => {
@@ -109,6 +111,7 @@ export const useRealtimeOrders = (): UseRealtimeOrdersReturn => {
       }
       return prevOrders;
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleOrderUpdate = useCallback((order: Order) => {
@@ -159,7 +162,8 @@ export const useRealtimeOrders = (): UseRealtimeOrdersReturn => {
       ],
       { cancelable: false }
     );
-  }, []);
+     
+  }, [acceptOrder, declineOrder]);
 
   const acceptOrder = useCallback(async (orderId: string) => {
     try {

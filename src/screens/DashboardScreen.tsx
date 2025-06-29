@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState, useRef, memo } from 'react';
+import React, { useCallback, useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,7 +7,6 @@ import {
   StyleSheet,
   RefreshControl,
   Alert,
-  ActivityIndicator,
   ListRenderItem,
   Animated,
   Dimensions,
@@ -30,7 +29,6 @@ import { realtimeService, RealtimeMode } from '../services/realtimeService';
 import { forceLocationUpdate, testNotifications } from '../utils/locationTest';
 import { locationService } from '../services/locationService';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface DashboardStackParamList extends Record<string, object | undefined> {
   OrderDetails: { orderId: string };
@@ -76,12 +74,12 @@ const DashboardScreen: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+     
     refreshOrders();
     
     // Delay dashboard initialization to ensure OrderContext has set up realtime service
     const initTimer = setTimeout(() => {
-      // eslint-disable-next-line @typescript-eslint/no-floating-promises
+       
       initializeConnectionMode();
       
       // Set up realtime service callbacks
@@ -280,7 +278,7 @@ const DashboardScreen: React.FC = () => {
               <Text style={styles.orderNumber}>Order {orderNumber}</Text>
               <Text style={styles.orderTime}>{safeOrderTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</Text>
             </View>
-            <View style={[styles.statusBadge, { backgroundColor: statusColor + '20' }]}>
+            <View style={[styles.statusBadge, { backgroundColor: `${statusColor  }20` }]}>
               <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
               <Text style={[styles.statusText, { color: statusColor }]}>
                 {ORDER_STATUS_LABELS[status as keyof typeof ORDER_STATUS_LABELS] || status}
@@ -378,7 +376,7 @@ const DashboardScreen: React.FC = () => {
             isActive={driver?.isOnline || false} 
             size={12}
             color={driver?.isOnline ? COLORS.white : COLORS.text.secondary}
-            pulseColor={driver?.isOnline ? COLORS.white + '40' : COLORS.text.secondary + '40'}
+            pulseColor={driver?.isOnline ? `${COLORS.white  }40` : `${COLORS.text.secondary  }40`}
           />
           <Text style={[
             styles.onlineButtonText,
@@ -423,7 +421,7 @@ const DashboardScreen: React.FC = () => {
             isActive={isConnected} 
             size={6}
             color={isConnected ? COLORS.success : COLORS.text.secondary}
-            pulseColor={isConnected ? COLORS.success + '30' : 'transparent'}
+            pulseColor={isConnected ? `${COLORS.success  }30` : 'transparent'}
           />
           <Text style={styles.connectionText}>
             {isConnected ? 'Connected' : 'Connecting...'}

@@ -5,9 +5,20 @@
   "scripts": {
     "android": "react-native run-android",
     "ios": "react-native run-ios",
-    "lint": "eslint .",
+    "lint": "eslint . --ext .js,.jsx,.ts,.tsx",
+    "lint:fix": "eslint . --ext .js,.jsx,.ts,.tsx --fix",
+    "typecheck": "tsc --noEmit",
     "start": "react-native start",
-    "test": "jest"
+    "test": "jest",
+    "pod-install": "cd ios && pod install",
+    "clean": "cd android && ./gradlew clean && cd ../ios && xcodebuild clean && cd ..",
+    "clean:all": "npm run clean && watchman watch-del-all && rm -rf node_modules && npm install && npm run pod-install",
+    "build:android": "cd android && ./gradlew assembleRelease",
+    "build:android:bundle": "cd android && ./gradlew bundleRelease",
+    "build:ios": "cd ios && xcodebuild -workspace DriverAppNew.xcworkspace -scheme DriverAppNew -configuration Release -destination generic/platform=iOS archive -archivePath ./build/DriverAppNew.xcarchive",
+    "prepare:release": "npm run lint:fix && npm run typecheck && npm run test",
+    "release:android": "npm run prepare:release && npm run build:android",
+    "release:ios": "npm run prepare:release && npm run build:ios"
   },
   "dependencies": {
     "@expo/vector-icons": "^13.0.0",

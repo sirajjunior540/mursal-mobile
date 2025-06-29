@@ -137,7 +137,7 @@ export class PollingClient {
 
     // Add authorization header if token is available
     if (this.config.authToken) {
-      headers['Authorization'] = `Bearer ${this.config.authToken}`;
+      headers.Authorization = `Bearer ${this.config.authToken}`;
     }
 
     console.log(`[PollingClient] Fetching from: ${url} with Host: ${API_CONFIG.HOST}`);
@@ -179,7 +179,7 @@ export class PollingClient {
   /**
    * Check if client is connected
    */
-  isConnected(): boolean {
+  getConnectionStatus(): boolean {
     return this.isConnected;
   }
 

@@ -314,7 +314,7 @@ export class RealtimeSDK {
         
       case 'auth_error':
         this.log('error', 'WebSocket authentication failed:', message.message);
-        this.callbacks.onError?.('Authentication failed: ' + message.message, 'websocket');
+        this.callbacks.onError?.(`Authentication failed: ${  message.message}`, 'websocket');
         break;
         
       case 'error':

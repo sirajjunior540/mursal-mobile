@@ -87,7 +87,7 @@ interface DriverProviderProps {
 
 export const DriverProvider: React.FC<DriverProviderProps> = ({ children }) => {
   const [state, dispatch] = useReducer(driverReducer, initialState);
-  const { isLoggedIn, user } = useAuth();
+  const { isLoggedIn } = useAuth();
 
   // Load driver data when logged in
   useEffect(() => {
@@ -231,8 +231,8 @@ export const DriverProvider: React.FC<DriverProviderProps> = ({ children }) => {
             const currentLocation = await locationService.getCurrentLocation();
             console.log(`📍 Got current location: ${currentLocation.latitude}, ${currentLocation.longitude}`);
 
-            const { apiService } = await import('../services/api');
-            const updateResult = await apiService.updateLocation(
+            const { apiService: api } = await import('../services/api');
+            const updateResult = await api.updateLocation(
               currentLocation.latitude, 
               currentLocation.longitude
             );

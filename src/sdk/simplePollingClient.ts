@@ -110,7 +110,7 @@ export class SimplePollingClient {
     };
     
     if (this.config.authToken) {
-      headers['Authorization'] = `Bearer ${this.config.authToken}`;
+      headers.Authorization = `Bearer ${this.config.authToken}`;
     }
     
     console.log(`[SimplePollingClient] Fetching: ${url}`);

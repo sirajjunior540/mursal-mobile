@@ -4,8 +4,7 @@ import { Storage, SecureStorage } from '../utils';
 import { 
   RealtimeSDK, 
   RealtimeSDKConfig, 
-  CommunicationMode,
-  ConnectionStatus
+  CommunicationMode
 } from '../sdk';
 
 // For backward compatibility
@@ -82,7 +81,7 @@ class RealtimeService {
         // The service will retry when a token becomes available
         return;
       }
-      console.log('🔑 Auth token retrieved:', token.substring(0, 20) + '...');
+      console.log('🔑 Auth token retrieved:', `${token.substring(0, 20)  }...`);
 
       // Create SDK configuration
       const sdkConfig: Partial<RealtimeSDKConfig> = {
@@ -328,7 +327,7 @@ class RealtimeService {
   /**
    * Clean up old order IDs (deprecated - handled by SDK)
    */
-  private cleanupOldOrders(currentOrderIds: Set<string>): void {
+  private cleanupOldOrders(_currentOrderIds: Set<string>): void {
     // No-op - handled by SDK
   }
 
@@ -363,7 +362,7 @@ class RealtimeService {
   /**
    * Handle WebSocket messages (deprecated - handled by SDK)
    */
-  private handleWebSocketMessage(data: any): void {
+  private handleWebSocketMessage(_data: any): void {
     // No-op - handled by SDK
   }
 

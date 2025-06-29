@@ -96,6 +96,7 @@ export const TenantProvider: React.FC<TenantProviderProps> = ({ children }) => {
     } else {
       dispatch({ type: 'CLEAR_DATA' });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoggedIn]);
 
   const refreshSettings = async (): Promise<void> => {

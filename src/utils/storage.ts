@@ -9,7 +9,7 @@ export class Storage {
    */
   static async setItem<T>(key: string, value: T): Promise<void> {
     try {
-      const serializedValue = JSON.stringify(value, (key, val) => {
+      const serializedValue = JSON.stringify(value, (_storageKey, val) => {
         // Handle Date objects
         if (val instanceof Date) {
           return { __type: 'Date', value: val.toISOString() };
@@ -33,7 +33,7 @@ export class Storage {
         return null;
       }
 
-      const parsed = JSON.parse(serializedValue, (key, val) => {
+      const parsed = JSON.parse(serializedValue, (_parseKey, val) => {
         // Handle Date objects
         if (val && typeof val === 'object' && val.__type === 'Date') {
           return new Date(val.value);

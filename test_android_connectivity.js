@@ -11,7 +11,7 @@ console.log('🔍 Testing Android to Django Backend Connectivity\n');
 console.log('📡 Server IP: 192.168.1.52');
 console.log('🏢 Tenant Host: sirajjunior.localhost');
 console.log('🌐 API Base URL:', API_BASE_URL);
-console.log('\n' + '='.repeat(50) + '\n');
+console.log(`\n${  '='.repeat(50)  }\n`);
 
 // Test 1: Basic connectivity
 console.log('Test 1: Basic connectivity check...');

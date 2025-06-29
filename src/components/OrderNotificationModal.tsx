@@ -9,7 +9,6 @@ import {
   Dimensions,
   Linking,
   Platform,
-  PermissionsAndroid,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import Geolocation from '@react-native-community/geolocation';
@@ -254,10 +253,12 @@ const OrderNotificationModal: React.FC<OrderNotificationModalProps> = ({
   }
 
   // Helper function to safely get address string
-  const getAddressString = (address: any): string => {
+  const getAddressString = (address: unknown): string => {
     if (!address) return 'Address not available';
     if (typeof address === 'string') return address;
-    if (address.street) return address.street;
+    if (typeof address === 'object' && address !== null && 'street' in address) {
+      return (address as { street: string }).street;
+    }
     return 'Address not available';
   };
 
@@ -437,10 +438,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     overflow: 'hidden',
     height: 150,
-  },
-  mapPreview: {
-    width: '100%',
-    height: '100%',
   },
   mapPlaceholder: {
     width: '100%',
