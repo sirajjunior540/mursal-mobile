@@ -13,6 +13,7 @@ import {
 } from '../types';
 import { API_CONFIG, TENANT_CONFIG, STORAGE_KEYS } from '../constants';
 import { Storage, SecureStorage } from '../utils';
+import { ENV, getApiUrl, getTenantHost, apiDebug } from '../config/environment';
 
 /**
  * HTTP Client for API requests
@@ -21,9 +22,9 @@ class HttpClient {
   private baseURL: string;
   private timeout: number;
 
-  constructor(baseURL: string, timeout: number = 10000) {
-    this.baseURL = baseURL;
-    this.timeout = timeout;
+  constructor(baseURL?: string, timeout?: number) {
+    this.baseURL = baseURL || ENV.API_BASE_URL;
+    this.timeout = timeout || ENV.API_TIMEOUT;
   }
 
   private async request<T>(
@@ -37,17 +38,17 @@ class HttpClient {
 
     const defaultHeaders = {
       'Content-Type': 'application/json',
-      'Host': API_CONFIG.HOST, // Required for Django tenant resolution
+      'Host': getTenantHost(), // Required for Django tenant resolution
       ...(token && { Authorization: `Bearer ${token}` }),
     };
 
     // Log API calls for debugging
-    console.log(`API Call: ${options.method || 'GET'} ${url}`);
-    console.log('Host header:', API_CONFIG.HOST);
+    apiDebug(`${options.method || 'GET'} ${url}`);
+    apiDebug('Host header:', getTenantHost());
     if (token) {
-      console.log('Using auth token:', `${token.substring(0, 20)  }...`);
+      apiDebug('Using auth token:', `${token.substring(0, 20)}...`);
     } else {
-      console.log('No auth token available');
+      apiDebug('No auth token available');
     }
 
     const config: RequestInit = {
@@ -154,14 +155,14 @@ class ApiService {
   private client: HttpClient;
 
   constructor() {
-    this.client = new HttpClient(API_CONFIG.BASE_URL, API_CONFIG.TIMEOUT);
+    this.client = new HttpClient(); // Uses ENV configuration
   }
 
   /**
    * Get the base URL for API requests
    */
   getBaseUrl(): string {
-    return API_CONFIG.BASE_URL;
+    return ENV.API_BASE_URL;
   }
 
   // Authentication
@@ -722,17 +723,26 @@ class ApiService {
     const endpoint = `/api/v1/auth/drivers/${driverId}/update_fcm_token/`;
     console.log(`🎯 Calling FCM token endpoint: ${endpoint}`);
 
-    const result = await this.client.post<void>(endpoint, {
-      fcm_token: token
-    });
+    try {
+      const result = await this.client.post<void>(endpoint, {
+        fcm_token: token
+      });
 
-    if (result.success) {
-      console.log('✅ FCM token update API call successful');
-    } else {
-      console.error('❌ FCM token update API call failed:', result.error);
+      if (result.success) {
+        console.log('✅ FCM token update API call successful');
+      } else {
+        console.error('❌ FCM token update API call failed:', result.error);
+      }
+
+      return result;
+    } catch (error) {
+      console.error('❌ FCM token update network error:', error);
+      return {
+        success: false,
+        data: null as any,
+        error: error instanceof Error ? error.message : 'Network error updating FCM token'
+      };
     }
-
-    return result;
   }
 }
 

@@ -13,12 +13,16 @@ import {
 } from 'react-native';
 import { useAuth } from '../../contexts/AuthContext';
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import { ConnectionTester } from '../../utils/connectionTest';
+import { ENV } from '../../config/environment';
 
 const LoginScreen = () => {
   const { login, isLoading, error } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [deliveryProvider, setDeliveryProvider] = useState('');
+  const [showDebug, setShowDebug] = useState(__DEV__);
+  const [debugResults, setDebugResults] = useState<any>(null);
   
   // Default tenant for backend compatibility
   const selectedTenant = 'sirajjunior';
@@ -40,6 +44,16 @@ const LoginScreen = () => {
       console.error('Login error:', err);
       // Error is handled by the context and displayed below
     }
+  };
+
+  const runConnectionTest = async () => {
+    setDebugResults({ testing: true });
+    const results = await ConnectionTester.runAllTests();
+    setDebugResults(results);
+  };
+
+  const getEnvironmentInfo = () => {
+    return ConnectionTester.getEnvironmentInfo();
   };
 
   return (
@@ -127,6 +141,65 @@ const LoginScreen = () => {
           <Text style={styles.helpText}>
             New driver? Contact your delivery provider to get started
           </Text>
+
+          {/* Debug Panel for Development */}
+          {__DEV__ && (
+            <View style={styles.debugContainer}>
+              <TouchableOpacity 
+                style={styles.debugToggle}
+                onPress={() => setShowDebug(!showDebug)}
+              >
+                <Text style={styles.debugToggleText}>
+                  {showDebug ? '🔧 Hide Debug' : '🔧 Show Debug'}
+                </Text>
+              </TouchableOpacity>
+
+              {showDebug && (
+                <View style={styles.debugPanel}>
+                  <Text style={styles.debugTitle}>Connection Debug</Text>
+                  
+                  <View style={styles.envInfo}>
+                    <Text style={styles.envLabel}>Current Environment:</Text>
+                    <Text style={styles.envValue}>API: {ENV.API_BASE_URL}</Text>
+                    <Text style={styles.envValue}>Host: {ENV.API_HOST}</Text>
+                    <Text style={styles.envValue}>Tenant: {ENV.DEFAULT_TENANT_ID}</Text>
+                  </View>
+
+                  <TouchableOpacity 
+                    style={styles.testButton}
+                    onPress={runConnectionTest}
+                    disabled={debugResults?.testing}
+                  >
+                    <Text style={styles.testButtonText}>
+                      {debugResults?.testing ? 'Testing...' : 'Test Connection'}
+                    </Text>
+                  </TouchableOpacity>
+
+                  {debugResults && !debugResults.testing && (
+                    <ScrollView style={styles.resultsContainer} nestedScrollEnabled>
+                      <Text style={styles.resultsTitle}>Test Results:</Text>
+                      {Object.entries(debugResults).map(([key, result]: [string, any]) => (
+                        <View key={key} style={styles.resultItem}>
+                          <Text style={[
+                            styles.resultTitle,
+                            { color: result.success ? '#4CAF50' : '#F44336' }
+                          ]}>
+                            {key}: {result.success ? '✅' : '❌'}
+                          </Text>
+                          <Text style={styles.resultMessage}>{result.message}</Text>
+                          {result.details && (
+                            <Text style={styles.resultDetails}>
+                              {JSON.stringify(result.details, null, 2).substring(0, 200)}...
+                            </Text>
+                          )}
+                        </View>
+                      ))}
+                    </ScrollView>
+                  )}
+                </View>
+              )}
+            </View>
+          )}
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -257,6 +330,104 @@ const styles = StyleSheet.create({
     color: '#666',
     fontSize: 14,
     lineHeight: 20,
+  },
+  // Debug styles
+  debugContainer: {
+    marginTop: 20,
+    padding: 16,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  debugToggle: {
+    padding: 8,
+    backgroundColor: '#2196F3',
+    borderRadius: 4,
+    alignItems: 'center',
+  },
+  debugToggleText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  debugPanel: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: '#fff',
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#ccc',
+  },
+  debugTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 8,
+    color: '#333',
+  },
+  envInfo: {
+    marginBottom: 12,
+    padding: 8,
+    backgroundColor: '#f9f9f9',
+    borderRadius: 4,
+  },
+  envLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#666',
+    marginBottom: 4,
+  },
+  envValue: {
+    fontSize: 10,
+    color: '#333',
+    fontFamily: 'monospace',
+  },
+  testButton: {
+    padding: 8,
+    backgroundColor: '#4CAF50',
+    borderRadius: 4,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  testButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  resultsContainer: {
+    maxHeight: 200,
+    backgroundColor: '#f9f9f9',
+    borderRadius: 4,
+    padding: 8,
+  },
+  resultsTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 8,
+    color: '#333',
+  },
+  resultItem: {
+    marginBottom: 8,
+    padding: 6,
+    backgroundColor: '#fff',
+    borderRadius: 3,
+    borderWidth: 1,
+    borderColor: '#eee',
+  },
+  resultTitle: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  resultMessage: {
+    fontSize: 10,
+    color: '#666',
+    marginTop: 2,
+  },
+  resultDetails: {
+    fontSize: 9,
+    color: '#999',
+    fontFamily: 'monospace',
+    marginTop: 2,
   },
 });
 

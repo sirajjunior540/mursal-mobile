@@ -201,6 +201,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           type: 'LOGIN_SUCCESS',
           payload: { user, driver, tenant },
         });
+
+        // Retry realtime service initialization after successful login
+        try {
+          const { realtimeService } = await import('../services/realtimeService');
+          await realtimeService.retryInitialization();
+        } catch (realtimeError) {
+          console.warn('Failed to initialize realtime service after login:', realtimeError);
+        }
       } else {
         throw new Error(response.error || 'Login failed');
       }

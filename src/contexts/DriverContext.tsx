@@ -120,16 +120,30 @@ export const DriverProvider: React.FC<DriverProviderProps> = ({ children }) => {
             onRegistration: async (token) => {
               console.log('📱 FCM token received:', token);
 
-              // Send token to backend
+              // Send token to backend (only if the API endpoint exists)
               try {
                 const response = await apiService.updateFcmToken(token);
                 if (response.success) {
                   console.log('✅ FCM token sent to backend');
                 } else {
-                  console.error('❌ Failed to send FCM token to backend:', response.error);
+                  // Check if it's a 404 (endpoint doesn't exist) or 405 (method not allowed)
+                  const errorMsg = response.error || '';
+                  if (errorMsg.includes('404') || errorMsg.includes('Not Found') || 
+                      errorMsg.includes('405') || errorMsg.includes('Method Not Allowed')) {
+                    console.warn('⚠️ FCM token endpoint not implemented on backend yet - this is expected during development');
+                  } else {
+                    console.error('❌ Failed to send FCM token to backend:', response.error);
+                  }
                 }
               } catch (error) {
-                console.error('❌ Error sending FCM token to backend:', error);
+                // Gracefully handle network or other errors
+                const errorMsg = error instanceof Error ? error.message : String(error);
+                if (errorMsg.includes('404') || errorMsg.includes('Not Found') || 
+                    errorMsg.includes('405') || errorMsg.includes('Method Not Allowed')) {
+                  console.warn('⚠️ FCM token endpoint not implemented on backend yet - this is expected during development');
+                } else {
+                  console.error('❌ Error sending FCM token to backend:', errorMsg);
+                }
               }
             },
             onRegistrationError: (error) => {

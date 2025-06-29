@@ -6,6 +6,7 @@ import {
   RealtimeSDKConfig, 
   CommunicationMode
 } from '../sdk';
+import { ENV, getApiUrl, getWebSocketUrl, realtimeDebug } from '../config/environment';
 
 // For backward compatibility
 export type RealtimeMode = 'polling' | 'websocket';
@@ -38,6 +39,7 @@ class RealtimeService {
   private callbacks: RealtimeCallbacks = {};
   private sdk: RealtimeSDK | null = null;
   private isConnected: boolean = false;
+  private initialized: boolean = false;
   private lastPollTime: number = 0;
   private seenOrderIds: Set<string> = new Set();
   private notifiedOrderIds: Set<string> = new Set();
@@ -59,6 +61,7 @@ class RealtimeService {
       // Initialize the SDK
       await this.initializeSDK();
 
+      this.initialized = true;
       console.log('✅ RealtimeService initialized successfully');
     } catch (error) {
       console.error('❌ RealtimeService initialization failed:', error);
@@ -76,24 +79,41 @@ class RealtimeService {
       // Get auth token
       const token = await SecureStorage.getAuthToken();
       if (!token) {
-        console.warn('⚠️ No authentication token available, skipping SDK initialization');
-        // Don't throw - just skip initialization
-        // The service will retry when a token becomes available
+        console.log('⚠️ No authentication token available - cannot initialize realtime service');
+        console.log('🔐 Realtime service will be initialized after successful login');
+        this.initialized = false;
         return;
       }
-      console.log('🔑 Auth token retrieved:', `${token.substring(0, 20)  }...`);
+      
+      // Validate token is not expired (basic check)
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        const now = Date.now() / 1000;
+        if (payload.exp && payload.exp < now) {
+          console.log('⚠️ Authentication token has expired - need to re-login');
+          this.initialized = false;
+          this.callbacks.onError?.('Authentication token expired - please login again');
+          return;
+        }
+      } catch (error) {
+        console.log('⚠️ Could not validate token expiry, proceeding anyway');
+      }
+      
+      console.log('🔐 Valid authentication token found, proceeding with initialization');
+      realtimeDebug('Auth token retrieved:', `${token.substring(0, 20)}...`);
 
       // Create SDK configuration
       const sdkConfig: Partial<RealtimeSDKConfig> = {
-        baseUrl: apiService.getBaseUrl(),
+        baseUrl: ENV.API_BASE_URL,
+        websocketUrl: ENV.WS_BASE_URL,
         authToken: token,
         enabledModes: this.getSdkEnabledModes(),
         primaryMode: this.getSdkPrimaryMode(),
         pollingInterval: this.config.pollingInterval,
         pollingEndpoint: '/api/v1/delivery/deliveries/available_orders/',
         websocketEndpoint: '/ws/driver/orders/',
-        pushEnabled: false, // Will be enabled later when FCM is set up
-        logLevel: __DEV__ ? 'debug' : 'info',
+        pushEnabled: ENV.ENABLE_PUSH_NOTIFICATIONS,
+        logLevel: ENV.DEBUG_REALTIME ? 'debug' : 'info',
         deduplicationEnabled: true
       };
 
@@ -103,6 +123,7 @@ class RealtimeService {
       // Set up SDK callbacks
       this.setupSdkCallbacks();
 
+      this.initialized = true;
       console.log('🚀 RealtimeSDK initialized successfully');
       console.log('📋 SDK Config:', {
         ...sdkConfig,
@@ -118,8 +139,26 @@ class RealtimeService {
       console.error('❌ Error initializing RealtimeSDK:', error);
       // Don't throw - just log the error
       // This prevents the entire app from crashing if realtime fails
-      this.callbacks.onError?.(`Failed to initialize realtime service: ${error}`);
+      this.initialized = false;
+      
+      // Check if it's an authentication error
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('authentication') || errorMessage.includes('401') || errorMessage.includes('403')) {
+        realtimeDebug('Authentication error detected, will retry after login');
+        this.callbacks.onError?.('Authentication failed - please login again');
+      } else {
+        this.callbacks.onError?.(`Failed to initialize realtime service: ${errorMessage}`);
+      }
     }
+  }
+
+  /**
+   * Retry initialization (useful after login)
+   */
+  async retryInitialization(): Promise<void> {
+    realtimeDebug('Retrying realtime service initialization...');
+    this.initialized = false;
+    await this.initializeSDK();
   }
 
   /**
@@ -377,21 +416,18 @@ class RealtimeService {
    * Check if service is running
    */
   isRunning(): boolean {
-    if (this.sdk) {
-      return this.config.enabled;
-    }
-    return false;
+    return this.initialized && this.config.enabled && this.sdk !== null;
   }
 
   /**
    * Check connection status
    */
   isConnectedToServer(): boolean {
-    if (this.sdk) {
-      const status = this.sdk.getConnectionStatus();
-      return status.overall;
+    if (!this.initialized || !this.sdk) {
+      return false;
     }
-    return this.isConnected;
+    const status = this.sdk.getConnectionStatus();
+    return status.overall;
   }
 
   /**

@@ -142,8 +142,8 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({ children }) => {
 
       // Delay API refresh to ensure authentication is fully complete
       const timer = setTimeout(() => {
-        console.log('🔄 Starting delayed order refresh');
-        refreshOrders().catch(error => {
+        console.log('🔄 Starting initial order refresh (will also initialize realtime)');
+        refreshOrders(true).catch(error => {
           console.error('⚠️ Initial order refresh failed:', error);
           // Don't throw - just log the error
         });
@@ -167,7 +167,7 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({ children }) => {
 
       const interval = setInterval(() => {
         console.log('⏰ Auto-refreshing orders...');
-        refreshOrders().catch(error => {
+        refreshOrders(false).catch(error => {
           console.error('⚠️ Auto-refresh failed:', error);
         });
       }, APP_SETTINGS.ORDER_REFRESH_INTERVAL);
@@ -185,108 +185,100 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({ children }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoggedIn]);
 
-  // Initialize realtime service for order notifications with delay
+  // Initialize realtime service ONLY after successful authentication
+  const initializeRealtimeService = async (): Promise<void> => {
+    try {
+      console.log('🚀 Initializing realtime service after authentication...');
+
+      // Verify user is still logged in
+      if (!isLoggedIn) {
+        console.log('⚠️ User no longer logged in, aborting realtime setup');
+        return;
+      }
+
+      // Initialize the service
+      await realtimeService.initialize();
+
+      // Set up callbacks for new orders
+      realtimeService.setCallbacks({
+        onNewOrder: (order: Order) => {
+          console.log('🆕 New order received via realtime:', order.id);
+
+          // Ensure order data is valid before dispatching
+          if (!order || !order.id) {
+            console.error('❌ Invalid order data received:', order);
+            return;
+          }
+
+          // Log order details for debugging
+          console.log('📦 Order details:', {
+            id: order.id,
+            orderNumber: order.orderNumber,
+            customer: order.customer ? {
+              name: order.customer.name,
+              phone: order.customer.phone
+            } : 'No customer data',
+            address: order.deliveryAddress ? 
+              (typeof order.deliveryAddress === 'string' ? 
+                order.deliveryAddress : 
+                order.deliveryAddress.street) : 
+              'No address data',
+            total: order.total,
+            status: order.status
+          });
+
+          // Add the order to the state
+          dispatch({ type: 'ADD_NEW_ORDER', payload: order });
+
+          // Play notification sound
+          console.log('🔔 Playing notification sound for new order');
+          soundService.playOrderNotification();
+        },
+        onOrderUpdate: (order: Order) => {
+          console.log('📝 Order update received via realtime:', order.id);
+          dispatch({ type: 'UPDATE_ORDER', payload: order });
+        },
+        onConnectionChange: (connected: boolean) => {
+          console.log('🔗 Realtime connection status:', connected ? 'Connected' : 'Disconnected');
+        },
+        onError: (error: string) => {
+          console.error('❌ Realtime service error:', error);
+          // If authentication fails, it means token is invalid
+          if (error.includes('authentication') || error.includes('token')) {
+            console.log('🔑 Authentication failed - user may need to re-login');
+          }
+        }
+      });
+
+      // Enable and start the service (default to polling mode)
+      console.log('🔧 Configuring realtime service...');
+      await realtimeService.setConfig({ 
+        enabled: true, 
+        mode: 'polling',
+        pollingInterval: 10000 // 10 seconds
+      });
+
+      console.log('▶️ Starting realtime service...');
+      realtimeService.start();
+
+      // Verify service is running
+      const isRunning = realtimeService.isRunning();
+      const isConnected = realtimeService.isConnectedToServer();
+      console.log(`🔍 Realtime service status: running=${isRunning}, connected=${isConnected}`);
+
+      console.log('✅ Realtime service initialized and started successfully');
+    } catch (error) {
+      console.error('💥 Failed to setup realtime service:', error);
+      // Don't throw - just log the error and continue
+    }
+  };
+
+  // Stop realtime service when user logs out
   useEffect(() => {
     if (!isLoggedIn) {
       console.log('🛑 Stopping realtime service - user not logged in');
       realtimeService.stop();
-      return;
     }
-
-    // Delay realtime service initialization to ensure auth is complete
-    const timer = setTimeout(() => {
-      console.log('🚀 Initializing realtime service...');
-
-      const setupRealtimeService = async () => {
-        try {
-          // Ensure user is still logged in when timer fires
-          if (!isLoggedIn) {
-            console.log('⚠️ User no longer logged in, skipping realtime setup');
-            return;
-          }
-
-          // Initialize the service
-          await realtimeService.initialize();
-
-          // Set up callbacks for new orders
-          realtimeService.setCallbacks({
-            onNewOrder: (order: Order) => {
-              console.log('🆕 New order received via realtime:', order.id);
-
-              // Ensure order data is valid before dispatching
-              if (!order || !order.id) {
-                console.error('❌ Invalid order data received:', order);
-                return;
-              }
-
-              // Log order details for debugging
-              console.log('📦 Order details:', {
-                id: order.id,
-                orderNumber: order.orderNumber,
-                customer: order.customer ? {
-                  name: order.customer.name,
-                  phone: order.customer.phone
-                } : 'No customer data',
-                address: order.deliveryAddress ? 
-                  (typeof order.deliveryAddress === 'string' ? 
-                    order.deliveryAddress : 
-                    order.deliveryAddress.street) : 
-                  'No address data',
-                total: order.total,
-                status: order.status
-              });
-
-              // Add the order to the state
-              dispatch({ type: 'ADD_NEW_ORDER', payload: order });
-
-              // Play notification sound
-              console.log('🔔 Playing notification sound for new order');
-              soundService.playOrderNotification();
-            },
-            onOrderUpdate: (order: Order) => {
-              console.log('📝 Order update received via realtime:', order.id);
-              dispatch({ type: 'UPDATE_ORDER', payload: order });
-            },
-            onConnectionChange: (connected: boolean) => {
-              console.log('🔗 Realtime connection status:', connected ? 'Connected' : 'Disconnected');
-            },
-            onError: (error: string) => {
-              console.error('❌ Realtime service error:', error);
-            }
-          });
-
-          // Enable and start the service (default to polling mode)
-          console.log('🔧 Configuring realtime service...');
-          await realtimeService.setConfig({ 
-            enabled: true, 
-            mode: 'polling',
-            pollingInterval: 10000 // 10 seconds
-          });
-
-          console.log('▶️ Starting realtime service...');
-          realtimeService.start();
-
-          // Verify service is running
-          const isRunning = realtimeService.isRunning();
-          const isConnected = realtimeService.isConnectedToServer();
-          console.log(`🔍 Realtime service status: running=${isRunning}, connected=${isConnected}`);
-
-          console.log('✅ Realtime service initialized and started');
-        } catch (error) {
-          console.error('💥 Failed to setup realtime service:', error);
-          // Don't throw - just log the error
-        }
-      };
-
-      setupRealtimeService();
-    }, 2000); // 2 second delay
-
-    // Cleanup function
-    return () => {
-      clearTimeout(timer);
-      console.log('🧹 Cleaning up realtime service');
-      realtimeService.stop();
-    };
   }, [isLoggedIn]);
 
   const loadCachedData = async () => {
@@ -308,7 +300,7 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({ children }) => {
     }
   };
 
-  const refreshOrders = async (): Promise<void> => {
+  const refreshOrders = async (isInitialLoad: boolean = false): Promise<void> => {
     if (state.isLoading) {
       console.log('⏳ Orders already loading, skipping refresh');
       return;
@@ -341,6 +333,15 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({ children }) => {
 
         // Clear any previous errors
         dispatch({ type: 'SET_ERROR', payload: null });
+
+        // Initialize realtime service ONLY after successful API call
+        if (isInitialLoad) {
+          console.log('🚀 First successful API call - now initializing realtime service');
+          // Delay realtime initialization to ensure API is fully working
+          setTimeout(() => {
+            initializeRealtimeService();
+          }, 1000);
+        }
       } else {
         console.error('❌ Failed to fetch orders:', response.error);
         // Don't throw error during login process

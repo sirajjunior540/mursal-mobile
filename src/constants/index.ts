@@ -1,4 +1,5 @@
 import Config from 'react-native-config';
+import { ENV } from '../config/environment';
 
 export * from './theme';
 export * from './colors';
@@ -6,23 +7,23 @@ export * from './colors';
 // Export spacing as SPACING for consistency
 export { spacing as SPACING } from './theme';
 
-// API Configuration
+// API Configuration (now using centralized ENV)
 export const API_CONFIG = {
-  BASE_URL: Config.API_BASE_URL || 'http://192.168.1.52:8000',
-  HOST: Config.API_HOST || 'sirajjunior.192.168.1.52',  // ✅ Fixed: Removed port number
-  TIMEOUT: parseInt(Config.API_TIMEOUT || '30000', 10),
+  BASE_URL: ENV.API_BASE_URL,
+  HOST: ENV.API_HOST,
+  TIMEOUT: ENV.API_TIMEOUT,
   RETRY_ATTEMPTS: 3,
 };
 
 // Tenant Configuration
 export const TENANT_CONFIG = {
-  DEFAULT_TENANT: Config.DEFAULT_TENANT || 'sirajjunior',
+  DEFAULT_TENANT: ENV.DEFAULT_TENANT_ID,
   TENANT_HEADER: 'X-Tenant-ID',
   TENANT_STORAGE_KEY: '@tenant_id',
 };
 
 // Environment
-export const ENVIRONMENT = Config.ENVIRONMENT || 'development';
+export const ENVIRONMENT = ENV.NODE_ENV;
 
 // Storage Keys
 export const STORAGE_KEYS = {

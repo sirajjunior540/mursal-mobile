@@ -18,7 +18,9 @@
     "build:ios": "cd ios && xcodebuild -workspace DriverAppNew.xcworkspace -scheme DriverAppNew -configuration Release -destination generic/platform=iOS archive -archivePath ./build/DriverAppNew.xcarchive",
     "prepare:release": "npm run lint:fix && npm run typecheck && npm run test",
     "release:android": "npm run prepare:release && npm run build:android",
-    "release:ios": "npm run prepare:release && npm run build:ios"
+    "release:ios": "npm run prepare:release && npm run build:ios",
+    "setup:env": "node scripts/setup-env.js",
+    "setup:ip": "node scripts/setup-env.js --ip"
   },
   "dependencies": {
     "@expo/vector-icons": "^13.0.0",
