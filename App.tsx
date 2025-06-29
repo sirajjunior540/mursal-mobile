@@ -22,6 +22,8 @@ import './src/utils/DevUtils'; // Import for development utilities
 import LoginScreen from './src/screens/auth/LoginScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
 import OrderDetailsScreen from './src/screens/OrderDetailsScreen';
+import OngoingDeliveryScreen from './src/screens/OngoingDeliveryScreen';
+import RouteNavigationScreen from './src/screens/RouteNavigationScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import Ionicons from 'react-native-vector-icons/Ionicons';
@@ -48,6 +50,10 @@ const MainTabs = () => {
 
           if (route.name === 'Dashboard') {
             iconName = focused ? 'home' : 'home-outline';
+          } else if (route.name === 'OngoingDelivery') {
+            iconName = focused ? 'car' : 'car-outline';
+          } else if (route.name === 'RouteNavigation') {
+            iconName = focused ? 'navigate' : 'navigate-outline';
           } else if (route.name === 'History') {
             iconName = focused ? 'time' : 'time-outline';
           } else if (route.name === 'Profile') {
@@ -60,9 +66,31 @@ const MainTabs = () => {
         tabBarInactiveTintColor: COLORS.text.secondary,
       })}
     >
-      <Tab.Screen name="Dashboard" component={DashboardScreen} />
-      <Tab.Screen name="History" component={HistoryScreen} />
-      <Tab.Screen name="Profile" component={ProfileScreen} />
+      <Tab.Screen 
+        name="Dashboard" 
+        component={DashboardScreen} 
+        options={{ tabBarLabel: 'Dashboard' }}
+      />
+      <Tab.Screen 
+        name="OngoingDelivery" 
+        component={OngoingDeliveryScreen} 
+        options={{ tabBarLabel: 'Ongoing' }}
+      />
+      <Tab.Screen 
+        name="RouteNavigation" 
+        component={RouteNavigationScreen} 
+        options={{ tabBarLabel: 'Orders' }}
+      />
+      <Tab.Screen 
+        name="History" 
+        component={HistoryScreen} 
+        options={{ tabBarLabel: 'History' }}
+      />
+      <Tab.Screen 
+        name="Profile" 
+        component={ProfileScreen} 
+        options={{ tabBarLabel: 'Profile' }}
+      />
     </Tab.Navigator>
   );
 };

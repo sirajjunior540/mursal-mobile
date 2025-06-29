@@ -28,3 +28,35 @@ export const FONTS = {
   medium: 'System',
   bold: 'System-Bold',
 };
+
+// Simple colors object for the new screens (flat structure)
+export const colors = {
+  // Basic colors
+  primary: lightTheme.colors.primary,
+  secondary: lightTheme.colors.secondary,
+  success: lightTheme.colors.success,
+  warning: lightTheme.colors.warning,
+  error: lightTheme.colors.error,
+  danger: lightTheme.colors.error, // Alias for error
+  info: '#2196F3',
+  
+  // Background colors
+  background: lightTheme.colors.background,
+  white: lightTheme.colors.white,
+  black: lightTheme.colors.black,
+  
+  // Text colors
+  text: lightTheme.colors.text,
+  textSecondary: lightTheme.colors.textSecondary,
+  
+  // Gray shades
+  gray: '#757575',
+  lightGray: '#E0E0E0',
+  darkGray: '#424242',
+  
+  // Light variants for backgrounds
+  lightBlue: '#E3F2FD',
+  lightGreen: '#E8F5E8',
+  lightRed: '#FFEBEE',
+  lightYellow: '#FFF8E1',
+};

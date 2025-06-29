@@ -227,6 +227,8 @@ export type RootStackParamList = {
 
 export type TabParamList = {
   Dashboard: undefined;
+  OngoingDelivery: undefined;
+  RouteNavigation: undefined;
   History: undefined;
   Profile: undefined;
 };

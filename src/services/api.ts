@@ -789,6 +789,28 @@ class ApiService {
     return this.client.post<void>(`/api/v1/delivery/deliveries/${orderId}/update_status/`, { status });
   }
 
+  // Smart assignment methods
+  async getOngoingDeliveries(): Promise<ApiResponse<any>> {
+    return this.client.get<any>('/api/v1/delivery/deliveries/ongoing-deliveries/');
+  }
+
+  async smartAcceptDelivery(deliveryId: string, data: { location?: string; latitude?: number; longitude?: number; notes?: string }): Promise<ApiResponse<void>> {
+    return this.client.post<void>(`/api/v1/delivery/deliveries/${deliveryId}/smart_accept/`, data);
+  }
+
+  async smartUpdateStatus(deliveryId: string, data: { status: string; location?: string; latitude?: number; longitude?: number; notes?: string }): Promise<ApiResponse<void>> {
+    return this.client.post<void>(`/api/v1/delivery/deliveries/${deliveryId}/smart_update_status/`, data);
+  }
+
+  async getAvailableOrders(): Promise<ApiResponse<any[]>> {
+    // Get smart-filtered available orders for the driver
+    return this.client.get<any[]>('/api/v1/delivery/deliveries/available_orders/');
+  }
+
+  async declineDelivery(deliveryId: string, data: { location?: string; reason?: string }): Promise<ApiResponse<void>> {
+    return this.client.post<void>(`/api/v1/delivery/deliveries/${deliveryId}/decline/`, data);
+  }
+
   // Get specific order details by ID
   async getOrderDetails(orderId: string): Promise<ApiResponse<Order>> {
     const response = await this.client.get<any>(`/api/v1/delivery/deliveries/${orderId}/`);
@@ -1063,3 +1085,12 @@ class ApiService {
 
 // Production API Service
 export const apiService = new ApiService();
+
+// Export delivery-specific methods for convenience
+export const deliveryApi = {
+  getOngoingDeliveries: () => apiService.getOngoingDeliveries(),
+  getAvailableOrders: () => apiService.getAvailableOrders(),
+  smartAcceptDelivery: (deliveryId: string, data: any) => apiService.smartAcceptDelivery(deliveryId, data),
+  smartUpdateStatus: (deliveryId: string, data: any) => apiService.smartUpdateStatus(deliveryId, data),
+  declineDelivery: (deliveryId: string, data: any) => apiService.declineDelivery(deliveryId, data),
+};
