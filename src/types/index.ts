@@ -105,27 +105,46 @@ export type PaymentMethod = 'cash' | 'card' | 'digital_wallet';
 
 export interface Order {
   id: string;
-  orderNumber: string;
-  customer: Customer;
+  order_number: string; // Match backend snake_case
+  customer_details: Customer; // Match backend field name
   items: OrderItem[];
-  deliveryAddress: Address;
-  restaurantAddress: Address;
+  delivery_address: string; // Match backend field name (string)
+  pickup_latitude?: number;
+  pickup_longitude?: number;
+  delivery_latitude?: number;
+  delivery_longitude?: number;
   status: OrderStatus;
-  paymentMethod: PaymentMethod;
+  payment_method: PaymentMethod;
   subtotal: number;
-  deliveryFee: number;
+  delivery_fee: number;
   tax: number;
-  tip: number;
   total: number;
-  estimatedDeliveryTime: string;
+  estimated_delivery_time?: string;
+  delivery_notes?: string;
+  created_at: Date;
+  updated_at?: Date;
+  
+  // Deprecated camelCase fields for backward compatibility (remove after full migration)
+  /** @deprecated Use order_number */
+  orderNumber?: string;
+  /** @deprecated Use customer_details */
+  customer?: Customer;
+  /** @deprecated Use delivery_address */
+  deliveryAddress?: Address | string;
+  /** @deprecated Use payment_method */
+  paymentMethod?: PaymentMethod;
+  /** @deprecated Use delivery_fee */
+  deliveryFee?: number;
+  /** @deprecated Use estimated_delivery_time */
+  estimatedDeliveryTime?: string;
+  /** @deprecated Use delivery_notes */
   specialInstructions?: string;
-  orderTime: Date;
-  acceptedTime?: Date;
-  pickedUpTime?: Date;
-  deliveredTime?: Date;
+  /** @deprecated Use created_at */
+  orderTime?: Date;
+  
+  // Additional fields
   tenantId?: string;
   tenant?: Tenant;
-  // Delivery-specific fields when order comes from delivery endpoint
   deliveryId?: string;
   driverId?: string;
   driverName?: string;

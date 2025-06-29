@@ -28,6 +28,8 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import { COLORS } from './src/constants';
 import { locationService } from './src/services/locationService';
 import { requestNotificationPermissions } from './src/utils/permissions';
+import { notificationService } from './src/services/notificationService';
+import { mapboxService } from './src/services/mapboxService';
 import './src/utils/locationTest'; // Import location testing utilities
 
 // Create navigation stacks
@@ -140,8 +142,41 @@ function App() {
         
         if (notificationPermissionGranted) {
           console.log('✅ Notification permissions granted');
+          
+          // Enable background notifications
+          console.log('📱 Enabling background notifications...');
+          const backgroundEnabled = await notificationService.enableBackgroundNotifications();
+          
+          if (backgroundEnabled) {
+            console.log('✅ Background notifications enabled');
+            
+            // Set up notification callbacks for background actions
+            notificationService.setNotificationCallbacks({
+              onOrderReceived: (orderId: string, action: 'accept' | 'decline') => {
+                console.log(`📱 Background notification action: ${action} for order ${orderId}`);
+                // Handle background order acceptance/decline
+                // This would typically trigger the appropriate API calls
+              },
+              onNavigateToOrder: (orderId: string) => {
+                console.log(`📱 Navigate to order from background notification: ${orderId}`);
+                // Handle navigation when app opens from notification tap
+              }
+            });
+          } else {
+            console.log('❌ Failed to enable background notifications');
+          }
         } else {
           console.log('❌ Notification permissions denied');
+        }
+        
+        // Test Mapbox configuration
+        console.log('🗺️ Testing Mapbox configuration...');
+        const mapboxConfigured = await mapboxService.testConfiguration();
+        
+        if (mapboxConfigured) {
+          console.log('✅ Mapbox configured successfully');
+        } else {
+          console.log('❌ Mapbox configuration failed or token invalid');
         }
         
       } catch (error) {

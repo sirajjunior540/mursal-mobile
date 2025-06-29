@@ -8,7 +8,8 @@ import {
   Alert,
   Linking,
   ActivityIndicator,
-  Platform
+  Platform,
+  Dimensions
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from 'react-native-vector-icons/Ionicons';
@@ -20,8 +21,10 @@ import { COLORS, FONTS } from '../constants';
 import { ORDER_STATUS_COLORS, ORDER_STATUS_LABELS, PAYMENT_METHOD_ICONS } from '../constants';
 import { openMapsForNavigation, getCurrentLocation, isValidCoordinate } from '../utils/locationUtils';
 
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
 type RootStackParamList = {
-  OrderDetails: { orderId: string };
+  OrderDetails: { orderId: string; autoNavigate?: boolean };
   Dashboard: undefined;
 };
 
@@ -77,7 +80,7 @@ const DELIVERY_WORKFLOW = {
 const OrderDetailsScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<RouteProps>();
-  const { orderId } = route.params;
+  const { orderId, autoNavigate } = route.params;
   const { updateOrderStatus, getOrderDetails } = useOrders();
   const [order, setOrder] = useState<Order | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -89,6 +92,16 @@ const OrderDetailsScreen: React.FC = () => {
       loadOrderDetails();
     }, [orderId])
   );
+
+  // Auto-navigate if requested
+  useEffect(() => {
+    if (autoNavigate && order) {
+      // Small delay to let the screen render first
+      setTimeout(() => {
+        handleOpenMaps('pickup');
+      }, 500);
+    }
+  }, [autoNavigate, order]);
 
   const loadOrderDetails = async () => {
     setIsLoading(true);
@@ -288,45 +301,6 @@ const OrderDetailsScreen: React.FC = () => {
     );
   };
 
-  const getStatusProgress = () => {
-    if (!order) return null;
-
-    const statuses = ['accepted', 'en_route_to_pickup', 'arrived_at_pickup', 'picked_up', 'en_route_to_delivery', 'arrived_at_delivery', 'delivered'];
-    const currentIndex = statuses.indexOf(order.status);
-    
-    return (
-      <View style={styles.progressContainer}>
-        <Text style={styles.progressTitle}>Delivery Progress</Text>
-        <View style={styles.progressBar}>
-          {statuses.map((status, index) => {
-            const isActive = index <= currentIndex;
-            const isCurrent = index === currentIndex;
-            const workflow = DELIVERY_WORKFLOW[status as keyof typeof DELIVERY_WORKFLOW];
-            
-            return (
-              <View key={status} style={styles.progressStep}>
-                <View style={[
-                  styles.progressDot, 
-                  isActive && styles.progressDotActive,
-                  isCurrent && styles.progressDotCurrent
-                ]}>
-                  <Ionicons 
-                    name={workflow.icon as any} 
-                    size={12} 
-                    color={isActive ? COLORS.white : COLORS.text.secondary} 
-                  />
-                </View>
-                {index < statuses.length - 1 && (
-                  <View style={[styles.progressLine, isActive && styles.progressLineActive]} />
-                )}
-              </View>
-            );
-          })}
-        </View>
-      </View>
-    );
-  };
-
   if (isLoading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -353,178 +327,225 @@ const OrderDetailsScreen: React.FC = () => {
   }
 
   const statusColor = ORDER_STATUS_COLORS[order.status] || COLORS.text.secondary;
-  const paymentIcon = PAYMENT_METHOD_ICONS[order.paymentMethod] || 'cash';
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Modern Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={COLORS.text.primary} />
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerButton}>
+          <Ionicons name="arrow-back" size={24} color={COLORS.white} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Order Details</Text>
-        <TouchableOpacity onPress={loadOrderDetails}>
-          <Ionicons name="refresh" size={24} color={COLORS.text.primary} />
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle}>Order #{order.orderNumber}</Text>
+          <Text style={styles.headerSubtitle}>{ORDER_STATUS_LABELS[order.status] || order.status}</Text>
+        </View>
+        <TouchableOpacity onPress={loadOrderDetails} style={styles.headerButton}>
+          <Ionicons name="refresh" size={24} color={COLORS.white} />
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Order Header */}
-        <View style={styles.section}>
-          <View style={styles.orderHeader}>
-            <Text style={styles.orderNumber}>#{order.orderNumber}</Text>
-            <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
-              <Text style={styles.statusText}>{ORDER_STATUS_LABELS[order.status] || order.status}</Text>
-            </View>
-          </View>
-          <Text style={styles.orderTime}>
-            {new Date(order.orderTime).toLocaleString()}
-          </Text>
-        </View>
-
-        {/* Progress Indicator */}
-        {getStatusProgress()}
-
-        {/* Customer Info */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Customer</Text>
-          <View style={styles.card}>
-            <View style={styles.customerInfo}>
-              <View>
-                <Text style={styles.customerName}>{order.customer?.name || 'Unknown Customer'}</Text>
-                <Text style={styles.customerPhone}>{order.customer?.phone || 'No phone'}</Text>
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Hero Card */}
+        <View style={styles.heroCard}>
+          <View style={styles.heroContent}>
+            <View style={styles.heroLeft}>
+              <View style={styles.customerAvatar}>
+                <Text style={styles.customerInitial}>
+                  {(order.customer?.name || 'U').charAt(0).toUpperCase()}
+                </Text>
               </View>
-              {order.customer?.phone && (
-                <TouchableOpacity 
-                  style={styles.callButton}
-                  onPress={handleCallCustomer}
-                >
-                  <Ionicons name="call" size={20} color={COLORS.white} />
-                </TouchableOpacity>
-              )}
+              <View style={styles.heroInfo}>
+                <Text style={styles.heroName}>{order.customer?.name || 'Unknown Customer'}</Text>
+                <Text style={styles.heroTime}>
+                  {new Date(order.orderTime).toLocaleDateString()} • {new Date(order.orderTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.heroRight}>
+              <Text style={styles.heroAmount}>${(Number(order.total) || 0).toFixed(2)}</Text>
+              <View style={[styles.heroStatus, { backgroundColor: statusColor }]}>
+                <Text style={styles.heroStatusText}>{ORDER_STATUS_LABELS[order.status] || order.status}</Text>
+              </View>
             </View>
           </View>
         </View>
 
-        {/* Pickup Location */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Pickup Location</Text>
+        {/* Quick Actions */}
+        <View style={styles.quickActions}>
           <TouchableOpacity 
-            style={styles.card}
+            style={styles.quickAction}
             onPress={() => handleOpenMaps('pickup')}
           >
-            <View style={styles.addressRow}>
-              <Ionicons name="restaurant-outline" size={20} color={COLORS.primary.default} />
-              <View style={styles.addressContent}>
-                <Text style={styles.addressText}>
-                  {order.restaurantAddress?.street || 'Pickup location not specified'}
-                </Text>
-                {order.restaurantAddress?.city && (
-                  <Text style={styles.addressSubtext}>
-                    {order.restaurantAddress.city}, {order.restaurantAddress.state} {order.restaurantAddress.zipCode}
-                  </Text>
-                )}
-              </View>
-              <Ionicons name="navigate-outline" size={20} color={COLORS.text.secondary} />
+            <View style={[styles.quickActionIcon, { backgroundColor: '#FF6B6B20' }]}>
+              <Ionicons name="restaurant" size={24} color="#FF6B6B" />
             </View>
+            <Text style={styles.quickActionText}>Pickup</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.quickAction}
+            onPress={() => handleOpenMaps('delivery')}
+          >
+            <View style={[styles.quickActionIcon, { backgroundColor: '#4ECDC420' }]}>
+              <Ionicons name="location" size={24} color="#4ECDC4" />
+            </View>
+            <Text style={styles.quickActionText}>Delivery</Text>
+          </TouchableOpacity>
+
+          {order.customer?.phone && (
+            <TouchableOpacity 
+              style={styles.quickAction}
+              onPress={handleCallCustomer}
+            >
+              <View style={[styles.quickActionIcon, { backgroundColor: '#45B7D120' }]}>
+                <Ionicons name="call" size={24} color="#45B7D1" />
+              </View>
+              <Text style={styles.quickActionText}>Call</Text>
+            </TouchableOpacity>
+          )}
+
+          <TouchableOpacity style={styles.quickAction}>
+            <View style={[styles.quickActionIcon, { backgroundColor: '#96CEB420' }]}>
+              <Ionicons name="chatbubble" size={24} color="#96CEB4" />
+            </View>
+            <Text style={styles.quickActionText}>Message</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Delivery Address */}
+        {/* Locations */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Delivery Address</Text>
+          <Text style={styles.sectionTitle}>Locations</Text>
+          
+          {/* Pickup Location */}
           <TouchableOpacity 
-            style={styles.card}
+            style={styles.locationCard}
+            onPress={() => handleOpenMaps('pickup')}
+          >
+            <View style={styles.locationIconContainer}>
+              <View style={styles.locationIcon}>
+                <Ionicons name="restaurant" size={20} color="#FF6B6B" />
+              </View>
+              <View style={styles.locationLine} />
+            </View>
+            <View style={styles.locationContent}>
+              <View style={styles.locationHeader}>
+                <Text style={styles.locationTitle}>Pickup Location</Text>
+                <Ionicons name="navigate" size={16} color={COLORS.primary.default} />
+              </View>
+              <Text style={styles.locationAddress}>
+                {order.restaurantAddress?.street || 'Pickup location not specified'}
+              </Text>
+              {order.restaurantAddress?.city && (
+                <Text style={styles.locationSubtext}>
+                  {order.restaurantAddress.city}, {order.restaurantAddress.state}
+                </Text>
+              )}
+            </View>
+          </TouchableOpacity>
+
+          {/* Delivery Location */}
+          <TouchableOpacity 
+            style={[styles.locationCard, { marginTop: 0 }]}
             onPress={() => handleOpenMaps('delivery')}
           >
-            <View style={styles.addressRow}>
-              <Ionicons name="location-outline" size={20} color={COLORS.primary.default} />
-              <View style={styles.addressContent}>
-                <Text style={styles.addressText}>
-                  {order.deliveryAddress?.street || 'Address not available'}
-                  {order.deliveryAddress?.apartmentUnit && `, ${order.deliveryAddress.apartmentUnit}`}
+            <View style={styles.locationIconContainer}>
+              <View style={[styles.locationIcon, { backgroundColor: '#4ECDC420' }]}>
+                <Ionicons name="home" size={20} color="#4ECDC4" />
+              </View>
+            </View>
+            <View style={styles.locationContent}>
+              <View style={styles.locationHeader}>
+                <Text style={styles.locationTitle}>Delivery Address</Text>
+                <Ionicons name="navigate" size={16} color={COLORS.primary.default} />
+              </View>
+              <Text style={styles.locationAddress}>
+                {order.deliveryAddress?.street || 'Address not available'}
+                {order.deliveryAddress?.apartmentUnit && `, ${order.deliveryAddress.apartmentUnit}`}
+              </Text>
+              {order.deliveryAddress?.city && (
+                <Text style={styles.locationSubtext}>
+                  {order.deliveryAddress.city}, {order.deliveryAddress.state}
                 </Text>
-                {order.deliveryAddress?.city && (
-                  <Text style={styles.addressSubtext}>
-                    {order.deliveryAddress.city}, {order.deliveryAddress.state} {order.deliveryAddress.zipCode}
-                  </Text>
-                )}
-                {order.deliveryAddress?.deliveryInstructions && (
-                  <Text style={styles.deliveryInstructions}>
+              )}
+              {order.deliveryAddress?.deliveryInstructions && (
+                <View style={styles.instructionsBox}>
+                  <Ionicons name="information-circle" size={16} color="#FFA726" />
+                  <Text style={styles.instructionsText}>
                     {order.deliveryAddress.deliveryInstructions}
                   </Text>
-                )}
-              </View>
-              <Ionicons name="navigate-outline" size={20} color={COLORS.text.secondary} />
+                </View>
+              )}
             </View>
           </TouchableOpacity>
         </View>
 
         {/* Order Items */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Order Items</Text>
-          <View style={styles.card}>
-            {order.items && order.items.length > 0 ? (
-              order.items.map((item, index) => (
-                <View key={`item-${String(item.id || index)}-${String(item.name || '')}`} style={styles.orderItem}>
-                  <Text style={styles.itemQuantity}>{item.quantity || 1}x</Text>
-                  <Text style={styles.itemName}>{item.name || 'Unknown Item'}</Text>
-                  <Text style={styles.itemPrice}>${((item.price || 0) * (item.quantity || 1)).toFixed(2)}</Text>
+        {order.items && order.items.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Order Items</Text>
+            <View style={styles.itemsCard}>
+              {order.items.map((item, index) => (
+                <View key={`item-${String(item.id || index)}`} style={styles.itemRow}>
+                  <View style={styles.itemLeft}>
+                    <View style={styles.itemQuantity}>
+                      <Text style={styles.itemQuantityText}>{item.quantity || 1}</Text>
+                    </View>
+                    <Text style={styles.itemName}>{item.name || 'Unknown Item'}</Text>
+                  </View>
+                  <Text style={styles.itemPrice}>
+                    ${((Number(item.price) || 0) * (Number(item.quantity) || 1)).toFixed(2)}
+                  </Text>
                 </View>
-              ))
-            ) : (
-              <Text style={styles.noItemsText}>No items specified</Text>
-            )}
-            {order.specialInstructions && (
-              <View style={styles.specialInstructions}>
-                <Text style={styles.specialInstructionsLabel}>Special Instructions:</Text>
-                <Text style={styles.specialInstructionsText}>{order.specialInstructions}</Text>
-              </View>
-            )}
+              ))}
+              
+              {order.specialInstructions && (
+                <View style={styles.specialInstructions}>
+                  <Ionicons name="document-text" size={16} color="#FFA726" />
+                  <Text style={styles.specialInstructionsText}>{order.specialInstructions}</Text>
+                </View>
+              )}
+            </View>
+          </View>
+        )}
+
+        {/* Payment Summary */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Payment Summary</Text>
+          <View style={styles.paymentCard}>
+            <View style={styles.paymentRow}>
+              <Text style={styles.paymentLabel}>Subtotal</Text>
+              <Text style={styles.paymentValue}>${(Number(order.subtotal) || 0).toFixed(2)}</Text>
+            </View>
+            <View style={styles.paymentRow}>
+              <Text style={styles.paymentLabel}>Delivery Fee</Text>
+              <Text style={styles.paymentValue}>${(Number(order.deliveryFee) || 0).toFixed(2)}</Text>
+            </View>
+            <View style={styles.paymentRow}>
+              <Text style={styles.paymentLabel}>Tax</Text>
+              <Text style={styles.paymentValue}>${(Number(order.tax) || 0).toFixed(2)}</Text>
+            </View>
+            <View style={styles.paymentRow}>
+              <Text style={styles.paymentLabel}>Tip</Text>
+              <Text style={styles.paymentValue}>${(Number(order.tip) || 0).toFixed(2)}</Text>
+            </View>
+            <View style={styles.paymentDivider} />
+            <View style={styles.paymentRowTotal}>
+              <Text style={styles.paymentLabelTotal}>Total</Text>
+              <Text style={styles.paymentValueTotal}>${(Number(order.total) || 0).toFixed(2)}</Text>
+            </View>
           </View>
         </View>
 
-        {/* Payment Info */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Payment</Text>
-          <View style={styles.card}>
-            <View style={styles.paymentRow}>
-              <Ionicons name={paymentIcon as any} size={20} color={COLORS.text.secondary} />
-              <Text style={styles.paymentMethod}>
-                {order.paymentMethod ? 
-                  order.paymentMethod.charAt(0).toUpperCase() + order.paymentMethod.slice(1).replace('_', ' ') :
-                  'Not specified'
-                }
-              </Text>
-            </View>
-            <View style={styles.divider} />
-            <View style={styles.priceRow}>
-              <Text style={styles.priceLabel}>Subtotal</Text>
-              <Text style={styles.priceValue}>${(order.subtotal || 0).toFixed(2)}</Text>
-            </View>
-            <View style={styles.priceRow}>
-              <Text style={styles.priceLabel}>Delivery Fee</Text>
-              <Text style={styles.priceValue}>${(order.deliveryFee || 0).toFixed(2)}</Text>
-            </View>
-            <View style={styles.priceRow}>
-              <Text style={styles.priceLabel}>Tax</Text>
-              <Text style={styles.priceValue}>${(order.tax || 0).toFixed(2)}</Text>
-            </View>
-            <View style={styles.priceRow}>
-              <Text style={styles.priceLabel}>Tip</Text>
-              <Text style={styles.priceValue}>${(order.tip || 0).toFixed(2)}</Text>
-            </View>
-            <View style={[styles.priceRow, styles.totalRow]}>
-              <Text style={styles.totalLabel}>Total</Text>
-              <Text style={styles.totalValue}>${(order.total || 0).toFixed(2)}</Text>
-            </View>
-          </View>
-        </View>
+        {/* Bottom spacing for floating button */}
+        <View style={{ height: 100 }} />
       </ScrollView>
 
-      {/* Bottom Action Button */}
-      <View style={styles.bottomContainer}>
-        {getActionButton()}
-      </View>
+      {/* Floating Action Button */}
+      {getActionButton() && (
+        <View style={styles.floatingButtonContainer}>
+          {getActionButton()}
+        </View>
+      )}
     </SafeAreaView>
   );
 };
@@ -532,22 +553,405 @@ const OrderDetailsScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background.primary,
+    backgroundColor: '#F8F9FA',
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 16,
-    backgroundColor: COLORS.white,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border.light,
+    backgroundColor: COLORS.primary.default,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
+  },
+  headerButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerCenter: {
+    flex: 1,
+    alignItems: 'center',
   },
   headerTitle: {
     fontSize: 18,
     fontFamily: FONTS.bold,
+    color: COLORS.white,
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    fontFamily: FONTS.regular,
+    color: 'rgba(255,255,255,0.8)',
+    marginTop: 2,
+    textTransform: 'capitalize',
+  },
+  content: {
+    flex: 1,
+  },
+  heroCard: {
+    backgroundColor: COLORS.white,
+    marginHorizontal: 20,
+    marginTop: 20,
+    borderRadius: 20,
+    padding: 24,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.1,
+        shadowRadius: 16,
+      },
+      android: {
+        elevation: 8,
+      },
+    }),
+  },
+  heroContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  heroLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  customerAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: COLORS.primary.light,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  customerInitial: {
+    fontSize: 20,
+    fontFamily: FONTS.bold,
+    color: COLORS.primary.default,
+  },
+  heroInfo: {
+    flex: 1,
+  },
+  heroName: {
+    fontSize: 18,
+    fontFamily: FONTS.bold,
     color: COLORS.text.primary,
+    marginBottom: 4,
+  },
+  heroTime: {
+    fontSize: 14,
+    fontFamily: FONTS.regular,
+    color: COLORS.text.secondary,
+  },
+  heroRight: {
+    alignItems: 'flex-end',
+  },
+  heroAmount: {
+    fontSize: 24,
+    fontFamily: FONTS.bold,
+    color: COLORS.primary.default,
+    marginBottom: 8,
+  },
+  heroStatus: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  heroStatusText: {
+    fontSize: 12,
+    fontFamily: FONTS.bold,
+    color: COLORS.white,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  quickActions: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    marginTop: 20,
+    justifyContent: 'space-between',
+  },
+  quickAction: {
+    alignItems: 'center',
+    flex: 1,
+    marginHorizontal: 4,
+  },
+  quickActionIcon: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  quickActionText: {
+    fontSize: 12,
+    fontFamily: FONTS.medium,
+    color: COLORS.text.secondary,
+    textAlign: 'center',
+  },
+  section: {
+    marginTop: 32,
+    paddingHorizontal: 20,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontFamily: FONTS.bold,
+    color: COLORS.text.primary,
+    marginBottom: 16,
+    letterSpacing: -0.5,
+  },
+  locationCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 12,
+    flexDirection: 'row',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.08,
+        shadowRadius: 12,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
+  },
+  locationIconContainer: {
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  locationIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#FF6B6B20',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  locationLine: {
+    width: 2,
+    height: 30,
+    backgroundColor: '#E9ECEF',
+    marginTop: 8,
+  },
+  locationContent: {
+    flex: 1,
+  },
+  locationHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  locationTitle: {
+    fontSize: 16,
+    fontFamily: FONTS.bold,
+    color: COLORS.text.primary,
+  },
+  locationAddress: {
+    fontSize: 15,
+    fontFamily: FONTS.regular,
+    color: COLORS.text.primary,
+    lineHeight: 22,
+    marginBottom: 4,
+  },
+  locationSubtext: {
+    fontSize: 14,
+    fontFamily: FONTS.regular,
+    color: COLORS.text.secondary,
+    marginBottom: 8,
+  },
+  instructionsBox: {
+    flexDirection: 'row',
+    backgroundColor: '#FFF3E0',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'flex-start',
+    marginTop: 8,
+  },
+  instructionsText: {
+    fontSize: 14,
+    fontFamily: FONTS.regular,
+    color: '#F57C00',
+    marginLeft: 8,
+    flex: 1,
+    lineHeight: 20,
+  },
+  itemsCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 16,
+    padding: 20,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.08,
+        shadowRadius: 12,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
+  },
+  itemRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F5F5F5',
+  },
+  itemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  itemQuantity: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: COLORS.primary.light,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  itemQuantityText: {
+    fontSize: 14,
+    fontFamily: FONTS.bold,
+    color: COLORS.primary.default,
+  },
+  itemName: {
+    fontSize: 15,
+    fontFamily: FONTS.medium,
+    color: COLORS.text.primary,
+    flex: 1,
+  },
+  itemPrice: {
+    fontSize: 15,
+    fontFamily: FONTS.bold,
+    color: COLORS.text.primary,
+  },
+  specialInstructions: {
+    flexDirection: 'row',
+    backgroundColor: '#FFF3E0',
+    padding: 16,
+    borderRadius: 12,
+    marginTop: 16,
+    alignItems: 'flex-start',
+  },
+  specialInstructionsText: {
+    fontSize: 14,
+    fontFamily: FONTS.regular,
+    color: '#F57C00',
+    marginLeft: 12,
+    flex: 1,
+    lineHeight: 20,
+  },
+  paymentCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 16,
+    padding: 20,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.08,
+        shadowRadius: 12,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
+  },
+  paymentRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  paymentLabel: {
+    fontSize: 15,
+    fontFamily: FONTS.regular,
+    color: COLORS.text.secondary,
+  },
+  paymentValue: {
+    fontSize: 15,
+    fontFamily: FONTS.medium,
+    color: COLORS.text.primary,
+  },
+  paymentDivider: {
+    height: 1,
+    backgroundColor: '#E9ECEF',
+    marginVertical: 12,
+  },
+  paymentRowTotal: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  paymentLabelTotal: {
+    fontSize: 18,
+    fontFamily: FONTS.bold,
+    color: COLORS.text.primary,
+  },
+  paymentValueTotal: {
+    fontSize: 20,
+    fontFamily: FONTS.bold,
+    color: COLORS.primary.default,
+  },
+  floatingButtonContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 20,
+    backgroundColor: 'transparent',
+  },
+  actionButton: {
+    backgroundColor: COLORS.primary.default,
+    paddingVertical: 18,
+    borderRadius: 16,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: COLORS.primary.default,
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.3,
+        shadowRadius: 16,
+      },
+      android: {
+        elevation: 12,
+      },
+    }),
+  },
+  actionButtonDisabled: {
+    opacity: 0.6,
+  },
+  actionButtonText: {
+    fontSize: 18,
+    fontFamily: FONTS.bold,
+    color: COLORS.white,
+    marginLeft: 8,
+    letterSpacing: 0.5,
   },
   loadingContainer: {
     flex: 1,
@@ -583,276 +987,6 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontFamily: FONTS.medium,
     fontSize: 16,
-  },
-  scrollContent: {
-    paddingBottom: 120,
-  },
-  section: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontFamily: FONTS.bold,
-    color: COLORS.text.primary,
-    marginBottom: 12,
-  },
-  card: {
-    backgroundColor: COLORS.white,
-    borderRadius: 12,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  orderHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  orderNumber: {
-    fontSize: 20,
-    fontFamily: FONTS.bold,
-    color: COLORS.text.primary,
-  },
-  statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-  },
-  statusText: {
-    fontSize: 12,
-    fontFamily: FONTS.medium,
-    color: COLORS.white,
-    textTransform: 'uppercase',
-  },
-  orderTime: {
-    fontSize: 14,
-    fontFamily: FONTS.regular,
-    color: COLORS.text.secondary,
-    marginTop: 8,
-  },
-  progressContainer: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
-  },
-  progressTitle: {
-    fontSize: 16,
-    fontFamily: FONTS.bold,
-    color: COLORS.text.primary,
-    marginBottom: 16,
-  },
-  progressBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.white,
-    borderRadius: 12,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  progressStep: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  progressDot: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: COLORS.background.secondary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  progressDotActive: {
-    backgroundColor: COLORS.primary.default,
-  },
-  progressDotCurrent: {
-    backgroundColor: COLORS.success,
-  },
-  progressLine: {
-    flex: 1,
-    height: 2,
-    backgroundColor: COLORS.background.secondary,
-    marginHorizontal: 4,
-  },
-  progressLineActive: {
-    backgroundColor: COLORS.primary.default,
-  },
-  customerInfo: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  customerName: {
-    fontSize: 16,
-    fontFamily: FONTS.medium,
-    color: COLORS.text.primary,
-  },
-  customerPhone: {
-    fontSize: 14,
-    fontFamily: FONTS.regular,
-    color: COLORS.text.secondary,
-    marginTop: 4,
-  },
-  callButton: {
-    backgroundColor: COLORS.primary.default,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  addressRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  addressContent: {
-    flex: 1,
-    marginHorizontal: 12,
-  },
-  addressText: {
-    fontSize: 14,
-    fontFamily: FONTS.medium,
-    color: COLORS.text.primary,
-  },
-  addressSubtext: {
-    fontSize: 14,
-    fontFamily: FONTS.regular,
-    color: COLORS.text.secondary,
-    marginTop: 4,
-  },
-  deliveryInstructions: {
-    fontSize: 14,
-    fontFamily: FONTS.regular,
-    color: COLORS.text.secondary,
-    marginTop: 8,
-    fontStyle: 'italic',
-  },
-  orderItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  itemQuantity: {
-    fontSize: 14,
-    fontFamily: FONTS.medium,
-    color: COLORS.text.primary,
-    width: 30,
-  },
-  itemName: {
-    fontSize: 14,
-    fontFamily: FONTS.regular,
-    color: COLORS.text.primary,
-    flex: 1,
-  },
-  itemPrice: {
-    fontSize: 14,
-    fontFamily: FONTS.medium,
-    color: COLORS.text.primary,
-  },
-  noItemsText: {
-    fontSize: 14,
-    fontFamily: FONTS.regular,
-    color: COLORS.text.secondary,
-    fontStyle: 'italic',
-    textAlign: 'center',
-    paddingVertical: 16,
-  },
-  specialInstructions: {
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border.light,
-  },
-  specialInstructionsLabel: {
-    fontSize: 12,
-    fontFamily: FONTS.medium,
-    color: COLORS.text.secondary,
-    marginBottom: 4,
-  },
-  specialInstructionsText: {
-    fontSize: 14,
-    fontFamily: FONTS.regular,
-    color: COLORS.text.primary,
-  },
-  paymentRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  paymentMethod: {
-    fontSize: 14,
-    fontFamily: FONTS.medium,
-    color: COLORS.text.primary,
-    marginLeft: 8,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: COLORS.border.light,
-    marginVertical: 12,
-  },
-  priceRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 4,
-  },
-  priceLabel: {
-    fontSize: 14,
-    fontFamily: FONTS.regular,
-    color: COLORS.text.secondary,
-  },
-  priceValue: {
-    fontSize: 14,
-    fontFamily: FONTS.regular,
-    color: COLORS.text.primary,
-  },
-  totalRow: {
-    marginTop: 8,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border.light,
-  },
-  totalLabel: {
-    fontSize: 16,
-    fontFamily: FONTS.bold,
-    color: COLORS.text.primary,
-  },
-  totalValue: {
-    fontSize: 16,
-    fontFamily: FONTS.bold,
-    color: COLORS.primary.default,
-  },
-  bottomContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: 20,
-    backgroundColor: COLORS.white,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border.light,
-  },
-  actionButton: {
-    backgroundColor: COLORS.primary.default,
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'center',
-  },
-  actionButtonDisabled: {
-    opacity: 0.6,
-  },
-  actionButtonText: {
-    fontSize: 16,
-    fontFamily: FONTS.bold,
-    color: COLORS.white,
-    marginLeft: 8,
   },
 });
 

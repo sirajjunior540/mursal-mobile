@@ -253,9 +253,13 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({ children }) => {
         },
         onError: (error: string) => {
           console.error('❌ Realtime service error:', error);
-          // If authentication fails, it means token is invalid
-          if (error.includes('authentication') || error.includes('token')) {
-            console.log('🔑 Authentication failed - user may need to re-login');
+          // If authentication fails, it means token is invalid or expired
+          if (error.includes('authentication') || error.includes('token') || 
+              error.includes('expired') || error.includes('invalid')) {
+            console.log('🔑 Authentication error detected in realtime service');
+            console.log('🔄 The API service will automatically handle token refresh');
+            // Don't trigger logout here - let the API service handle token refresh
+            // The realtime service will be reinitialized after successful token refresh
           }
         }
       });

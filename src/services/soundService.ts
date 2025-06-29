@@ -33,7 +33,7 @@ class SoundService {
         Sound.setCategory('Playback');
 
         // Load the notification sound
-        this.orderSound = new Sound('order_notification.mp3', Sound.MAIN_BUNDLE, (error) => {
+        this.orderSound = new Sound('order_notification.mp3', Sound.MAIN_BUNDLE, (error: any) => {
           if (error) {
             console.log('Failed to load the sound', error);
             // Fallback to system sound if custom sound fails to load
@@ -66,7 +66,7 @@ class SoundService {
       // Play the notification sound
       if (this.orderSound) {
         this.orderSound.setVolume(this.config.volume);
-        this.orderSound.play((success) => {
+        this.orderSound.play((success: boolean) => {
           if (!success) {
             console.log('Failed to play sound');
           } else {

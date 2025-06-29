@@ -134,7 +134,7 @@ export const getCurrentLocation = (): Promise<{latitude: number; longitude: numb
 };
 
 /**
- * Open maps app for navigation
+ * Open maps app for navigation (enhanced with Mapbox support)
  * @param destinationLat Destination latitude
  * @param destinationLng Destination longitude
  * @param originLat Optional origin latitude (current location if not provided)
@@ -147,6 +147,23 @@ export const openMapsForNavigation = async (
   originLng?: number
 ): Promise<void> => {
   try {
+    // Import Mapbox service dynamically to avoid circular dependencies
+    const { mapboxService } = await import('../services/mapboxService');
+    
+    const destination = { latitude: destinationLat, longitude: destinationLng };
+    const origin = originLat && originLng ? { latitude: originLat, longitude: originLng } : undefined;
+    
+    // Try using Mapbox service first for enhanced navigation
+    const success = await mapboxService.openNavigation(destination, origin);
+    
+    if (success) {
+      console.log('✅ Navigation opened successfully via Mapbox service');
+      return;
+    }
+    
+    // Fallback to original implementation
+    console.log('⚠️ Falling back to original navigation implementation');
+    
     const { Platform, Linking } = require('react-native');
     
     let url: string;

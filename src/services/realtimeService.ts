@@ -96,33 +96,18 @@ class RealtimeService {
     try {
       console.log('🔧 Initializing RealtimeSDK...');
 
-      // Get auth token
-      console.log('🔑 Attempting to get auth token...');
-      const token = await SecureStorage.getAuthToken();
+      // Get auth token with automatic refresh handling
+      console.log('🔑 Attempting to get valid auth token...');
+      const token = await this.getValidAuthToken();
       if (!token) {
-        console.log('⚠️ No authentication token available - cannot initialize realtime service');
-        console.log('🔐 Realtime service will be initialized after successful login');
+        console.log('⚠️ No valid authentication token available - cannot initialize realtime service');
+        console.log('🔐 Realtime service will be initialized after successful login or token refresh');
         this.initialized = false;
-        this.callbacks.onError?.('No authentication token available');
+        this.callbacks.onError?.('Authentication failed - please check your login status');
         return;
       }
       
-      console.log('✅ Auth token found, length:', token.length);
-      
-      // Validate token is not expired (basic check)
-      try {
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        const now = Date.now() / 1000;
-        if (payload.exp && payload.exp < now) {
-          console.log('⚠️ Authentication token has expired - need to re-login');
-          this.initialized = false;
-          this.callbacks.onError?.('Authentication token expired - please login again');
-          return;
-        }
-      } catch (error) {
-        console.log('⚠️ Could not validate token expiry, proceeding anyway');
-      }
-      
+      console.log('✅ Valid auth token obtained, length:', token.length);
       console.log('🔐 Valid authentication token found, proceeding with initialization');
       realtimeDebug('Auth token retrieved:', `${token.substring(0, 20)}...`);
 
@@ -207,27 +192,35 @@ class RealtimeService {
     if (!this.sdk) return;
 
     this.sdk.setCallbacks({
-      onNewOrder: (order, source) => {
-        console.log(`🔔 New order received from ${source}: ${order.id}`);
+      onNewOrder: (data, source) => {
+        // Handle both direct order and delivery with nested order structure
+        const order = data.order || data;
+        const orderId = order.id;
+        
+        console.log(`🔔 New order received from ${source}: ${orderId}`);
+        console.log('📊 Full data structure:', JSON.stringify(data, null, 2));
 
         // Check if we've already seen this order
-        if (this.seenOrderIds.has(order.id)) {
-          console.log(`📎 Order ${order.id} already seen, ignoring`);
+        if (this.seenOrderIds.has(orderId)) {
+          console.log(`📎 Order ${orderId} already seen, ignoring`);
           return;
         }
 
-        // Validate and normalize order data
-        if (!this.validateOrderData(order)) {
-          console.error(`❌ Order ${order.id} has invalid data, attempting to fix`);
-          order = this.normalizeOrderData(order);
+        // Validate order data using backend field names
+        if (!this.validateOrderData(data)) {
+          console.error(`❌ Order ${orderId} has invalid data, skipping`);
+          return;
         }
 
         // Mark as seen
-        this.seenOrderIds.add(order.id);
-        this.notifiedOrderIds.add(order.id);
+        this.seenOrderIds.add(orderId);
+        this.notifiedOrderIds.add(orderId);
 
-        // Notify callback
-        this.callbacks.onNewOrder?.(order);
+        // Extract the actual order data for the callback
+        const normalizedOrder = data.order ? data.order : data;
+        
+        // Notify callback with the order data
+        this.callbacks.onNewOrder?.(normalizedOrder);
       },
       onOrderUpdate: (order) => {
         console.log(`📝 Order update received: ${order.id}`);
@@ -604,92 +597,89 @@ class RealtimeService {
 
   /**
    * Validate order data to ensure it has all required fields
-   * @param order Order to validate
+   * @param data Order data to validate (could be Order or Delivery with nested order)
    * @returns True if order data is valid, false otherwise
    */
-  private validateOrderData(order: Order): boolean {
-    if (!order) return false;
-    if (!order.id) return false;
+  private validateOrderData(data: any): boolean {
+    if (!data) {
+      console.log('❌ Order validation failed: data is null/undefined');
+      return false;
+    }
+    
+    // Handle both direct order and delivery with nested order structure
+    const order = data.order || data; // If it's a delivery object, use nested order
+    const deliveryId = data.id && data.order ? data.id : null; // Delivery ID if this is a delivery object
+    
+    if (!order.id) {
+      console.log('❌ Order validation failed: missing order id');
+      console.log('Available top-level fields:', Object.keys(data));
+      return false;
+    }
 
-    // Check for required fields
-    const hasCustomer = !!order.customer;
-    const hasDeliveryAddress = !!order.deliveryAddress;
-    const hasOrderNumber = !!order.orderNumber;
+    console.log(`🔍 Order validation for order ${order.id} ${deliveryId ? `(delivery ${deliveryId})` : ''}:`);
+    
+    // Use backend field names from DeliveryWithOrderSerializer -> OrderDetailSerializer
+    const hasCustomer = !!order.customer_details;
+    const hasDeliveryAddress = !!order.delivery_address;
+    const hasOrderNumber = !!order.order_number;
     const hasStatus = !!order.status;
 
-    // Log validation results
-    console.log(`🔍 Order validation: customer=${hasCustomer}, address=${hasDeliveryAddress}, orderNumber=${hasOrderNumber}, status=${hasStatus}`);
+    console.log(`   customer_details: ${hasCustomer} (${order.customer_details?.name || 'none'})`);
+    console.log(`   delivery_address: ${hasDeliveryAddress} (${order.delivery_address || 'none'})`);
+    console.log(`   order_number: ${hasOrderNumber} (${order.order_number || 'none'})`);
+    console.log(`   status: ${hasStatus} (${order.status || 'none'})`);
 
-    return hasCustomer && hasDeliveryAddress && hasOrderNumber && hasStatus;
+    const isValid = hasCustomer && hasDeliveryAddress && hasOrderNumber && hasStatus;
+    console.log(`   validation result: ${isValid}`);
+    
+    return isValid;
   }
 
   /**
-   * Normalize order data to ensure it has all required fields with fallback values
-   * @param order Order to normalize
-   * @returns Normalized order data
+   * Get a valid authentication token, attempting refresh if needed
    */
-  private normalizeOrderData(order: Order): Order {
-    if (!order) return {} as Order;
-
-    console.log('🔧 Normalizing order data:', order.id);
-
-    // Create a deep copy to avoid modifying the original
-    const normalizedOrder: Order = { ...order };
-
-    // Ensure order has an ID
-    normalizedOrder.id = order.id || `order_${Date.now()}`;
-
-    // Ensure order has a number
-    normalizedOrder.orderNumber = order.orderNumber || `#${normalizedOrder.id}`;
-
-    // Ensure order has a status
-    normalizedOrder.status = order.status || 'pending';
-
-    // Ensure order has a customer
-    if (!normalizedOrder.customer) {
-      normalizedOrder.customer = {
-        id: `customer_${normalizedOrder.id}`,
-        name: 'Unknown Customer',
-        phone: '',
-        email: ''
-      };
-      console.log('⚠️ Created fallback customer data');
+  private async getValidAuthToken(): Promise<string | null> {
+    const token = await SecureStorage.getAuthToken();
+    if (!token) {
+      console.log('🚫 No auth token available');
+      return null;
     }
 
-    // Ensure customer has required fields
-    if (normalizedOrder.customer) {
-      normalizedOrder.customer.id = normalizedOrder.customer.id || `customer_${normalizedOrder.id}`;
-      normalizedOrder.customer.name = normalizedOrder.customer.name || 
-                                      normalizedOrder.customer.full_name || 
-                                      'Unknown Customer';
-      normalizedOrder.customer.phone = normalizedOrder.customer.phone || 
-                                       normalizedOrder.customer.phone_number || 
-                                       '';
-      normalizedOrder.customer.email = normalizedOrder.customer.email || '';
+    try {
+      // Decode JWT token to check expiration
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      const now = Date.now() / 1000;
+      const bufferTime = 60; // Refresh 1 minute before expiry
+
+      if (payload.exp && payload.exp < (now + bufferTime)) {
+        console.log('🔄 Token expiring soon, attempting refresh via API service...');
+        
+        // Try to refresh token using API service
+        try {
+          // Make a test API call which will trigger automatic refresh if needed
+          const testResponse = await apiService.getDriverProfile();
+          if (testResponse.success) {
+            // Get the refreshed token
+            const newToken = await SecureStorage.getAuthToken();
+            console.log('✅ Token refreshed successfully via API service');
+            return newToken;
+          } else {
+            console.log('❌ Token refresh failed, authentication error persists');
+            return null;
+          }
+        } catch (error) {
+          console.error('❌ Token refresh via API service failed:', error);
+          return null;
+        }
+      }
+
+      return token;
+    } catch (error) {
+      console.error('⚠️ Token validation error:', error);
+      return token; // Return token anyway, let server validate
     }
-
-    // Ensure order has a delivery address
-    if (!normalizedOrder.deliveryAddress) {
-      normalizedOrder.deliveryAddress = {
-        street: 'Address not available',
-        coordinates: null
-      };
-      console.log('⚠️ Created fallback delivery address');
-    }
-
-    // Ensure order has a total
-    if (typeof normalizedOrder.total !== 'number') {
-      normalizedOrder.total = 0;
-      console.log('⚠️ Set fallback total amount');
-    }
-
-    // Ensure order has an estimated delivery time
-    normalizedOrder.estimatedDeliveryTime = normalizedOrder.estimatedDeliveryTime || '30 min';
-
-    console.log('✅ Order data normalized successfully');
-
-    return normalizedOrder;
   }
+
 }
 
 export const realtimeService = new RealtimeService();

@@ -26,24 +26,28 @@ export interface EnvironmentConfig {
   DEBUG_API_CALLS: boolean;
   DEBUG_REALTIME: boolean;
   DEBUG_LOCATION: boolean;
+  
+  // Mapbox Configuration
+  MAPBOX_ACCESS_TOKEN: string;
 }
 
 // Default configuration for fallback
 const defaultConfig: EnvironmentConfig = {
   NODE_ENV: 'development',
-  API_BASE_URL: 'http://192.168.1.52:8000',
-  API_HOST: 'sirajjunior.192.168.1.52',
+  API_BASE_URL: 'http://192.168.1.137:8000',
+  API_HOST: 'sirajjunior.192.168.1.137',
   API_TIMEOUT: 30000,
   DEFAULT_TENANT_ID: 'sirajjunior',
   TENANT_SUBDOMAIN: 'sirajjunior',
-  WS_BASE_URL: 'ws://192.168.1.52:8000',
-  WS_HOST: 'sirajjunior.192.168.1.52',
+  WS_BASE_URL: 'ws://192.168.1.137:8000',
+  WS_HOST: 'sirajjunior.192.168.1.137',
   ENABLE_WEBSOCKET: true,
   ENABLE_PUSH_NOTIFICATIONS: true,
   ENABLE_LOCATION_TRACKING: true,
   DEBUG_API_CALLS: true,
   DEBUG_REALTIME: true,
   DEBUG_LOCATION: true,
+  MAPBOX_ACCESS_TOKEN: 'pk.eyJ1Ijoic2lyYWpqdW5pb3IiLCJhIjoiY21jODVoa2JwMTF0NDJqc2F5YTl0emwxNSJ9.migKQuZQbWrXnJlXNTb1Lg',
 };
 
 // Helper function to parse boolean strings
@@ -75,6 +79,7 @@ export const ENV: EnvironmentConfig = {
   DEBUG_API_CALLS: parseBoolean(Config.DEBUG_API_CALLS) || defaultConfig.DEBUG_API_CALLS,
   DEBUG_REALTIME: parseBoolean(Config.DEBUG_REALTIME) || defaultConfig.DEBUG_REALTIME,
   DEBUG_LOCATION: parseBoolean(Config.DEBUG_LOCATION) || defaultConfig.DEBUG_LOCATION,
+  MAPBOX_ACCESS_TOKEN: Config.MAPBOX_ACCESS_TOKEN || defaultConfig.MAPBOX_ACCESS_TOKEN,
 };
 
 // Development helpers
@@ -108,6 +113,9 @@ export const getWebSocketUrl = (endpoint?: string): string => {
 export const getTenantHost = (): string => ENV.API_HOST;
 export const getTenantSubdomain = (): string => ENV.TENANT_SUBDOMAIN;
 
+// Mapbox helpers
+export const getMapboxToken = (): string => ENV.MAPBOX_ACCESS_TOKEN;
+
 // Debug helpers
 export const debugLog = (category: keyof Pick<EnvironmentConfig, 'DEBUG_API_CALLS' | 'DEBUG_REALTIME' | 'DEBUG_LOCATION'>) => {
   return (message: string, ...args: any[]) => {
@@ -129,6 +137,7 @@ if (isDevelopment()) {
     API_HOST: ENV.API_HOST,
     DEFAULT_TENANT_ID: ENV.DEFAULT_TENANT_ID,
     WS_BASE_URL: ENV.WS_BASE_URL,
+    MAPBOX_TOKEN: ENV.MAPBOX_ACCESS_TOKEN ? `${ENV.MAPBOX_ACCESS_TOKEN.substring(0, 20)}...` : 'Not configured',
     features: {
       websocket: ENV.ENABLE_WEBSOCKET,
       pushNotifications: ENV.ENABLE_PUSH_NOTIFICATIONS,

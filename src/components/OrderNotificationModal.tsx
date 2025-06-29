@@ -12,11 +12,13 @@ import {
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import Geolocation from '@react-native-community/geolocation';
+// import Mapbox from '@rnmapbox/maps'; // Temporarily disabled due to native code issues
 
 import { Order } from '../types';
 import { COLORS, FONTS } from '../constants';
 import { calculateDistance } from '../utils/locationUtils';
 import { requestLocationPermissions } from '../utils/permissions';
+import { notificationService } from '../services/notificationService';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -46,7 +48,7 @@ const OrderNotificationModal: React.FC<OrderNotificationModalProps> = ({
   const scaleAnim = useRef(new Animated.Value(0.8)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
   const countdownAnim = useRef(new Animated.Value(1)).current;
-  const countdownRef = useRef<NodeJS.Timeout | null>(null);
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const [driverLocation, setDriverLocation] = useState<DriverLocation | null>(null);
   const [distance, setDistance] = useState<string>('Calculating...');
@@ -96,12 +98,20 @@ const OrderNotificationModal: React.FC<OrderNotificationModalProps> = ({
           const { latitude, longitude } = position.coords;
           setDriverLocation({ lat: latitude, lng: longitude });
 
-          if (order?.deliveryAddress?.coordinates?.latitude && order?.deliveryAddress?.coordinates?.longitude) {
+          // Handle different delivery address formats from backend
+          const deliveryLat = order?.delivery_latitude || 
+            (typeof order?.deliveryAddress === 'object' && order?.deliveryAddress?.coordinates?.latitude) || 
+            undefined;
+          const deliveryLng = order?.delivery_longitude || 
+            (typeof order?.deliveryAddress === 'object' && order?.deliveryAddress?.coordinates?.longitude) || 
+            undefined;
+          
+          if (deliveryLat && deliveryLng) {
             const dist = calculateDistance(
               latitude,
               longitude,
-              order.deliveryAddress.coordinates.latitude,
-              order.deliveryAddress.coordinates.longitude
+              deliveryLat,
+              deliveryLng
             );
             setDistance(`${dist.toFixed(1)} km away`);
           } else {
@@ -133,9 +143,9 @@ const OrderNotificationModal: React.FC<OrderNotificationModalProps> = ({
           setDistance(errorMessage);
         },
         {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 60000,
+          enableHighAccuracy: false,  // Changed to false for faster response
+          timeout: 20000,             // Increased to 20 seconds
+          maximumAge: 300000,         // Allow 5-minute old location data
         }
       );
     } catch (error) {
@@ -176,12 +186,18 @@ const OrderNotificationModal: React.FC<OrderNotificationModalProps> = ({
 
   const handleAccept = useCallback((): void => {
     stopCountdown();
-    onAccept(order?.id || '');
+    // For available orders, the main 'id' field should be the delivery ID
+    const acceptId = order?.id || '';
+    console.log(`🎯 Modal accepting order with ID: ${acceptId} (main id: ${order?.id}, deliveryId: ${order?.deliveryId}, orderId: ${order?.orderId})`);
+    onAccept(acceptId);
   }, [stopCountdown, onAccept, order?.id]);
 
   const handleDecline = useCallback((): void => {
     stopCountdown();
-    onDecline(order?.id || '');
+    // For available orders, the main 'id' field should be the delivery ID (same as accept logic)
+    const declineId = order?.id || '';
+    console.log(`🚫 Modal declining order with ID: ${declineId} (main id: ${order?.id}, deliveryId: ${order?.deliveryId}, orderId: ${order?.orderId})`);
+    onDecline(declineId);
   }, [stopCountdown, onDecline, order?.id]);
 
   // Get driver's current location
@@ -203,7 +219,11 @@ const OrderNotificationModal: React.FC<OrderNotificationModalProps> = ({
 
   // Animation effects
   useEffect(() => {
-    if (visible) {
+    if (visible && order) {
+      // Play notification sound and vibration when modal becomes visible
+      notificationService.playOrderSound();
+      notificationService.vibrateForOrder();
+      
       // Entrance animation
       Animated.parallel([
         Animated.timing(opacityAnim, {
@@ -239,7 +259,7 @@ const OrderNotificationModal: React.FC<OrderNotificationModalProps> = ({
         }),
       ]).start();
     }
-  }, [visible, opacityAnim, slideAnim, scaleAnim]);
+  }, [visible, order, opacityAnim, slideAnim, scaleAnim]);
 
   // Early return if no order data (after hooks)
   if (!order) {
@@ -353,19 +373,56 @@ const OrderNotificationModal: React.FC<OrderNotificationModalProps> = ({
               </TouchableOpacity>
             )}
 
-            {/* Map Preview */}
-            {order.deliveryAddress?.coordinates && (
-              <View style={styles.mapPreviewContainer}>
-                {/* Placeholder until react-native-maps is installed */}
-                <View style={styles.mapPlaceholder}>
-                  <Ionicons name="map" size={32} color={COLORS.primary.default} />
-                  <Text style={styles.mapPlaceholderText}>Map Preview</Text>
-                  <Text style={styles.mapPlaceholderSubtext}>
-                    {getAddressString(order.deliveryAddress)}
-                  </Text>
+            {/* Custom Map Preview */}
+            {(() => {
+              const deliveryLat = order?.delivery_latitude || 
+                (typeof order?.deliveryAddress === 'object' && order?.deliveryAddress?.coordinates?.latitude) || 
+                undefined;
+              const deliveryLng = order?.delivery_longitude || 
+                (typeof order?.deliveryAddress === 'object' && order?.deliveryAddress?.coordinates?.longitude) || 
+                undefined;
+              
+              return deliveryLat && deliveryLng ? (
+                <View style={styles.mapPreviewContainer}>
+                  <View style={styles.customMapView}>
+                    {/* Map background with grid pattern */}
+                    <View style={styles.mapBackground}>
+                      {/* Grid lines for map appearance */}
+                      {Array.from({ length: 6 }, (_, i) => (
+                        <View key={`h-${i}`} style={[styles.gridLine, styles.horizontalLine, { top: `${i * 20}%` }]} />
+                      ))}
+                      {Array.from({ length: 8 }, (_, i) => (
+                        <View key={`v-${i}`} style={[styles.gridLine, styles.verticalLine, { left: `${i * 12.5}%` }]} />
+                      ))}
+                    </View>
+                    
+                    {/* Delivery location marker */}
+                    <View style={[styles.deliveryMarker, styles.centerMarker]}>
+                      <Ionicons name="location" size={24} color={COLORS.white} />
+                    </View>
+                    
+                    {/* Driver location marker if available */}
+                    {driverLocation && (
+                      <View style={[styles.driverMarker, styles.driverMarkerPosition]}>
+                        <Ionicons name="car-sport" size={18} color={COLORS.white} />
+                      </View>
+                    )}
+                    
+                    {/* Map info overlay */}
+                    <View style={styles.mapInfoOverlay}>
+                      <Text style={styles.mapInfoText}>
+                        📍 {getAddressString(order.deliveryAddress || order.delivery_address)}
+                      </Text>
+                      {deliveryLat && deliveryLng && (
+                        <Text style={styles.mapCoordinatesText}>
+                          {deliveryLat.toFixed(4)}, {deliveryLng.toFixed(4)}
+                        </Text>
+                      )}
+                    </View>
+                  </View>
                 </View>
-              </View>
-            )}
+              ) : null;
+            })()}
           </View>
 
           {/* Contact Customer Button */}
@@ -388,7 +445,7 @@ const OrderNotificationModal: React.FC<OrderNotificationModalProps> = ({
               </View>
               <View style={styles.detailItem}>
                 <Ionicons name="card" size={16} color={COLORS.text.secondary} />
-                <Text style={styles.detailText}>${(order.total || 0).toFixed(2)}</Text>
+                <Text style={styles.detailText}>${(Number(order.total) || 0).toFixed(2)}</Text>
               </View>
             </View>
 
@@ -439,27 +496,39 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     height: 150,
   },
-  mapPlaceholder: {
+  mapView: {
     width: '100%',
     height: '100%',
-    backgroundColor: '#F8F9FA',
+  },
+  deliveryMarker: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: COLORS.primary.default,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: 12,
+    borderWidth: 3,
+    borderColor: COLORS.white,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
   },
-  mapPlaceholderText: {
-    fontSize: 16,
-    fontFamily: FONTS.medium,
-    color: COLORS.primary.default,
-    marginTop: 8,
-  },
-  mapPlaceholderSubtext: {
-    fontSize: 12,
-    fontFamily: FONTS.regular,
-    color: COLORS.text.secondary,
-    marginTop: 4,
-    textAlign: 'center',
-    paddingHorizontal: 16,
+  driverMarker: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#2E86AB',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: COLORS.white,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
   },
   contactButton: {
     flexDirection: 'row',
@@ -705,6 +774,71 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: FONTS.bold,
     color: COLORS.white,
+  },
+  // Custom map styles
+  customMapView: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#E8F5E8',
+    position: 'relative',
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  mapBackground: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  gridLine: {
+    position: 'absolute',
+    backgroundColor: '#C8E6C9',
+    opacity: 0.6,
+  },
+  horizontalLine: {
+    width: '100%',
+    height: 1,
+  },
+  verticalLine: {
+    height: '100%',
+    width: 1,
+  },
+  centerMarker: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    marginTop: -20,
+    marginLeft: -20,
+  },
+  driverMarkerPosition: {
+    position: 'absolute',
+    top: '20%',
+    left: '20%',
+    marginTop: -18,
+    marginLeft: -18,
+  },
+  mapInfoOverlay: {
+    position: 'absolute',
+    bottom: 8,
+    left: 8,
+    right: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    borderRadius: 6,
+    padding: 8,
+  },
+  mapInfoText: {
+    fontSize: 12,
+    fontFamily: FONTS.medium,
+    color: COLORS.white,
+    textAlign: 'center',
+  },
+  mapCoordinatesText: {
+    fontSize: 10,
+    fontFamily: FONTS.regular,
+    color: 'rgba(255, 255, 255, 0.8)',
+    textAlign: 'center',
+    marginTop: 2,
   },
 });
 

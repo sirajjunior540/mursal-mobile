@@ -31,16 +31,28 @@ class HttpClient {
     endpoint: string, 
     options: RequestInit = {}
   ): Promise<ApiResponse<T>> {
-    // Get auth token from secure storage
-    const token = await SecureStorage.getAuthToken();
+    return this.requestWithAuth<T>(endpoint, options);
+  }
+
+  private async requestWithAuth<T>(
+    endpoint: string, 
+    options: RequestInit = {},
+    isRetry: boolean = false
+  ): Promise<ApiResponse<T>> {
+    // Get valid auth token (with automatic refresh if needed)
+    const token = await this.getValidToken();
 
     const url = `${this.baseURL}${endpoint}`;
 
-    const defaultHeaders = {
+    const defaultHeaders: Record<string, string> = {
       'Content-Type': 'application/json',
       'Host': getTenantHost(), // Required for Django tenant resolution
-      ...(token && { Authorization: `Bearer ${token}` }),
     };
+
+    // Add Authorization header only if token exists and is valid
+    if (token && token.trim()) {
+      defaultHeaders['Authorization'] = `Bearer ${token}`;
+    }
 
     // Log API calls for debugging
     apiDebug(`${options.method || 'GET'} ${url}`);
@@ -89,9 +101,28 @@ class HttpClient {
         message: data?.message,
       };
     } catch (error) {
+      // Check if this is an authentication error and we haven't already retried
+      if (!isRetry && this.isAuthError(error)) {
+        console.log('🔄 Authentication error detected, attempting token refresh...');
+        const refreshSuccess = await this.refreshAuthToken();
+        if (refreshSuccess) {
+          console.log('✅ Token refreshed, retrying request...');
+          return this.requestWithAuth<T>(endpoint, options, true);
+        } else {
+          console.log('❌ Token refresh failed, authentication error persists');
+          // Don't throw here - let the error be handled below to trigger logout
+        }
+      }
+
       console.error(`API Error [${endpoint}]:`, error);
       console.error('Request URL:', url);
-      console.error('Request headers:', defaultHeaders);
+      
+      // Only log headers for non-authentication errors to reduce log noise
+      if (!this.isAuthError(error)) {
+        console.error('Request headers:', defaultHeaders);
+      } else {
+        console.log('🔍 Authentication error - headers not logged for security');
+      }
 
       let errorMessage = 'Unknown error';
       if (error instanceof Error) {
@@ -145,6 +176,130 @@ class HttpClient {
       method: 'PATCH',
       body: data ? JSON.stringify(data) : undefined,
     });
+  }
+
+  /**
+   * Get a valid authentication token, refreshing if necessary
+   */
+  private async getValidToken(): Promise<string | null> {
+    const token = await SecureStorage.getAuthToken();
+    if (!token) {
+      console.log('🚫 No auth token available');
+      return null;
+    }
+
+    try {
+      // Decode JWT token to check expiration
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      const now = Date.now() / 1000;
+      const bufferTime = 60; // Refresh 1 minute before expiry
+
+      if (payload.exp && payload.exp < (now + bufferTime)) {
+        console.log('🔄 Token expiring soon, attempting refresh...');
+        const refreshSuccess = await this.refreshAuthToken();
+        if (refreshSuccess) {
+          const newToken = await SecureStorage.getAuthToken();
+          console.log('✅ Token refreshed successfully');
+          return newToken;
+        } else {
+          console.log('❌ Token refresh failed, using expired token (will likely fail)');
+          return token; // Return expired token, let server handle the error
+        }
+      }
+
+      return token;
+    } catch (error) {
+      console.error('⚠️ Token validation error:', error);
+      return token; // Return token anyway, let server validate
+    }
+  }
+
+  /**
+   * Refresh the authentication token using the refresh token
+   */
+  private async refreshAuthToken(): Promise<boolean> {
+    try {
+      console.log('🔄 Attempting to refresh authentication token...');
+      
+      const refreshToken = await SecureStorage.getRefreshToken();
+      if (!refreshToken) {
+        console.log('❌ No refresh token available');
+        return false;
+      }
+
+      // Make refresh request without authentication headers
+      const url = `${this.baseURL}/api/v1/auth/token/refresh/`;
+      const headers = {
+        'Content-Type': 'application/json',
+        'Host': getTenantHost(),
+      };
+
+      console.log('🔄 Making token refresh request to:', url);
+      
+      const response = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          refresh: refreshToken
+        }),
+        signal: AbortSignal.timeout(this.timeout),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('❌ Token refresh failed:', response.status, errorData);
+        
+        // If refresh token is invalid, clear all auth data
+        if (response.status === 401 || response.status === 403) {
+          console.log('🗑️ Refresh token invalid, clearing auth data');
+          await SecureStorage.clearAll();
+        }
+        
+        return false;
+      }
+
+      const data = await response.json();
+      
+      if (data.access) {
+        await SecureStorage.setAuthToken(data.access);
+        console.log('✅ New access token stored successfully');
+        
+        // Update refresh token if provided
+        if (data.refresh) {
+          await SecureStorage.setRefreshToken(data.refresh);
+          console.log('✅ New refresh token stored successfully');
+        }
+        
+        return true;
+      } else {
+        console.error('❌ Refresh response missing access token:', data);
+        return false;
+      }
+    } catch (error) {
+      console.error('❌ Token refresh network error:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Check if an error is an authentication error
+   */
+  private isAuthError(error: any): boolean {
+    if (!error) return false;
+    
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const isAuthError = errorMessage.includes('401') || 
+                       errorMessage.includes('403') || 
+                       errorMessage.includes('Unauthorized') ||
+                       errorMessage.includes('Forbidden') ||
+                       errorMessage.includes('authentication') ||
+                       errorMessage.includes('token');
+    
+    if (isAuthError) {
+      console.log('🔍 Detected authentication error:', errorMessage);
+    }
+    
+    return isAuthError;
   }
 }
 
@@ -324,19 +479,35 @@ class ApiService {
       };
     }
 
-    // Use the new update_status endpoint with explicit online status
+    // Use the new update_status endpoint with comprehensive online status
+    // Set both is_available and is_on_duty to ensure orders appear when online
     return this.client.post<void>(`/api/v1/auth/drivers/${driverId}/update_status/`, {
-      is_online: isOnline
+      is_online: isOnline,
+      is_available: isOnline,  // Required for available_orders endpoint
+      is_on_duty: isOnline     // Required for available_orders endpoint
     });
   }
 
   // Orders
   async getActiveOrders(): Promise<ApiResponse<Order[]>> {
-    // Get deliveries assigned to the current driver (both new assignments and active)
-    const response = await this.client.get<any[]>('/api/v1/delivery/deliveries/by_driver/');
+    // Get available orders for the driver to accept (unassigned/broadcast orders)
+    const response = await this.client.get<any[]>('/api/v1/delivery/deliveries/available_orders/');
 
     // Transform backend response to match our Order type
     if (response.success && response.data) {
+      console.log('🔍 DEBUG: available_orders raw response:');
+      response.data.forEach((item, index) => {
+        console.log(`Order ${index}:`, {
+          id: item.id,
+          order_id: item.order?.id,
+          order_number: item.order?.order_number || item.order_number,
+          has_order_object: !!item.order,
+          driver: item.driver,
+          status: item.status,
+          keys: Object.keys(item)
+        });
+      });
+      
       const orders: Order[] = response.data.map(this.transformOrder);
       return {
         success: true,
@@ -417,8 +588,47 @@ class ApiService {
     return response as ApiResponse<Order[]>;
   }
 
+  // Helper function to determine correct order status
+  private transformOrderStatus = (delivery: any, order: any): string => {
+    const deliveryStatus = delivery?.status;
+    const orderStatus = order?.status;
+    
+    console.log('🔍 Transforming order status:', {
+      deliveryStatus,
+      orderStatus,
+      hasDriver: !!delivery?.driver,
+      driverId: delivery?.driver
+    });
+    
+    // If this is from available_orders endpoint, it should be pending
+    // Available orders are those that drivers can accept
+    if (!delivery?.driver || delivery?.driver === null || delivery?.driver === '') {
+      console.log('📋 Order has no driver assigned - setting status to pending');
+      return 'pending';
+    }
+    
+    // If delivery has a driver but status is still 'assigned', it means accepted but not picked up
+    if (deliveryStatus === 'assigned' && delivery?.driver) {
+      console.log('🚛 Order is assigned to driver - keeping assigned status');
+      return 'assigned';
+    }
+    
+    // Use delivery status if available, then order status, default to pending
+    const finalStatus = deliveryStatus || orderStatus || 'pending';
+    console.log(`✅ Final order status: ${finalStatus}`);
+    return finalStatus;
+  };
+
   // Helper method to transform backend delivery/order to frontend Order type
   private transformOrder = (backendData: any): Order => {
+    // Debug log to understand structure
+    console.log('🔄 transformOrder input:', {
+      hasId: !!backendData.id,
+      hasOrder: !!(backendData.order && typeof backendData.order === 'object'),
+      hasDriver: 'driver' in backendData,
+      topLevelKeys: Object.keys(backendData).slice(0, 10)
+    });
+    
     // Check if this is a delivery object with nested order or a direct order object
     const isDelivery = backendData.order && typeof backendData.order === 'object';
     const order = isDelivery ? backendData.order : backendData;
@@ -469,8 +679,22 @@ class ApiService {
       });
     }
 
+    // CRITICAL: For available_orders endpoint, the root object IS the delivery
+    // So backendData.id is the delivery ID we need for accept/decline
+    const primaryId = backendData.id || delivery?.id || order.id || '';
+    
+    console.log('🆔 ID Resolution:', {
+      primaryId,
+      backendDataId: backendData.id,
+      deliveryId: delivery?.id,
+      orderId: order.id,
+      isFromAvailableOrders: !delivery && backendData.id && backendData.order
+    });
+    
     return {
-      id: order.id || '',
+      id: primaryId,  // This must be the delivery ID for API calls
+      deliveryId: delivery?.id || backendData.id || '', // Store delivery ID separately
+      orderId: order.id || '', // Store order ID separately
       orderNumber: order.order_number || order.orderNumber || `#${order.id}`,
       customer,
       items: (order.items || order.order_items || []).map((item: any) => ({
@@ -498,7 +722,7 @@ class ApiService {
         zipCode: '',
         coordinates: undefined
       },
-      status: delivery?.status || order.status || 'pending',
+      status: this.transformOrderStatus(delivery, order),
       paymentMethod: order.payment_method || 'cash',
       subtotal: parseFloat(order.subtotal) || 0,
       deliveryFee: parseFloat(order.delivery_fee) || 0,
@@ -512,18 +736,52 @@ class ApiService {
       pickedUpTime: delivery?.pickup_time ? new Date(delivery.pickup_time) : undefined,
       deliveredTime: delivery?.delivery_time ? new Date(delivery.delivery_time) : undefined,
       // Add delivery-specific fields if this is a delivery object
-      deliveryId: delivery?.id,
       driverId: delivery?.driver,
-      driverName: delivery?.driver_name
+      driverName: delivery?.driver_name,
+      // Debug info
+      _rawDriverId: delivery?.driver,
+      _hasDelivery: !!delivery
     };
   }
 
   async acceptOrder(orderId: string): Promise<ApiResponse<void>> {
+    console.log(`🎯 Attempting to accept order/delivery: ${orderId}`);
+    
+    // Try to get the order details to find the correct delivery ID
+    try {
+      const orderResponse = await this.getOrderDetails(orderId);
+      if (orderResponse.success && orderResponse.data?.deliveryId) {
+        const deliveryId = orderResponse.data.deliveryId;
+        console.log(`✅ Found delivery ID ${deliveryId} for order ${orderId}, using for accept call`);
+        return this.client.post<void>(`/api/v1/delivery/deliveries/${deliveryId}/accept/`);
+      }
+    } catch (error) {
+      console.warn(`⚠️ Could not get order details, proceeding with original ID: ${error}`);
+    }
+    
+    // Fallback to using the provided ID (might be delivery ID already)
+    console.log(`🔄 Using provided ID ${orderId} for accept call`);
     return this.client.post<void>(`/api/v1/delivery/deliveries/${orderId}/accept/`);
   }
 
   async declineOrder(orderId: string): Promise<ApiResponse<void>> {
-    return this.client.post<void>(`/api/v1/delivery/deliveries/${orderId}/decline/`);
+    console.log(`🚫 API: Attempting to decline order/delivery: ${orderId}`);
+    
+    // Direct decline attempt
+    const result = await this.client.post<void>(`/api/v1/delivery/deliveries/${orderId}/decline/`);
+    
+    if (!result.success) {
+      console.error(`❌ Decline failed for ID ${orderId}:`, result.error);
+      
+      // If error mentions "you can only decline", it means backend needs fixing
+      if (result.error?.toLowerCase().includes('you can only decline')) {
+        console.error('⚠️ Backend decline logic needs update - see quick_backend_fix.py');
+      }
+    } else {
+      console.log(`✅ Successfully declined order/delivery: ${orderId}`);
+    }
+    
+    return result;
   }
 
   async updateOrderStatus(orderId: string, status: OrderStatus): Promise<ApiResponse<void>> {
