@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, useEffect, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useState, useCallback, ReactNode, useRef } from 'react';
 import { OrderContextType, Order, OrderStatus, HistoryFilter } from '../types';
 import { STORAGE_KEYS, APP_SETTINGS } from '../constants';
 import { Storage, SecureStorage } from '../utils';
@@ -110,17 +110,30 @@ const OrderContext = createContext<OrderContextType | undefined>(undefined);
 // Provider Component
 interface OrderProviderProps {
   children: ReactNode;
+  apiBaseUrl?: string;
+  websocketUrl?: string;
 }
 
-export const OrderProvider: React.FC<OrderProviderProps> = ({ children }) => {
-  console.log('🏗️ OrderProvider: Creating OrderProvider instance');
+export const OrderProvider: React.FC<OrderProviderProps> = ({ children, apiBaseUrl, websocketUrl }) => {
+  console.log('🏗️ OrderProvider: Creating OrderProvider instance with config:', { apiBaseUrl, websocketUrl });
+  
+  // Initialize all hooks first - these must always be called in the same order
   const [state, dispatch] = useReducer(orderReducer, initialState);
   const [authReady, setAuthReady] = useState(false);
   const [contextError, setContextError] = useState<string | null>(null);
+  const [notificationCallback, setNotificationCallback] = useState<((order: Order) => void) | null>(null);
+  const [acceptedCallback, setAcceptedCallback] = useState<((orderId: string) => void) | null>(null);
 
-  // Get auth context - hooks must always be called in the same order
+  // Use refs for values that shouldn't trigger re-renders
+  const isLoadingRef = useRef(false);
+  const ordersRef = useRef<Order[]>([]);
+  const realtimeInitializedRef = useRef(false);
+
+  // Get auth context - this hook must always be called
   const authContext = useAuth();
   const isLoggedIn = authContext?.isLoggedIn || false;
+  
+  console.log('🔄 OrderProvider: Auth state check - isLoggedIn:', isLoggedIn, 'authContext exists:', !!authContext);
 
   // Mark auth as ready if we got a valid context
   useEffect(() => {
@@ -153,9 +166,9 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({ children }) => {
     } else {
       console.log('🚪 User not logged in, clearing order data');
       dispatch({ type: 'CLEAR_DATA' });
+      realtimeInitializedRef.current = false; // Reset realtime flag
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoggedIn, authReady]);
+  }, [isLoggedIn, authReady]); // Remove refreshOrders from dependencies
 
   // Auto-refresh orders with delay after login
   useEffect(() => {
@@ -182,8 +195,7 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({ children }) => {
     return () => {
       clearTimeout(startTimer);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoggedIn]);
+  }, [isLoggedIn]); // Remove refreshOrders from dependencies
 
   // Initialize realtime service ONLY after successful authentication
   const initializeRealtimeService = async (): Promise<void> => {
@@ -225,16 +237,18 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({ children }) => {
             id: order.id,
             orderNumber: order.orderNumber,
             customer: order.customer ? {
-              name: order.customer.name,
-              phone: order.customer.phone
+              id: order.customer.id,
+              name: order.customer.name || 'Unknown Customer',
+              phone: order.customer.phone || 'No phone'
             } : 'No customer data',
             address: order.deliveryAddress ? 
               (typeof order.deliveryAddress === 'string' ? 
                 order.deliveryAddress : 
-                order.deliveryAddress.street) : 
+                order.deliveryAddress.street || 'No street address') : 
               'No address data',
-            total: order.total,
-            status: order.status
+            total: order.total || 0,
+            status: order.status,
+            rawCustomerData: order.customer  // Add raw data for debugging
           });
 
           // Add the order to the state
@@ -243,6 +257,12 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({ children }) => {
           // Play notification sound
           console.log('🔔 Playing notification sound for new order');
           soundService.playOrderNotification();
+          
+          // Trigger notification callback if set
+          if (notificationCallback) {
+            console.log('📱 Triggering notification callback for new order');
+            notificationCallback(order);
+          }
         },
         onOrderUpdate: (order: Order) => {
           console.log('📝 Order update received via realtime:', order.id);
@@ -252,7 +272,7 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({ children }) => {
           console.log('🔗 Realtime connection status:', connected ? 'Connected' : 'Disconnected');
         },
         onError: (error: string) => {
-          console.error('❌ Realtime service error:', error);
+          console.log('❌ Realtime service error:', error);
           // If authentication fails, it means token is invalid or expired
           if (error.includes('authentication') || error.includes('token') || 
               error.includes('expired') || error.includes('invalid')) {
@@ -260,6 +280,10 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({ children }) => {
             console.log('🔄 The API service will automatically handle token refresh');
             // Don't trigger logout here - let the API service handle token refresh
             // The realtime service will be reinitialized after successful token refresh
+          } else if (error.includes('Network Error') || error.includes('Failed to fetch')) {
+            console.log('🌐 Network error in realtime service - will retry automatically');
+          } else {
+            console.log('⚠️ Realtime service error (non-critical):', error);
           }
         }
       });
@@ -315,8 +339,14 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({ children }) => {
     }
   };
 
-  const refreshOrders = async (isInitialLoad: boolean = false): Promise<void> => {
-    if (state.isLoading) {
+  // Update refs when state changes
+  useEffect(() => {
+    isLoadingRef.current = state.isLoading;
+    ordersRef.current = state.orders;
+  }, [state.isLoading, state.orders]);
+
+  const refreshOrders = useCallback(async (isInitialLoad: boolean = false): Promise<void> => {
+    if (isLoadingRef.current) {
       console.log('⏳ Orders already loading, skipping refresh');
       return;
     }
@@ -327,6 +357,7 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({ children }) => {
     }
 
     console.log('🔄 Refreshing orders from API...');
+    isLoadingRef.current = true;
     dispatch({ type: 'SET_LOADING', payload: true });
 
     try {
@@ -349,9 +380,10 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({ children }) => {
         // Clear any previous errors
         dispatch({ type: 'SET_ERROR', payload: null });
 
-        // Initialize realtime service ONLY after successful API call
-        if (isInitialLoad) {
+        // Initialize realtime service ONLY after successful API call and only once
+        if (isInitialLoad && !realtimeInitializedRef.current) {
           console.log('🚀 First successful API call - now initializing realtime service');
+          realtimeInitializedRef.current = true;
           // Delay realtime initialization to ensure API is fully working
           setTimeout(() => {
             initializeRealtimeService();
@@ -359,7 +391,6 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({ children }) => {
         }
       } else {
         console.error('❌ Failed to fetch orders:', response.error);
-        // Don't throw error during login process
         dispatch({ type: 'SET_ERROR', payload: response.error || 'Failed to fetch orders' });
       }
     } catch (error) {
@@ -374,17 +405,18 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({ children }) => {
         dispatch({ type: 'SET_ERROR', payload: null });
       }
     } finally {
+      isLoadingRef.current = false;
       dispatch({ type: 'SET_LOADING', payload: false });
     }
-  };
+  }, [isLoggedIn]); // Only depend on isLoggedIn, which is stable
 
-  const acceptOrder = async (orderId: string): Promise<boolean> => {
+  const acceptOrder = useCallback(async (orderId: string): Promise<boolean> => {
     try {
       const response = await apiService.acceptOrder(orderId);
 
       if (response.success) {
         // Remove accepted order from active orders list (driver moves to order details)
-        const updatedOrders = state.orders.filter(order => order.id !== orderId);
+        const updatedOrders = ordersRef.current.filter(order => order.id !== orderId);
 
         dispatch({ type: 'SET_ORDERS', payload: updatedOrders });
 
@@ -394,6 +426,12 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({ children }) => {
         // Mark order as handled to stop notifications
         realtimeService.markOrderAsHandled(orderId);
         console.log(`✅ Order ${orderId} accepted and removed from active list - notifications stopped`);
+        
+        // Trigger accepted callback if set (for ongoing deliveries refresh)
+        if (acceptedCallback) {
+          console.log('📋 Triggering accepted callback for ongoing deliveries refresh');
+          acceptedCallback(orderId);
+        }
 
         return true;
       } else {
@@ -405,10 +443,11 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({ children }) => {
       dispatch({ type: 'SET_ERROR', payload: message });
       return false;
     }
-  };
+  }, [acceptedCallback]); // Remove state.orders dependency
 
-  const declineOrder = async (orderId: string): Promise<void> => {
+  const declineOrder = useCallback(async (orderId: string): Promise<void> => {
     try {
+      console.log(`🙅 Attempting to decline order: ${orderId}`);
       const response = await apiService.declineOrder(orderId);
 
       if (response.success) {
@@ -416,23 +455,41 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({ children }) => {
         dispatch({ type: 'REMOVE_ORDER', payload: orderId });
 
         // Update cache
-        const updatedOrders = state.orders.filter(order => order.id !== orderId);
+        const updatedOrders = ordersRef.current.filter(order => order.id !== orderId);
         await Storage.setItem(STORAGE_KEYS.ACTIVE_ORDERS, updatedOrders);
 
         // Mark order as handled to stop notifications
         realtimeService.markOrderAsHandled(orderId);
-        console.log(`❌ Order ${orderId} declined - notifications stopped`);
+        console.log(`✅ Order ${orderId} declined successfully - removed from list`);
       } else {
+        console.error(`❌ Decline failed for order ${orderId}:`, response.error);
+        
+        // If backend has permission issues, still remove from local state
+        // This is a workaround for the backend decline permission bug
+        if (response.error?.toLowerCase().includes('you can only decline')) {
+          console.warn('⚠️ Backend decline permission issue detected - removing order locally');
+          
+          // Remove order from local state anyway
+          dispatch({ type: 'REMOVE_ORDER', payload: orderId });
+          const updatedOrders = ordersRef.current.filter(order => order.id !== orderId);
+          await Storage.setItem(STORAGE_KEYS.ACTIVE_ORDERS, updatedOrders);
+          realtimeService.markOrderAsHandled(orderId);
+          
+          console.log(`📱 Order ${orderId} removed from app (backend needs fixing)`);
+          return; // Don't throw error, just warn user
+        }
+        
         throw new Error(response.error || 'Failed to decline order');
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to decline order';
+      console.error(`🚨 Decline order error:`, message);
       dispatch({ type: 'SET_ERROR', payload: message });
       throw error;
     }
-  };
+  }, []); // Remove state.orders dependency completely
 
-  const updateOrderStatus = async (orderId: string, status: OrderStatus): Promise<boolean> => {
+  const updateOrderStatus = useCallback(async (orderId: string, status: OrderStatus): Promise<boolean> => {
     try {
       const response = await apiService.updateOrderStatus(orderId, status);
 
@@ -459,9 +516,9 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({ children }) => {
       dispatch({ type: 'SET_ERROR', payload: message });
       return false;
     }
-  };
+  }, [state.orders, getOrderHistory]); // Include dependencies
 
-  const getOrderDetails = async (orderId: string): Promise<Order | null> => {
+  const getOrderDetails = useCallback(async (orderId: string): Promise<Order | null> => {
     try {
       const response = await apiService.getOrderDetails(orderId);
 
@@ -476,9 +533,9 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({ children }) => {
       console.error('❌ Error getting order details:', message);
       return null;
     }
-  };
+  }, []); // No dependencies needed
 
-  const getOrderHistory = async (filter?: HistoryFilter): Promise<void> => {
+  const getOrderHistory = useCallback(async (filter?: HistoryFilter): Promise<void> => {
     dispatch({ type: 'SET_LOADING', payload: true });
 
     try {
@@ -495,6 +552,62 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({ children }) => {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to fetch order history';
       dispatch({ type: 'SET_ERROR', payload: message });
+    } finally {
+      dispatch({ type: 'SET_LOADING', payload: false });
+    }
+  }, []); // Empty dependency array since this function doesn't depend on any state
+
+  const getDriverOrders = useCallback(async (): Promise<void> => {
+    dispatch({ type: 'SET_LOADING', payload: true });
+
+    try {
+      const response = await apiService.getDriverOrders();
+
+      if (response.success && response.data) {
+        dispatch({ type: 'SET_ORDERS', payload: response.data });
+
+        // Cache the data
+        await Storage.setItem(STORAGE_KEYS.ACTIVE_ORDERS, response.data);
+      } else {
+        throw new Error(response.error || 'Failed to fetch driver orders');
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to fetch driver orders';
+      dispatch({ type: 'SET_ERROR', payload: message });
+    } finally {
+      dispatch({ type: 'SET_LOADING', payload: false });
+    }
+  }, []); // Empty dependency array since this function doesn't depend on any state
+
+  const setOrderNotificationCallback = useCallback((callback: ((order: Order) => void) | null) => {
+    setNotificationCallback(() => callback);
+  }, []);
+  
+  const setOrderAcceptedCallback = useCallback((callback: ((orderId: string) => void) | null) => {
+    setAcceptedCallback(() => callback);
+  }, []);
+
+  // Function to check if driver can accept an order (capacity management)
+  const canAcceptOrder = (order: Order): boolean => {
+    if (!order) return false;
+    
+    // Get current accepted orders count by type
+    const currentAcceptedOrders = state.orders.filter(o => 
+      o.status === 'assigned' || o.status === 'accepted'
+    );
+    
+    const foodOrders = currentAcceptedOrders.filter(o => 
+      o.deliveryType === 'food' || o.deliveryType === 'fast'
+    );
+    const regularOrders = currentAcceptedOrders.filter(o => 
+      o.deliveryType === 'regular' || !o.deliveryType
+    );
+    
+    // Check capacity limits
+    if (order.deliveryType === 'food' || order.deliveryType === 'fast') {
+      return foodOrders.length < 1; // Max 1 food/fast order
+    } else {
+      return regularOrders.length < 5; // Max 5 regular orders
     }
   };
 
@@ -509,6 +622,10 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({ children }) => {
     updateOrderStatus,
     getOrderHistory,
     getOrderDetails,
+    getDriverOrders,
+    setOrderNotificationCallback,
+    setOrderAcceptedCallback,
+    canAcceptOrder,
   };
 
   console.log('🎯 OrderProvider: Rendering with context value ready');

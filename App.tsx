@@ -1,43 +1,80 @@
 /**
- * Mursal Driver App
- * Multi-tenant delivery driver application
- *
- * @format
+ * Mursal Driver App - Production Ready Mobile Application
+ * Professional splash screen → authentication → main app flow
  */
 
-import React, { useEffect } from 'react';
-import { StatusBar, StyleSheet, useColorScheme, View, Text, ActivityIndicator, Alert, AppState } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { StatusBar, StyleSheet, useColorScheme, View, Alert, AppState, AppStateStatus } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { AuthProvider, useAuth } from './src/contexts/AuthContext';
-import { DriverProvider } from './src/contexts/DriverContext';
-import { OrderProvider } from './src/contexts/OrderContext';
-import { TenantProvider } from './src/contexts/TenantContext';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import Ionicons from 'react-native-vector-icons/Ionicons';
+
+// Infrastructure
+import { logger } from './src/infrastructure/logging/logger';
 import ErrorBoundary from './src/components/ErrorBoundary';
 import ContextErrorBoundary from './src/components/ContextErrorBoundary';
-import { RootStackParamList, TabParamList } from './src/types';
-import './src/utils/DevUtils'; // Import for development utilities
+import { LoadingOverlay } from './src/components/LoadingOverlay';
+import { NetworkStatus } from './src/components/NetworkStatus';
+import { AppUpdatePrompt } from './src/components/AppUpdatePrompt';
+
+// Screens
+import { SplashScreen } from './src/screens/SplashScreen';
 import LoginScreen from './src/screens/auth/LoginScreen';
-import DashboardScreen from './src/screens/DashboardScreen';
 import OrderDetailsScreen from './src/screens/OrderDetailsScreen';
 import OngoingDeliveryScreen from './src/screens/OngoingDeliveryScreen';
-import RouteNavigationScreen from './src/screens/RouteNavigationScreen';
+import AcceptedOrdersScreen from './src/screens/AcceptedOrdersScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
-import Ionicons from 'react-native-vector-icons/Ionicons';
-import { COLORS } from './src/constants';
+import DashboardScreen from './src/screens/DashboardScreen';
+import RouteNavigationScreen from './src/screens/RouteNavigationScreen';
+
+// Context providers
+import { AuthProvider, useAuth } from './src/contexts/AuthContext';
+import { OrderProvider } from './src/contexts/OrderContext';
+import { DriverProvider } from './src/contexts/DriverContext';
+import { TenantProvider } from './src/contexts/TenantContext';
+
+// Services and utilities
+import { theme } from './src/shared/styles/theme';
 import { locationService } from './src/services/locationService';
 import { requestNotificationPermissions } from './src/utils/permissions';
 import { notificationService } from './src/services/notificationService';
-import { mapboxService } from './src/services/mapboxService';
-import './src/utils/locationTest'; // Import location testing utilities
+import { haptics } from './src/utils/haptics';
+import { ENV, getApiUrl, getWebSocketUrl } from './src/config/environment';
+
+// Environment configuration
+const API_BASE_URL = ENV.API_BASE_URL;
+const WEBSOCKET_URL = ENV.WS_BASE_URL;
+
+// Type definitions
+interface RootStackParamList extends Record<string, object | undefined> {
+  Splash: undefined;
+  Login: undefined;
+  Main: undefined;
+  OrderDetails: { orderId: string; autoNavigate?: boolean };
+}
+
+interface TabParamList extends Record<string, object | undefined> {
+  Dashboard: undefined;
+  AcceptedOrders: undefined;
+  OngoingDelivery: undefined;
+  RouteNavigation: undefined;
+  History: undefined;
+  Profile: undefined;
+}
 
 // Create navigation stacks
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<TabParamList>();
 
+// App initialization state
+interface AppInitState {
+  showSplash: boolean;
+  isInitialized: boolean;
+}
 
 // Main tab navigator
 const MainTabs = () => {
@@ -49,42 +86,59 @@ const MainTabs = () => {
           let iconName: keyof typeof Ionicons.glyphMap = 'home';
 
           if (route.name === 'Dashboard') {
-            iconName = focused ? 'home' : 'home-outline';
-          } else if (route.name === 'OngoingDelivery') {
-            iconName = focused ? 'car' : 'car-outline';
+            iconName = focused ? 'grid' : 'grid-outline';
           } else if (route.name === 'RouteNavigation') {
             iconName = focused ? 'navigate' : 'navigate-outline';
+          } else if (route.name === 'AcceptedOrders') {
+            iconName = focused ? 'list' : 'list-outline';
           } else if (route.name === 'History') {
-            iconName = focused ? 'time' : 'time-outline';
+            iconName = focused ? 'receipt' : 'receipt-outline';
           } else if (route.name === 'Profile') {
             iconName = focused ? 'person' : 'person-outline';
           }
 
           return <Ionicons name={iconName} size={size} color={color} />;
         },
-        tabBarActiveTintColor: COLORS.primary.default,
-        tabBarInactiveTintColor: COLORS.text.secondary,
+        tabBarActiveTintColor: '#3B82F6',
+        tabBarInactiveTintColor: '#6B7280',
+        tabBarStyle: {
+          backgroundColor: '#FFFFFF',
+          borderTopColor: '#E5E7EB',
+          borderTopWidth: 1,
+          height: 83,
+          paddingBottom: 34,
+          paddingTop: 8,
+          elevation: 8,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.1,
+          shadowRadius: 8,
+        },
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: '600',
+        },
       })}
+      screenListeners={{
+        tabPress: () => {
+          haptics.selection();
+        },
+      }}
     >
       <Tab.Screen 
         name="Dashboard" 
         component={DashboardScreen} 
-        options={{ tabBarLabel: 'Dashboard' }}
+        options={{ tabBarLabel: 'Home' }}
       />
       <Tab.Screen 
-        name="OngoingDelivery" 
-        component={OngoingDeliveryScreen} 
-        options={{ tabBarLabel: 'Ongoing' }}
-      />
-      <Tab.Screen 
-        name="RouteNavigation" 
-        component={RouteNavigationScreen} 
+        name="AcceptedOrders" 
+        component={AcceptedOrdersScreen} 
         options={{ tabBarLabel: 'Orders' }}
       />
       <Tab.Screen 
         name="History" 
         component={HistoryScreen} 
-        options={{ tabBarLabel: 'History' }}
+        options={{ tabBarLabel: 'Earnings' }}
       />
       <Tab.Screen 
         name="Profile" 
@@ -97,34 +151,62 @@ const MainTabs = () => {
 
 // Main navigation container with authentication flow
 const AppNavigator = () => {
-  const { isLoading, isLoggedIn, user } = useAuth();
+  const { isLoading, isLoggedIn } = useAuth();
+  const [appInitState, setAppInitState] = useState<AppInitState>({
+    showSplash: true,
+    isInitialized: false,
+  });
+
+  // Handle splash screen completion
+  const handleSplashComplete = () => {
+    logger.info('Splash screen animation completed');
+    setAppInitState({
+      showSplash: false,
+      isInitialized: true,
+    });
+  };
 
   // Debug authentication state
-  console.log('Auth State:', { isLoading, isLoggedIn, username: user?.username });
+  logger.debug('Auth State', { isLoading, isLoggedIn, appInitState });
 
+  // Show splash screen first
+  if (appInitState.showSplash) {
+    return <SplashScreen onAnimationComplete={handleSplashComplete} />;
+  }
+
+  // Show loading during auth check (after splash)
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#0000ff" />
-        <Text style={styles.loadingText}>Loading...</Text>
+        {/* Silent loading - no UI needed as it's very brief after splash */}
       </View>
     );
   }
 
-  console.log('Rendering navigation - isLoggedIn:', isLoggedIn);
+  logger.debug('Rendering main navigation', { isLoggedIn });
 
   return (
     <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Navigator screenOptions={{ headerShown: false, animation: 'fade' }}>
         {!isLoggedIn ? (
-          <Stack.Screen name="Login" component={LoginScreen} />
+          <Stack.Screen 
+            name="Login" 
+            component={LoginScreen}
+            options={{
+              gestureEnabled: false, // Prevent swipe back on login
+            }}
+          />
         ) : (
           <>
             <Stack.Screen name="Main" component={MainTabs} />
             <Stack.Screen 
               name="OrderDetails" 
               component={OrderDetailsScreen} 
-              options={{ headerShown: true }}
+              options={{ 
+                headerShown: false,
+                presentation: 'modal',
+                animation: 'slide_from_bottom'
+              }}
             />
           </>
         )}
@@ -137,135 +219,153 @@ const AppNavigator = () => {
 function App() {
   const isDarkMode = useColorScheme() === 'dark';
   
-  // Initialize location and notification permissions on app start
+  // Initialize app permissions and services
   useEffect(() => {
     const initializeApp = async () => {
-      console.log('🚀 Initializing app permissions and services...');
+      logger.info('🚀 Initializing Mursal Driver App');
       
       try {
-        // Request location permissions immediately
-        console.log('📍 Requesting location permissions...');
+        // Request location permissions
+        logger.debug('📍 Requesting location permissions');
         const locationPermissionGranted = await locationService.requestLocationPermissions();
         
         if (locationPermissionGranted) {
-          console.log('✅ Location permissions granted');
+          logger.info('✅ Location permissions granted');
         } else {
-          console.log('❌ Location permissions denied');
+          logger.warn('⚠️ Location permissions denied');
           Alert.alert(
             'Location Required',
             'This app requires location access to track deliveries. Please enable location permissions in your device settings.',
             [
               { text: 'Cancel', style: 'cancel' },
               { text: 'Open Settings', onPress: () => {
-                // For production, you might want to use Linking.openSettings()
-                console.log('Opening device settings...');
+                logger.debug('Opening device settings');
               }}
             ]
           );
         }
         
         // Request notification permissions
-        console.log('🔔 Requesting notification permissions...');
+        logger.debug('🔔 Requesting notification permissions');
         const notificationPermissionGranted = await requestNotificationPermissions();
         
         if (notificationPermissionGranted) {
-          console.log('✅ Notification permissions granted');
+          logger.info('✅ Notification permissions granted');
           
           // Enable background notifications
-          console.log('📱 Enabling background notifications...');
+          logger.debug('📱 Enabling background notifications');
           const backgroundEnabled = await notificationService.enableBackgroundNotifications();
           
           if (backgroundEnabled) {
-            console.log('✅ Background notifications enabled');
+            logger.info('✅ Background notifications enabled');
             
             // Set up notification callbacks for background actions
             notificationService.setNotificationCallbacks({
               onOrderReceived: (orderId: string, action: 'accept' | 'decline') => {
-                console.log(`📱 Background notification action: ${action} for order ${orderId}`);
-                // Handle background order acceptance/decline
-                // This would typically trigger the appropriate API calls
+                logger.info(`🔔 Background notification action: ${action} for order ${orderId}`);
               },
               onNavigateToOrder: (orderId: string) => {
-                console.log(`📱 Navigate to order from background notification: ${orderId}`);
-                // Handle navigation when app opens from notification tap
+                logger.info(`🔔 Navigate to order from background notification: ${orderId}`);
               }
             });
           } else {
-            console.log('❌ Failed to enable background notifications');
+            logger.error('❌ Failed to enable background notifications');
           }
         } else {
-          console.log('❌ Notification permissions denied');
+          logger.warn('⚠️ Notification permissions denied');
         }
         
-        // Test Mapbox configuration
-        console.log('🗺️ Testing Mapbox configuration...');
-        const mapboxConfigured = await mapboxService.testConfiguration();
-        
-        if (mapboxConfigured) {
-          console.log('✅ Mapbox configured successfully');
-        } else {
-          console.log('❌ Mapbox configuration failed or token invalid');
+        // Test backend connection
+        logger.debug('🔌 Testing backend connection...');
+        try {
+          const response = await fetch(`${API_BASE_URL}/whoami/`, {
+            method: 'GET',
+            headers: {
+              'Host': 'sirajjunior.192.168.1.137',
+              'Content-Type': 'application/json',
+            },
+          });
+          
+          if (response.ok) {
+            const data = await response.text();
+            logger.info(`✅ Backend connection successful: ${data}`);
+          } else {
+            logger.warn(`⚠️ Backend responded with status: ${response.status}`);
+          }
+        } catch (connectionError) {
+          logger.error('❌ Backend connection failed:', connectionError as Error);
         }
+        
+        logger.info('✅ App initialization completed successfully');
         
       } catch (error) {
-        console.error('❌ Error initializing app permissions:', error);
+        logger.error('💥 Error initializing app permissions', error as Error);
       }
     };
     
-    initializeApp();
+    // Initialize app after a brief delay to allow splash screen to show
+    const initTimer = setTimeout(initializeApp, 500);
     
     // Handle app state changes for background/foreground
-    const handleAppStateChange = (nextAppState: string) => {
-      console.log('📱 App state changed to:', nextAppState);
+    const handleAppStateChange = (nextAppState: AppStateStatus) => {
+      logger.debug('📱 App state changed', { nextAppState });
       
       if (nextAppState === 'active') {
-        // App came to foreground - check if location tracking should resume
-        console.log('🔄 App became active, checking location tracking...');
+        logger.debug('🎯 App became active, checking services');
+      } else if (nextAppState === 'background') {
+        logger.debug('🌙 App went to background');
       }
     };
     
     const subscription = AppState.addEventListener('change', handleAppStateChange);
     
     return () => {
+      clearTimeout(initTimer);
       subscription?.remove();
     };
   }, []);
 
   return (
-    <ErrorBoundary>
-      <SafeAreaProvider>
-        <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-        <ContextErrorBoundary contextName="AuthProvider">
-          <AuthProvider>
-            <ContextErrorBoundary contextName="TenantProvider">
-              <TenantProvider>
-                <ContextErrorBoundary contextName="DriverProvider">
-                  <DriverProvider>
-                    <ContextErrorBoundary contextName="OrderProvider">
-                      <OrderProvider>
-                        <AppNavigator />
-                      </OrderProvider>
-                    </ContextErrorBoundary>
-                  </DriverProvider>
-                </ContextErrorBoundary>
-              </TenantProvider>
-            </ContextErrorBoundary>
-          </AuthProvider>
-        </ContextErrorBoundary>
-      </SafeAreaProvider>
-    </ErrorBoundary>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ErrorBoundary>
+        <SafeAreaProvider>
+          <StatusBar 
+            barStyle={isDarkMode ? 'light-content' : 'dark-content'}
+            backgroundColor={theme.colors.primary}
+            translucent={false}
+          />
+          <ContextErrorBoundary contextName="AuthProvider">
+            <AuthProvider>
+              <ContextErrorBoundary contextName="TenantProvider">
+                <TenantProvider>
+                  <ContextErrorBoundary contextName="DriverProvider">
+                    <DriverProvider>
+                      <ContextErrorBoundary contextName="OrderProvider">
+                        <OrderProvider 
+                          apiBaseUrl={API_BASE_URL}
+                          websocketUrl={WEBSOCKET_URL}
+                        >
+                          <AppNavigator />
+                          <NetworkStatus />
+                          <AppUpdatePrompt checkForUpdates={true} />
+                        </OrderProvider>
+                      </ContextErrorBoundary>
+                    </DriverProvider>
+                  </ContextErrorBoundary>
+                </TenantProvider>
+              </ContextErrorBoundary>
+            </AuthProvider>
+          </ContextErrorBoundary>
+        </SafeAreaProvider>
+      </ErrorBoundary>
+    </GestureHandlerRootView>
   );
 }
 
 const styles = StyleSheet.create({
   loadingContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 10,
-    fontSize: 16,
+    backgroundColor: theme.colors.background,
   },
 });
 

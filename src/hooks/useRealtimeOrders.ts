@@ -104,15 +104,14 @@ export const useRealtimeOrders = (): UseRealtimeOrdersReturn => {
       if (!exists) {
         const updatedOrders = [...prevOrders, order];
         
-        // Show notification
-        showOrderNotification(order);
+        // Show notification after state update
+        setTimeout(() => showOrderNotification(order), 0);
         
         return updatedOrders;
       }
       return prevOrders;
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, []); // Keep empty dependencies since showOrderNotification is now stable
 
   const handleOrderUpdate = useCallback((order: Order) => {
     console.log('Order update received:', order.id);
@@ -146,9 +145,14 @@ export const useRealtimeOrders = (): UseRealtimeOrdersReturn => {
     // Play notification sound and vibration
     soundService.playOrderNotification();
     
+    // Safely extract customer name and address with fallbacks
+    const customerName = order.customer?.name || 'Unknown Customer';
+    const deliveryAddress = order.deliveryAddress?.street || 'Address not specified';
+    const orderTotal = order.total ? order.total.toFixed(2) : '0.00';
+    
     Alert.alert(
       '🚚 New Delivery Order!',
-      `Order #${order.orderNumber}\nCustomer: ${order.customer.name}\nTotal: $${order.total.toFixed(2)}\nDelivery Address: ${order.deliveryAddress.street}`,
+      `Order #${order.orderNumber}\nCustomer: ${customerName}\nTotal: $${orderTotal}\nDelivery Address: ${deliveryAddress}`,
       [
         {
           text: 'Decline',
@@ -163,20 +167,25 @@ export const useRealtimeOrders = (): UseRealtimeOrdersReturn => {
       { cancelable: false }
     );
      
-  }, [acceptOrder, declineOrder]);
+  }, []); // Remove dependencies since acceptOrder and declineOrder are now stable
 
   const acceptOrder = useCallback(async (orderId: string) => {
     try {
-      // First, get the order from newOrders
-      const order = newOrders.find(o => o.id === orderId);
-      const deliveryId = order?.deliveryId || orderId;
+      // Use functional state update to avoid dependency on newOrders
+      let targetOrder: Order | undefined;
+      setNewOrders(currentOrders => {
+        targetOrder = currentOrders.find(o => o.id === orderId);
+        return currentOrders; // Don't modify state yet
+      });
+      
+      const deliveryId = targetOrder?.deliveryId || orderId;
       
       // Call API to accept the order
       const { apiService } = await import('../services/api');
       const response = await apiService.acceptOrder(deliveryId);
       
       if (response.success) {
-        // Remove from new orders list
+        // Remove from new orders list after successful API call
         setNewOrders(prevOrders => 
           prevOrders.filter(order => order.id !== orderId)
         );
@@ -195,20 +204,25 @@ export const useRealtimeOrders = (): UseRealtimeOrdersReturn => {
       console.error('Failed to accept order:', error);
       Alert.alert('Error', 'Failed to accept the order. Please try again.');
     }
-  }, [newOrders]);
+  }, []); // Remove newOrders dependency
 
   const declineOrder = useCallback(async (orderId: string) => {
     try {
-      // First, get the order from newOrders
-      const order = newOrders.find(o => o.id === orderId);
-      const deliveryId = order?.deliveryId || orderId;
+      // Use functional state update to avoid dependency on newOrders
+      let targetOrder: Order | undefined;
+      setNewOrders(currentOrders => {
+        targetOrder = currentOrders.find(o => o.id === orderId);
+        return currentOrders; // Don't modify state yet
+      });
+      
+      const deliveryId = targetOrder?.deliveryId || orderId;
       
       // Call API to decline the order
       const { apiService } = await import('../services/api');
       const response = await apiService.declineOrder(deliveryId);
       
       if (response.success) {
-        // Remove from new orders list
+        // Remove from new orders list after successful API call
         setNewOrders(prevOrders => 
           prevOrders.filter(order => order.id !== orderId)
         );
@@ -227,7 +241,7 @@ export const useRealtimeOrders = (): UseRealtimeOrdersReturn => {
       console.error('Failed to decline order:', error);
       Alert.alert('Error', 'Failed to decline the order. Please try again.');
     }
-  }, [newOrders]);
+  }, []); // Remove newOrders dependency
 
   const clearNewOrders = useCallback(() => {
     setNewOrders([]);

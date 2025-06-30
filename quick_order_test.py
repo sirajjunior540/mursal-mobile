@@ -16,7 +16,7 @@ import django
 django.setup()
 
 from django.contrib.auth import get_user_model
-from delivery.models import Customer, Order, Delivery
+from delivery.models import  Order, Delivery
 from delivery.enums import OrderStatus, DeliveryStatus, PaymentMethod
 from delivery.order_assignment import order_assignment_service
 from django_tenants.utils import tenant_context
@@ -56,34 +56,35 @@ def create_test_order():
         # Get the first driver and set them online
         driver = drivers.first()
         print(f"Driver: {driver.first_name} {driver.last_name}")
-        print(f"Current status: online={getattr(driver, 'is_online', False)}, available={getattr(driver, 'is_available', False)}, on_duty={getattr(driver, 'is_on_duty', False)}")
+        print(f"Current status: available={getattr(driver, 'is_available', False)}, on_duty={getattr(driver, 'is_on_duty', False)}")
         
         # Update driver status to be fully online
-        driver.is_online = True
         driver.is_available = True
         driver.is_on_duty = True
         
         # Set location and ensure it's recent
         driver.current_latitude = 25.2048  # Dubai coordinates
         driver.current_longitude = 55.2708
-        driver.location_updated_at = timezone.now()  # Mark location as recent
+        driver.last_location_update = timezone.now()  # Mark location as recent
         print("📍 Set driver location to Dubai with current timestamp")
         
         driver.save()
-        print(f"✅ Driver status updated: online=True, available=True, on_duty=True")
+        print(f"✅ Driver status updated: available=True, on_duty=True")
         
         # Step 2: Create customer
         print("\n👤 STEP 2: Creating test customer...")
         
-        customer, created = Customer.objects.get_or_create(
-            name="Test Customer Mobile",
+        customer, created = User.objects.get_or_create(
+            username="test_customer_mobile",
             defaults={
+                'first_name': 'Test',
+                'last_name': 'Customer Mobile',
                 'email': 'test.mobile@example.com',
-                'phone': '+971501234567',
-                'address': 'Test Address, Dubai, UAE'
+                'phone_number': '+971501234567',
+                'role': User.ROLE_CUSTOMER
             }
         )
-        print(f"✅ {'Created' if created else 'Using existing'} customer: {customer.name}")
+        print(f"✅ {'Created' if created else 'Using existing'} customer: {customer.get_full_name()}")
         
         # Step 3: Create order
         print("\n📦 STEP 3: Creating test order...")
@@ -99,6 +100,7 @@ def create_test_order():
             delivery_fee=5.00,
             tax=2.40,
             total=32.40,
+            pickup_address="Test Restaurant, Downtown Dubai, UAE",
             delivery_address="123 Test Street, Business Bay, Dubai, UAE",
             delivery_notes="Mobile app test order",
             delivery_latitude=25.1972,  # Business Bay
@@ -118,7 +120,7 @@ def create_test_order():
         # Use the proper order assignment service
         delivery = order_assignment_service.auto_assign_order(
             order,
-            radius_km=5.0,
+            radius_km=50.0,
             assignment_mode='broadcast'  # Broadcast to all available drivers
         )
         

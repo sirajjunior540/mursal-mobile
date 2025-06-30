@@ -20,25 +20,25 @@ import { colors } from '../constants/colors';
 
 interface AvailableOrder {
   id: string;
-  order: {
-    order_number: string;
-    customer: {
-      name: string;
-      phone: string;
+  order?: {
+    order_number?: string;
+    customer?: {
+      name?: string;
+      phone?: string;
     };
-    delivery_address: string;
+    delivery_address?: string;
     delivery_notes?: string;
     pickup_latitude?: number;
     pickup_longitude?: number;
     delivery_latitude?: number;
     delivery_longitude?: number;
-    delivery_type: 'regular' | 'food' | 'fast';
-    payment_method: string;
-    total: string;
+    delivery_type?: 'regular' | 'food' | 'fast';
+    payment_method?: string;
+    total?: string;
   };
-  status: string;
+  status?: string;
   estimated_delivery_time?: string;
-  created_at: string;
+  created_at?: string;
 }
 
 const RouteNavigationScreen: React.FC = () => {
@@ -52,10 +52,19 @@ const RouteNavigationScreen: React.FC = () => {
   const fetchAvailableOrders = useCallback(async () => {
     try {
       const response = await deliveryApi.getAvailableOrders();
-      setAvailableOrders(response.data);
+      console.log('Available orders response:', response);
+      
+      if (response.success && response.data) {
+        setAvailableOrders(response.data);
+        console.log(`📦 Found ${response.data.length} available orders`);
+      } else {
+        console.log('❌ No orders available or API error:', response.error);
+        setAvailableOrders([]);
+      }
     } catch (error) {
       console.error('Error fetching available orders:', error);
       Alert.alert('Error', 'Failed to load available orders');
+      setAvailableOrders([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -182,7 +191,7 @@ const RouteNavigationScreen: React.FC = () => {
 
     // Calculate distance if user has location and order has delivery coordinates
     const distance = user?.current_latitude && user?.current_longitude && 
-      item.order.delivery_latitude && item.order.delivery_longitude
+      item.order?.delivery_latitude && item.order?.delivery_longitude
       ? calculateDistance(
           parseFloat(user.current_latitude),
           parseFloat(user.current_longitude),
@@ -195,19 +204,19 @@ const RouteNavigationScreen: React.FC = () => {
       <View style={styles.orderCard}>
         <View style={styles.cardHeader}>
           <View style={styles.orderInfo}>
-            <Text style={styles.orderNumber}>#{item.order.order_number}</Text>
+            <Text style={styles.orderNumber}>#{item.order?.order_number || 'N/A'}</Text>
             <View style={styles.orderMeta}>
               <View style={[
                 styles.typeBadge, 
-                { backgroundColor: getDeliveryTypeColor(item.order.delivery_type) }
+                { backgroundColor: getDeliveryTypeColor(item.order?.delivery_type || 'regular') }
               ]}>
                 <Ionicons 
-                  name={getDeliveryTypeIcon(item.order.delivery_type) as any} 
+                  name={getDeliveryTypeIcon(item.order?.delivery_type || 'regular') as any} 
                   size={12} 
                   color={colors.white} 
                 />
                 <Text style={styles.typeText}>
-                  {item.order.delivery_type.toUpperCase()}
+                  {(item.order?.delivery_type || 'regular').toUpperCase()}
                 </Text>
               </View>
               {distance && (
@@ -219,19 +228,19 @@ const RouteNavigationScreen: React.FC = () => {
             </View>
           </View>
           <View style={styles.amountContainer}>
-            <Text style={styles.amount}>${item.order.total}</Text>
-            <Text style={styles.paymentMethod}>{item.order.payment_method}</Text>
+            <Text style={styles.amount}>${item.order?.total || '0.00'}</Text>
+            <Text style={styles.paymentMethod}>{item.order?.payment_method || 'N/A'}</Text>
           </View>
         </View>
 
         <View style={styles.customerSection}>
           <View style={styles.customerInfo}>
             <Ionicons name="person" size={16} color={colors.gray} />
-            <Text style={styles.customerName}>{item.order.customer.name}</Text>
+            <Text style={styles.customerName}>{item.order?.customer?.name || 'Unknown Customer'}</Text>
           </View>
           <TouchableOpacity
             style={styles.callButton}
-            onPress={() => handleCall(item.order.customer.phone)}
+            onPress={() => handleCall(item.order?.customer?.phone)}
           >
             <Ionicons name="call" size={16} color={colors.white} />
           </TouchableOpacity>
@@ -239,10 +248,10 @@ const RouteNavigationScreen: React.FC = () => {
 
         <View style={styles.addressSection}>
           <MaterialIcons name="location-on" size={16} color={colors.gray} />
-          <Text style={styles.address}>{item.order.delivery_address}</Text>
+          <Text style={styles.address}>{item.order?.delivery_address || 'Address not provided'}</Text>
         </View>
 
-        {item.order.delivery_notes && (
+        {item.order?.delivery_notes && (
           <View style={styles.notesSection}>
             <Ionicons name="information-circle" size={16} color={colors.info} />
             <Text style={styles.notes}>{item.order.delivery_notes}</Text>
@@ -266,9 +275,9 @@ const RouteNavigationScreen: React.FC = () => {
             style={styles.navigateButton}
             onPress={() =>
               handleNavigate(
-                item.order.delivery_latitude,
-                item.order.delivery_longitude,
-                item.order.delivery_address
+                item.order?.delivery_latitude,
+                item.order?.delivery_longitude,
+                item.order?.delivery_address
               )
             }
           >

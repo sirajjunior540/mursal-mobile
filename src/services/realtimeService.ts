@@ -107,6 +107,13 @@ class RealtimeService {
         return;
       }
       
+      // Additional validation for token format
+      if (!token || token.split('.').length !== 3) {
+        console.error('❌ Invalid JWT token format');
+        this.callbacks.onError?.('Invalid authentication token format');
+        return;
+      }
+      
       console.log('✅ Valid auth token obtained, length:', token.length);
       console.log('🔐 Valid authentication token found, proceeding with initialization');
       realtimeDebug('Auth token retrieved:', `${token.substring(0, 20)}...`);
@@ -619,17 +626,26 @@ class RealtimeService {
     console.log(`🔍 Order validation for order ${order.id} ${deliveryId ? `(delivery ${deliveryId})` : ''}:`);
     
     // Use backend field names from DeliveryWithOrderSerializer -> OrderDetailSerializer
-    const hasCustomer = !!order.customer_details;
+    // Be more flexible with customer data - accept either customer_details or customer field
+    const hasCustomer = !!(order.customer_details || order.customer);
     const hasDeliveryAddress = !!order.delivery_address;
     const hasOrderNumber = !!order.order_number;
     const hasStatus = !!order.status;
 
-    console.log(`   customer_details: ${hasCustomer} (${order.customer_details?.name || 'none'})`);
+    // Log customer info safely
+    const customerInfo = order.customer_details?.name || 
+                        order.customer_details?.full_name ||
+                        order.customer_name ||
+                        (typeof order.customer === 'object' ? order.customer?.name : 'ID: ' + order.customer) ||
+                        'none';
+
+    console.log(`   customer: ${hasCustomer} (${customerInfo})`);
     console.log(`   delivery_address: ${hasDeliveryAddress} (${order.delivery_address || 'none'})`);
     console.log(`   order_number: ${hasOrderNumber} (${order.order_number || 'none'})`);
     console.log(`   status: ${hasStatus} (${order.status || 'none'})`);
 
-    const isValid = hasCustomer && hasDeliveryAddress && hasOrderNumber && hasStatus;
+    // More lenient validation - only require essential fields
+    const isValid = hasCustomer && hasDeliveryAddress && hasOrderNumber;
     console.log(`   validation result: ${isValid}`);
     
     return isValid;

@@ -32,16 +32,21 @@ class SoundService {
         // Enable sound for the app
         Sound.setCategory('Playback');
 
-        // Load the notification sound
-        this.orderSound = new Sound('order_notification.mp3', Sound.MAIN_BUNDLE, (error: any) => {
-          if (error) {
-            console.log('Failed to load the sound', error);
-            // Fallback to system sound if custom sound fails to load
-            this.orderSound = null;
-          } else {
-            console.log('Sound loaded successfully');
-          }
-        });
+        // Try to load the notification sound, but don't fail if it doesn't exist
+        try {
+          this.orderSound = new Sound('order_notification.mp3', Sound.MAIN_BUNDLE, (error: any) => {
+            if (error) {
+              console.log('Custom sound file not found, using vibration only');
+              // Fallback to system sound if custom sound fails to load
+              this.orderSound = null;
+            } else {
+              console.log('Sound loaded successfully');
+            }
+          });
+        } catch (soundError) {
+          console.log('Sound file not available, using vibration only');
+          this.orderSound = null;
+        }
 
         console.log('Sound service initialized with audio support');
       } else {
@@ -49,7 +54,7 @@ class SoundService {
         this.orderSound = null;
       }
     } catch (error) {
-      console.error('Error initializing sound service:', error);
+      console.log('Sound service initialized with vibration fallback:', error);
       this.orderSound = null;
     }
   }

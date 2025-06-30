@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -9,9 +9,7 @@ import {
   Alert,
   RefreshControl,
   ActivityIndicator,
-  Animated,
-  Dimensions,
-  Platform,
+  StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from 'react-native-vector-icons/Ionicons';
@@ -19,7 +17,6 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useAuth } from '../contexts/AuthContext';
 import { useDriver } from '../contexts/DriverContext';
 import { useTenant } from '../contexts/TenantContext';
-import { COLORS, SPACING } from '../constants';
 
 interface ProfileItemProps {
   icon: string;
@@ -30,94 +27,70 @@ interface ProfileItemProps {
 }
 
 const ProfileItem: React.FC<ProfileItemProps> = ({ icon, label, value, onPress, showDivider = true }) => {
-  const animatedScale = useState(new Animated.Value(1))[0];
-
-  const handlePressIn = () => {
-    if (onPress) {
-      Animated.spring(animatedScale, {
-        toValue: 0.98,
-        useNativeDriver: true,
-      }).start();
-    }
-  };
-
-  const handlePressOut = () => {
-    if (onPress) {
-      Animated.spring(animatedScale, {
-        toValue: 1,
-        useNativeDriver: true,
-      }).start();
-    }
-  };
-
   return (
-    <Animated.View style={{ transform: [{ scale: animatedScale }] }}>
-      <TouchableOpacity
-        style={styles.profileItem}
-        onPress={onPress}
-        disabled={!onPress}
-        onPressIn={handlePressIn}
-        onPressOut={handlePressOut}
-        activeOpacity={1}
-      >
-        <View style={styles.profileItemContent}>
-          <View style={styles.iconContainer}>
-            <Ionicons name={icon as any} size={20} color={COLORS.primary.default} />
-          </View>
-          <View style={styles.profileItemText}>
-            <Text style={styles.profileItemLabel}>{label}</Text>
-            <Text style={styles.profileItemValue}>{value}</Text>
-          </View>
+    <TouchableOpacity
+      style={styles.profileItem}
+      onPress={onPress}
+      disabled={!onPress}
+      activeOpacity={0.7}
+    >
+      <View style={styles.profileItemContent}>
+        <View style={styles.iconContainer}>
+          <Ionicons name={icon as any} size={20} color="#3B82F6" />
         </View>
-        {onPress && (
-          <Ionicons name="chevron-forward" size={16} color={COLORS.text.secondary} />
-        )}
-      </TouchableOpacity>
+        <View style={styles.profileItemText}>
+          <Text style={styles.profileItemLabel}>{label}</Text>
+          <Text style={styles.profileItemValue}>{value}</Text>
+        </View>
+      </View>
+      {onPress && (
+        <Ionicons name="chevron-forward" size={16} color="#6B7280" />
+      )}
       {showDivider && <View style={styles.itemDivider} />}
-    </Animated.View>
+    </TouchableOpacity>
   );
 };
 
 interface BalanceCardProps {
   balance: any;
-  fadeAnim: Animated.Value;
-  slideAnim: Animated.Value;
 }
 
-const BalanceCard: React.FC<BalanceCardProps> = ({ balance, fadeAnim, slideAnim }) => (
-  <Animated.View style={[styles.balanceCard, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+const BalanceCard: React.FC<BalanceCardProps> = ({ balance }) => (
+  <View style={styles.balanceCard}>
     <View style={styles.balanceHeader}>
-      <Ionicons name="wallet-outline" size={24} color={COLORS.primary.default} />
+      <View style={styles.balanceHeaderIcon}>
+        <Ionicons name="wallet-outline" size={24} color="#3B82F6" />
+      </View>
       <Text style={styles.balanceCardTitle}>Balance Overview</Text>
     </View>
     {balance ? (
       <View style={styles.balanceGrid}>
         <View style={styles.balanceItem}>
-          <View style={styles.balanceIconContainer}>
-            <Ionicons name="cash-outline" size={16} color={COLORS.success} />
+          <View style={[styles.balanceIconContainer, { backgroundColor: '#10B981' }]}>
+            <Ionicons name="cash-outline" size={16} color="#ffffff" />
           </View>
-          <Text style={styles.balanceValue}>${balance.cashOnHand.toFixed(2)}</Text>
+          <Text style={styles.balanceValue}>${balance.cashOnHand?.toFixed(2) || '0.00'}</Text>
           <Text style={styles.balanceLabel}>Cash on Hand</Text>
         </View>
         <View style={styles.balanceItem}>
-          <View style={styles.balanceIconContainer}>
-            <Ionicons name="card-outline" size={16} color={COLORS.primary.default} />
+          <View style={[styles.balanceIconContainer, { backgroundColor: '#3B82F6' }]}>
+            <Ionicons name="card-outline" size={16} color="#ffffff" />
           </View>
-          <Text style={styles.balanceValue}>${balance.depositBalance.toFixed(2)}</Text>
+          <Text style={styles.balanceValue}>${balance.depositBalance?.toFixed(2) || '0.00'}</Text>
           <Text style={styles.balanceLabel}>Deposit Balance</Text>
         </View>
         <View style={styles.balanceItem}>
-          <View style={styles.balanceIconContainer}>
-            <Ionicons name="trending-up-outline" size={16} color={COLORS.warning} />
+          <View style={[styles.balanceIconContainer, { backgroundColor: '#F59E0B' }]}>
+            <Ionicons name="trending-up-outline" size={16} color="#ffffff" />
           </View>
-          <Text style={styles.balanceValue}>${balance.todayEarnings.toFixed(2)}</Text>
+          <Text style={styles.balanceValue}>${balance.todayEarnings?.toFixed(2) || '0.00'}</Text>
           <Text style={styles.balanceLabel}>Today's Earnings</Text>
         </View>
         <View style={styles.balanceItem}>
-          <View style={styles.balanceIconContainer}>
-            <Ionicons name="calendar-outline" size={16} color={COLORS.text.secondary} />
+          <View style={[styles.balanceIconContainer, { backgroundColor: '#6B7280' }]}>
+            <Ionicons name="calendar-outline" size={16} color="#ffffff" />
           </View>
-          <Text style={styles.balanceValue}>${balance.weekEarnings.toFixed(2)}</Text>
+          <Text style={styles.balanceValue}>${balance.weekEarnings?.toFixed(2) || '0.00'}</Text>
           <Text style={styles.balanceLabel}>Week Earnings</Text>
         </View>
       </View>
@@ -126,7 +99,7 @@ const BalanceCard: React.FC<BalanceCardProps> = ({ balance, fadeAnim, slideAnim 
         <Text style={styles.balanceLoadingText}>Balance information not available</Text>
       </View>
     )}
-  </Animated.View>
+  </View>
 );
 
 const ProfileScreen: React.FC = () => {
@@ -135,25 +108,6 @@ const ProfileScreen: React.FC = () => {
   const { settings } = useTenant();
   const [refreshing, setRefreshing] = useState(false);
   const [onlineLoading, setOnlineLoading] = useState(false);
-  const fadeAnim = useState(new Animated.Value(0))[0];
-  const slideAnim = useState(new Animated.Value(30))[0];
-
-  useEffect(() => {
-    // Animate screen entrance
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 500,
-        useNativeDriver: true,
-      }),
-      Animated.spring(slideAnim, {
-        toValue: 0,
-        tension: 50,
-        friction: 8,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [fadeAnim, slideAnim]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -207,50 +161,55 @@ const ProfileScreen: React.FC = () => {
     );
   };
 
-
   if (isLoading && !driver) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={COLORS.primary.default} />
-          <Text style={styles.loadingText}>Loading profile...</Text>
-        </View>
-      </SafeAreaView>
+      <View style={styles.container}>
+        <StatusBar barStyle="dark-content" backgroundColor="#F9FAFB" />
+        <SafeAreaView style={styles.safeArea}>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#3B82F6" />
+            <Text style={styles.loadingText}>Loading profile...</Text>
+          </View>
+        </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Profile Header */}
-      <View style={styles.header}>
-        <View style={styles.profileSection}>
-          <View style={styles.avatarContainer}>
-            <Text style={styles.avatarText}>
-              {driver?.firstName?.charAt(0) || user?.firstName?.charAt(0) || 'D'}
-            </Text>
-          </View>
-          <View style={styles.profileInfo}>
-            <Text style={styles.profileName}>
-              {driver ? `${driver.firstName} ${driver.lastName}` : `${user?.firstName} ${user?.lastName}` || 'Driver'}
-            </Text>
-            <Text style={styles.profileEmail}>
-              {driver?.email || user?.email || 'driver@example.com'}
-            </Text>
-            <View style={styles.onlineStatusBadge}>
-              <View style={[
-                styles.statusDot, 
-                { backgroundColor: driver?.isOnline ? COLORS.success : COLORS.text.secondary }
-              ]} />
-              <Text style={[
-                styles.statusText,
-                { color: driver?.isOnline ? COLORS.success : COLORS.text.secondary }
-              ]}>
-                {driver?.isOnline ? 'Online' : 'Offline'}
+    <View style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor="#F9FAFB" />
+      <SafeAreaView style={styles.safeArea}>
+        {/* Profile Header */}
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Profile</Text>
+          <View style={styles.profileSection}>
+            <View style={styles.avatarContainer}>
+              <Text style={styles.avatarText}>
+                {driver?.firstName?.charAt(0) || user?.firstName?.charAt(0) || 'D'}
               </Text>
+            </View>
+            <View style={styles.profileInfo}>
+              <Text style={styles.profileName}>
+                {driver ? `${driver.firstName} ${driver.lastName}` : `${user?.firstName} ${user?.lastName}` || 'Driver'}
+              </Text>
+              <Text style={styles.profileEmail}>
+                {driver?.email || user?.email || 'driver@example.com'}
+              </Text>
+              <View style={styles.onlineStatusBadge}>
+                <View style={[
+                  styles.statusDot, 
+                  { backgroundColor: driver?.isOnline ? '#10B981' : '#6B7280' }
+                ]} />
+                <Text style={[
+                  styles.statusText,
+                  { color: driver?.isOnline ? '#10B981' : '#6B7280' }
+                ]}>
+                  {driver?.isOnline ? 'Online' : 'Offline'}
+                </Text>
+              </View>
             </View>
           </View>
         </View>
-      </View>
 
       <ScrollView
         style={styles.scrollView}
@@ -259,48 +218,56 @@ const ProfileScreen: React.FC = () => {
           <RefreshControl 
             refreshing={refreshing} 
             onRefresh={handleRefresh}
-            tintColor={COLORS.primary.default}
+            tintColor="#3B82F6"
           />
         }
         showsVerticalScrollIndicator={false}
       >
         {error && (
-          <Animated.View style={[styles.errorContainer, { opacity: fadeAnim }]}>
-            <Ionicons name="warning-outline" size={20} color={COLORS.error} />
-            <Text style={styles.errorText}>{error}</Text>
-            <TouchableOpacity style={styles.retryButton} onPress={handleRefresh}>
-              <Text style={styles.retryButtonText}>Retry</Text>
-            </TouchableOpacity>
-          </Animated.View>
+          <View style={styles.errorContainer}>
+            <View style={styles.errorContent}>
+              <Ionicons name="warning-outline" size={20} color="#EF4444" />
+              <Text style={styles.errorText}>{error}</Text>
+              <TouchableOpacity style={styles.retryButton} onPress={handleRefresh}>
+                <Text style={styles.retryButtonText}>Retry</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         )}
 
         {/* Stats Cards */}
-        <Animated.View style={[styles.statsContainer, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+        <View style={styles.statsContainer}>
           <View style={styles.statCard}>
-            <Ionicons name="star" size={20} color={COLORS.warning} />
+            <View style={[styles.statIcon, { backgroundColor: '#F59E0B' }]}>
+              <Ionicons name="star" size={20} color="#ffffff" />
+            </View>
             <Text style={styles.statValue}>{driver?.rating?.toFixed(1) || '0.0'}</Text>
             <Text style={styles.statLabel}>Rating</Text>
           </View>
           <View style={styles.statCard}>
-            <Ionicons name="checkmark-circle" size={20} color={COLORS.success} />
+            <View style={[styles.statIcon, { backgroundColor: '#10B981' }]}>
+              <Ionicons name="checkmark-circle" size={20} color="#ffffff" />
+            </View>
             <Text style={styles.statValue}>{driver?.totalDeliveries || 0}</Text>
             <Text style={styles.statLabel}>Deliveries</Text>
           </View>
           <View style={styles.statCard}>
-            <Ionicons name="time" size={20} color={COLORS.primary.default} />
+            <View style={[styles.statIcon, { backgroundColor: '#3B82F6' }]}>
+              <Ionicons name="time" size={20} color="#ffffff" />
+            </View>
             <Text style={styles.statValue}>4.2</Text>
             <Text style={styles.statLabel}>Avg Time</Text>
           </View>
-        </Animated.View>
+        </View>
 
         {/* Driver Information */}
-        <Animated.View style={[styles.section, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+        <View style={styles.section}>
           <Text style={styles.sectionTitle}>Driver Information</Text>
           <View style={styles.card}>
             <ProfileItem
               icon="person-outline"
               label="Full Name"
-              value={driver ? `${driver.firstName} ${driver.lastName}` : `${user?.firstName  } ${  user?.lastName}` || 'N/A'}
+              value={driver ? `${driver.firstName} ${driver.lastName}` : `${user?.firstName || ''} ${user?.lastName || ''}` || 'N/A'}
             />
             <ProfileItem
               icon="mail-outline"
@@ -321,10 +288,10 @@ const ProfileScreen: React.FC = () => {
               />
             )}
           </View>
-        </Animated.View>
+        </View>
 
         {/* Online Status Control */}
-        <Animated.View style={[styles.section, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+        <View style={styles.section}>
           <Text style={styles.sectionTitle}>Status Control</Text>
           <View style={styles.card}>
             <View style={styles.statusControlItem}>
@@ -335,30 +302,30 @@ const ProfileScreen: React.FC = () => {
                 </Text>
               </View>
               {onlineLoading ? (
-                <ActivityIndicator size="small" color={COLORS.primary.default} />
+                <ActivityIndicator size="small" color="#3B82F6" />
               ) : (
                 <Switch
                   value={driver?.isOnline || false}
                   onValueChange={handleToggleOnlineStatus}
-                  trackColor={{ false: '#E5E5EA', true: COLORS.primary.light }}
-                  thumbColor={driver?.isOnline ? COLORS.primary.default : COLORS.white}
-                  ios_backgroundColor="#E5E5EA"
+                  trackColor={{ false: '#E5E7EB', true: '#3B82F6' }}
+                  thumbColor={driver?.isOnline ? '#ffffff' : '#ffffff'}
+                  ios_backgroundColor="#E5E7EB"
                 />
               )}
             </View>
           </View>
-        </Animated.View>
+        </View>
 
         {/* Balance Section - Only show if enabled for this tenant */}
         {settings?.show_driver_balance && (
-          <Animated.View style={[styles.section, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+          <View style={styles.section}>
             <Text style={styles.sectionTitle}>Balance</Text>
-            <BalanceCard balance={balance} fadeAnim={fadeAnim} slideAnim={slideAnim} />
-          </Animated.View>
+            <BalanceCard balance={balance} />
+          </View>
         )}
 
         {/* App Settings */}
-        <Animated.View style={[styles.section, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+        <View style={styles.section}>
           <Text style={styles.sectionTitle}>App Settings</Text>
           <View style={styles.card}>
             <ProfileItem
@@ -381,41 +348,55 @@ const ProfileScreen: React.FC = () => {
               showDivider={false}
             />
           </View>
-        </Animated.View>
+        </View>
 
         {/* Logout */}
-        <Animated.View style={[styles.section, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+        <View style={styles.section}>
           <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-            <Ionicons name="log-out-outline" size={20} color={COLORS.error} />
-            <Text style={styles.logoutButtonText}>Sign Out</Text>
+            <View style={styles.logoutButtonContent}>
+              <Ionicons name="log-out-outline" size={20} color="#EF4444" />
+              <Text style={styles.logoutButtonText}>Sign Out</Text>
+            </View>
           </TouchableOpacity>
-        </Animated.View>
+        </View>
       </ScrollView>
-    </SafeAreaView>
+      </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F2F2F7',
+    backgroundColor: '#F9FAFB',
+  },
+  safeArea: {
+    flex: 1,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#6B7280',
+    marginTop: 16,
+    fontWeight: '500',
   },
   header: {
-    backgroundColor: COLORS.white,
-    paddingHorizontal: 20,
+    paddingHorizontal: 24,
     paddingTop: 20,
     paddingBottom: 24,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 20,
   },
   profileSection: {
     flexDirection: 'row',
@@ -425,44 +406,49 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: COLORS.primary.default,
+    backgroundColor: '#3B82F6',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   avatarText: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: COLORS.white,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   profileInfo: {
     flex: 1,
   },
   profileName: {
     fontSize: 20,
-    fontWeight: 'bold',
-    color: COLORS.text.primary,
-    marginBottom: 2,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 4,
   },
   profileEmail: {
     fontSize: 14,
-    color: COLORS.text.secondary,
+    color: '#6B7280',
     marginBottom: 8,
   },
   onlineStatusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F2F2F7',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
     alignSelf: 'flex-start',
   },
   statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    marginRight: 6,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 8,
   },
   statusText: {
     fontSize: 12,
@@ -475,86 +461,97 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
   },
   errorContainer: {
+    margin: 24,
+    borderRadius: 12,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  errorContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    margin: 20,
     padding: 16,
-    backgroundColor: `${COLORS.error  }10`,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: `${COLORS.error  }20`,
   },
   errorText: {
     flex: 1,
-    color: COLORS.error,
+    color: '#EF4444',
     fontSize: 14,
     marginLeft: 12,
     marginRight: 12,
+    fontWeight: '500',
   },
   retryButton: {
+    backgroundColor: '#EF4444',
+    borderRadius: 8,
     paddingHorizontal: 16,
     paddingVertical: 8,
-    backgroundColor: COLORS.error,
-    borderRadius: 8,
   },
   retryButtonText: {
-    color: COLORS.white,
+    color: '#FFFFFF',
     fontWeight: '600',
     fontSize: 14,
   },
   statsContainer: {
     flexDirection: 'row',
-    paddingHorizontal: 20,
+    paddingHorizontal: 24,
     marginTop: 16,
     marginBottom: 8,
+    gap: 12,
   },
   statCard: {
     flex: 1,
-    backgroundColor: COLORS.white,
-    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
     padding: 16,
-    marginHorizontal: 4,
     alignItems: 'center',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.03,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  statIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
   },
   statValue: {
     fontSize: 20,
-    fontWeight: 'bold',
-    color: COLORS.text.primary,
-    marginTop: 8,
+    fontWeight: '700',
+    color: '#111827',
     marginBottom: 4,
   },
   statLabel: {
     fontSize: 12,
-    color: COLORS.text.secondary,
+    color: '#6B7280',
+    textAlign: 'center',
   },
   section: {
     marginBottom: 24,
   },
   sectionTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '600',
-    color: COLORS.text.primary,
-    marginHorizontal: 20,
+    color: '#111827',
+    marginHorizontal: 24,
     marginBottom: 12,
   },
   card: {
-    backgroundColor: COLORS.white,
-    marginHorizontal: 20,
-    borderRadius: 16,
-    overflow: 'hidden',
+    marginHorizontal: 24,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
     borderWidth: 1,
-    borderColor: '#E5E5EA',
+    borderColor: '#E5E7EB',
   },
   profileItem: {
     flexDirection: 'row',
@@ -572,7 +569,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#F2F2F7',
+    backgroundColor: '#EBF4FF',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -582,17 +579,18 @@ const styles = StyleSheet.create({
   },
   profileItemLabel: {
     fontSize: 13,
-    color: COLORS.text.secondary,
+    color: '#6B7280',
     marginBottom: 2,
+    fontWeight: '500',
   },
   profileItemValue: {
     fontSize: 16,
-    color: COLORS.text.primary,
-    fontWeight: '500',
+    color: '#111827',
+    fontWeight: '600',
   },
   itemDivider: {
     height: 1,
-    backgroundColor: '#E5E5EA',
+    backgroundColor: '#E5E7EB',
     marginLeft: 60,
   },
   statusControlItem: {
@@ -607,32 +605,45 @@ const styles = StyleSheet.create({
   },
   statusControlLabel: {
     fontSize: 16,
-    fontWeight: '500',
-    color: COLORS.text.primary,
+    fontWeight: '600',
+    color: '#111827',
     marginBottom: 2,
   },
   statusControlDescription: {
     fontSize: 13,
-    color: COLORS.text.secondary,
+    color: '#6B7280',
   },
   balanceCard: {
-    backgroundColor: COLORS.white,
-    marginHorizontal: 20,
-    borderRadius: 16,
+    marginHorizontal: 24,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
     padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
     borderWidth: 1,
-    borderColor: '#E5E5EA',
+    borderColor: '#E5E7EB',
   },
   balanceHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 20,
   },
+  balanceHeaderIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#EBF4FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
   balanceCardTitle: {
     fontSize: 18,
-    fontWeight: '600',
-    color: COLORS.text.primary,
-    marginLeft: 8,
+    fontWeight: '700',
+    color: '#111827',
   },
   balanceGrid: {
     flexDirection: 'row',
@@ -648,20 +659,19 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#F2F2F7',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 8,
   },
   balanceValue: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: COLORS.text.primary,
+    fontWeight: '700',
+    color: '#111827',
     marginBottom: 4,
   },
   balanceLabel: {
     fontSize: 12,
-    color: COLORS.text.secondary,
+    color: '#6B7280',
     textAlign: 'center',
   },
   balanceLoading: {
@@ -670,25 +680,32 @@ const styles = StyleSheet.create({
     paddingVertical: 32,
   },
   balanceLoadingText: {
-    color: COLORS.text.secondary,
+    color: '#6B7280',
     fontSize: 14,
   },
   logoutButton: {
+    marginHorizontal: 24,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  logoutButtonContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.white,
-    marginHorizontal: 20,
     paddingVertical: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: `${COLORS.error  }20`,
   },
   logoutButtonText: {
     marginLeft: 8,
     fontSize: 16,
     fontWeight: '600',
-    color: COLORS.error,
+    color: '#EF4444',
   },
 });
 

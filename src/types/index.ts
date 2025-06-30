@@ -103,26 +103,60 @@ export type OrderStatus =
 
 export type PaymentMethod = 'cash' | 'card' | 'digital_wallet';
 
+export type PackageSize = 'small' | 'medium' | 'large' | 'extra_large';
+export type Priority = 'low' | 'normal' | 'high' | 'urgent';
+export type SpecialHandling = 'none' | 'fragile' | 'perishable' | 'temperature_controlled' | 'liquid' | 'hazardous';
+export type DeliveryType = 'regular' | 'food' | 'fast';
+
 export interface Order {
   id: string;
-  order_number: string; // Match backend snake_case
-  customer_details: Customer; // Match backend field name
-  items: OrderItem[];
-  delivery_address: string; // Match backend field name (string)
+  order_number?: string; // Match backend snake_case
+  customer_details?: Customer; // Match backend field name
+  items?: OrderItem[];
+  delivery_address?: string; // Match backend field name (string)
   pickup_latitude?: number;
   pickup_longitude?: number;
   delivery_latitude?: number;
   delivery_longitude?: number;
-  status: OrderStatus;
-  payment_method: PaymentMethod;
-  subtotal: number;
-  delivery_fee: number;
-  tax: number;
-  total: number;
+  status?: OrderStatus;
+  payment_method?: PaymentMethod;
+  subtotal?: number;
+  delivery_fee?: number;
+  tax?: number;
+  total?: number;
   estimated_delivery_time?: string;
   delivery_notes?: string;
-  created_at: Date;
+  created_at?: Date;
   updated_at?: Date;
+  
+  // Smart assignment fields
+  delivery_type?: DeliveryType;
+  package_size?: PackageSize;
+  package_weight?: number;
+  priority?: Priority;
+  special_handling?: SpecialHandling;
+  
+  // Time constraints
+  pickup_time_window_start?: string;
+  pickup_time_window_end?: string;
+  delivery_time_window_start?: string;
+  delivery_time_window_end?: string;
+  estimated_preparation_time?: number;
+  
+  // Pickup and delivery details
+  pickup_address?: string;
+  pickup_contact_name?: string;
+  pickup_contact_phone?: string;
+  pickup_instructions?: string;
+  delivery_contact_name?: string;
+  delivery_contact_phone?: string;
+  delivery_instructions?: string;
+  
+  // Additional constraints
+  requires_signature?: boolean;
+  requires_id_verification?: boolean;
+  cash_on_delivery?: boolean;
+  cod_amount?: number;
   
   // Deprecated camelCase fields for backward compatibility (remove after full migration)
   /** @deprecated Use order_number */
@@ -183,6 +217,10 @@ export interface OrderContextType {
   updateOrderStatus: (orderId: string, status: OrderStatus) => Promise<boolean>;
   getOrderHistory: (filter?: 'today' | 'week' | 'month') => Promise<void>;
   getOrderDetails: (orderId: string) => Promise<Order | null>;
+  getDriverOrders: () => Promise<void>;
+  setOrderNotificationCallback: (callback: ((order: Order) => void) | null) => void;
+  setOrderAcceptedCallback: (callback: ((orderId: string) => void) | null) => void;
+  canAcceptOrder: (order: Order) => boolean;
 }
 
 export interface DriverContextType {

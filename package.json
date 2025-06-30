@@ -25,6 +25,7 @@
   "dependencies": {
     "@expo/vector-icons": "^13.0.0",
     "@react-native-async-storage/async-storage": "^2.2.0",
+    "@react-native-community/blur": "^4.4.1",
     "@react-native-community/geolocation": "^3.4.0",
     "@react-native-community/netinfo": "^11.4.1",
     "@react-native-firebase/app": "^22.2.1",
@@ -42,7 +43,10 @@
     "react-native-config": "^1.5.5",
     "react-native-device-info": "^14.0.4",
     "react-native-gesture-handler": "^2.26.0",
+    "react-native-haptic-feedback": "^2.3.3",
     "react-native-keychain": "^10.0.0",
+    "react-native-linear-gradient": "^2.8.3",
+    "react-native-maps": "^1.14.0",
     "react-native-permissions": "^5.4.1",
     "react-native-safe-area-context": "^5.5.0",
     "react-native-screens": "^4.11.1",

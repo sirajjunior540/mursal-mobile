@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,22 +10,58 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  Animated,
+  StatusBar,
+  Dimensions,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import LinearGradient from 'react-native-linear-gradient';
 import { useAuth } from '../../contexts/AuthContext';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { ConnectionTester } from '../../utils/connectionTest';
 import { ENV } from '../../config/environment';
+import { Design } from '../../constants/designSystem';
+
+const { width, height } = Dimensions.get('window');
 
 const LoginScreen = () => {
   const { login, isLoading, error } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [deliveryProvider, setDeliveryProvider] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [showDebug, setShowDebug] = useState(__DEV__);
   const [debugResults, setDebugResults] = useState<any>(null);
   
+  // Animation refs
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(30)).current;
+  const logoScale = useRef(new Animated.Value(0.8)).current;
+  
   // Default tenant for backend compatibility
   const selectedTenant = 'sirajjunior';
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 1000,
+        useNativeDriver: true,
+      }),
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        tension: 50,
+        friction: 8,
+        useNativeDriver: true,
+      }),
+      Animated.spring(logoScale, {
+        toValue: 1,
+        tension: 50,
+        friction: 8,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
 
   const handleLogin = async () => {
     if (!username || !password) {
@@ -52,382 +88,489 @@ const LoginScreen = () => {
     setDebugResults(results);
   };
 
-  const getEnvironmentInfo = () => {
-    return ConnectionTester.getEnvironmentInfo();
-  };
-
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.container}
-    >
-      <ScrollView contentContainerStyle={styles.scrollContainer}>
-        <View style={styles.formContainer}>
-          {/* Header */}
-          <View style={styles.header}>
-            <View style={styles.logoContainer}>
-              <Ionicons name="car-sport" size={40} color="#4CAF50" />
-            </View>
-            <Text style={styles.title}>Mursal Driver</Text>
-            <Text style={styles.subtitle}>Sign in to start delivering</Text>
-          </View>
-
-          {/* Input Fields */}
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Delivery Provider</Text>
-            <View style={styles.inputWrapper}>
-              <Ionicons name="business-outline" size={20} color="#666" style={styles.inputIcon} />
-              <TextInput
-                style={styles.inputWithIcon}
-                value={deliveryProvider}
-                onChangeText={setDeliveryProvider}
-                placeholder="e.g., Uber Eats, DoorDash, Grubhub"
-                autoCapitalize="words"
-                editable={!isLoading}
-              />
-            </View>
-          </View>
-
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Username</Text>
-            <View style={styles.inputWrapper}>
-              <Ionicons name="person-outline" size={20} color="#666" style={styles.inputIcon} />
-              <TextInput
-                style={styles.inputWithIcon}
-                value={username}
-                onChangeText={setUsername}
-                placeholder="Enter your username"
-                autoCapitalize="none"
-                editable={!isLoading}
-              />
-            </View>
-          </View>
-
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Password</Text>
-            <View style={styles.inputWrapper}>
-              <Ionicons name="lock-closed-outline" size={20} color="#666" style={styles.inputIcon} />
-              <TextInput
-                style={styles.inputWithIcon}
-                value={password}
-                onChangeText={setPassword}
-                placeholder="Enter your password"
-                secureTextEntry
-                editable={!isLoading}
-              />
-            </View>
-          </View>
-
-          {error && <Text style={styles.errorText}>{error}</Text>}
-
-          <TouchableOpacity
-            style={[styles.loginButton, isLoading && styles.disabledButton]}
-            onPress={handleLogin}
-            disabled={isLoading}
+    <>
+      <StatusBar barStyle="light-content" backgroundColor={Design.colors.primary} translucent />
+      <LinearGradient
+        colors={[Design.colors.primary, Design.colors.primaryDark]}
+        style={styles.container}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      >
+        <SafeAreaView style={styles.safeArea}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.keyboardContainer}
           >
-            {isLoading ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator color="#fff" size="small" />
-                <Text style={styles.loadingText}>Signing in...</Text>
-              </View>
-            ) : (
-              <View style={styles.buttonContent}>
-                <Text style={styles.loginButtonText}>Sign In</Text>
-                <Ionicons name="arrow-forward" size={20} color="#fff" style={styles.buttonIcon} />
-              </View>
-            )}
-          </TouchableOpacity>
-
-          <Text style={styles.helpText}>
-            New driver? Contact your delivery provider to get started
-          </Text>
-
-          {/* Debug Panel for Development */}
-          {__DEV__ && (
-            <View style={styles.debugContainer}>
-              <TouchableOpacity 
-                style={styles.debugToggle}
-                onPress={() => setShowDebug(!showDebug)}
+            <ScrollView 
+              contentContainerStyle={styles.scrollContainer}
+              showsVerticalScrollIndicator={false}
+            >
+              <Animated.View
+                style={[
+                  styles.contentContainer,
+                  {
+                    opacity: fadeAnim,
+                    transform: [{ translateY: slideAnim }],
+                  }
+                ]}
               >
-                <Text style={styles.debugToggleText}>
-                  {showDebug ? '🔧 Hide Debug' : '🔧 Show Debug'}
-                </Text>
-              </TouchableOpacity>
-
-              {showDebug && (
-                <View style={styles.debugPanel}>
-                  <Text style={styles.debugTitle}>Connection Debug</Text>
-                  
-                  <View style={styles.envInfo}>
-                    <Text style={styles.envLabel}>Current Environment:</Text>
-                    <Text style={styles.envValue}>API: {ENV.API_BASE_URL}</Text>
-                    <Text style={styles.envValue}>Host: {ENV.API_HOST}</Text>
-                    <Text style={styles.envValue}>Tenant: {ENV.DEFAULT_TENANT_ID}</Text>
+                {/* Header */}
+                <Animated.View
+                  style={[
+                    styles.header,
+                    {
+                      transform: [{ scale: logoScale }],
+                    }
+                  ]}
+                >
+                  <View style={styles.logoContainer}>
+                    <View style={styles.logoBackground}>
+                      <Ionicons name="car-sport" size={48} color="#ffffff" />
+                    </View>
                   </View>
+                  <Text style={styles.title}>MURSAL</Text>
+                  <Text style={styles.subtitle}>Driver Portal</Text>
+                  <Text style={styles.tagline}>Sign in to start delivering</Text>
+                </Animated.View>
 
-                  <TouchableOpacity 
-                    style={styles.testButton}
-                    onPress={runConnectionTest}
-                    disabled={debugResults?.testing}
-                  >
-                    <Text style={styles.testButtonText}>
-                      {debugResults?.testing ? 'Testing...' : 'Test Connection'}
-                    </Text>
-                  </TouchableOpacity>
-
-                  {debugResults && !debugResults.testing && (
-                    <ScrollView style={styles.resultsContainer} nestedScrollEnabled>
-                      <Text style={styles.resultsTitle}>Test Results:</Text>
-                      {Object.entries(debugResults).map(([key, result]: [string, any]) => (
-                        <View key={key} style={styles.resultItem}>
-                          <Text style={[
-                            styles.resultTitle,
-                            { color: result.success ? '#4CAF50' : '#F44336' }
-                          ]}>
-                            {key}: {result.success ? '✅' : '❌'}
-                          </Text>
-                          <Text style={styles.resultMessage}>{result.message}</Text>
-                          {result.details && (
-                            <Text style={styles.resultDetails}>
-                              {JSON.stringify(result.details, null, 2).substring(0, 200)}...
-                            </Text>
-                          )}
+                {/* Form Card */}
+                <View style={styles.formCard}>
+                    {/* Delivery Provider Input */}
+                    <View style={styles.inputContainer}>
+                      <Text style={styles.label}>Delivery Provider</Text>
+                      <View style={styles.inputWrapper}>
+                        <View style={styles.inputIconContainer}>
+                          <Ionicons name="business-outline" size={20} color="#667eea" />
                         </View>
-                      ))}
-                    </ScrollView>
-                  )}
+                        <TextInput
+                          style={styles.inputWithIcon}
+                          value={deliveryProvider}
+                          onChangeText={setDeliveryProvider}
+                          placeholder="e.g., Uber Eats, DoorDash, Grubhub"
+                          placeholderTextColor="#9ca3af"
+                          autoCapitalize="words"
+                          editable={!isLoading}
+                        />
+                      </View>
+                    </View>
+
+                    {/* Username Input */}
+                    <View style={styles.inputContainer}>
+                      <Text style={styles.label}>Username</Text>
+                      <View style={styles.inputWrapper}>
+                        <View style={styles.inputIconContainer}>
+                          <Ionicons name="person-outline" size={20} color="#667eea" />
+                        </View>
+                        <TextInput
+                          style={styles.inputWithIcon}
+                          value={username}
+                          onChangeText={setUsername}
+                          placeholder="Enter your username"
+                          placeholderTextColor="#9ca3af"
+                          autoCapitalize="none"
+                          editable={!isLoading}
+                        />
+                      </View>
+                    </View>
+
+                    {/* Password Input */}
+                    <View style={styles.inputContainer}>
+                      <Text style={styles.label}>Password</Text>
+                      <View style={styles.inputWrapper}>
+                        <View style={styles.inputIconContainer}>
+                          <Ionicons name="lock-closed-outline" size={20} color="#667eea" />
+                        </View>
+                        <TextInput
+                          style={styles.inputWithIcon}
+                          value={password}
+                          onChangeText={setPassword}
+                          placeholder="Enter your password"
+                          placeholderTextColor="#9ca3af"
+                          secureTextEntry={!showPassword}
+                          editable={!isLoading}
+                        />
+                        <TouchableOpacity
+                          style={styles.passwordToggle}
+                          onPress={() => setShowPassword(!showPassword)}
+                        >
+                          <Ionicons 
+                            name={showPassword ? "eye-off" : "eye"} 
+                            size={20} 
+                            color="#6b7280" 
+                          />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+
+                    {/* Error Display */}
+                    {error && (
+                      <View style={styles.errorContainer}>
+                        <Ionicons name="alert-circle" size={16} color="#ef4444" />
+                        <Text style={styles.errorText}>{error}</Text>
+                      </View>
+                    )}
+
+                    {/* Login Button */}
+                    <TouchableOpacity
+                      style={[styles.loginButton, isLoading && styles.disabledButton]}
+                      onPress={handleLogin}
+                      disabled={isLoading}
+                    >
+                      <LinearGradient
+                        colors={isLoading ? ['#9ca3af', '#6b7280'] : ['#667eea', '#764ba2']}
+                        style={styles.buttonGradient}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                      >
+                        {isLoading ? (
+                          <View style={styles.loadingContainer}>
+                            <ActivityIndicator color="#fff" size="small" />
+                            <Text style={styles.loadingText}>Signing in...</Text>
+                          </View>
+                        ) : (
+                          <View style={styles.buttonContent}>
+                            <Text style={styles.loginButtonText}>Sign In</Text>
+                            <Ionicons name="arrow-forward" size={20} color="#fff" />
+                          </View>
+                        )}
+                      </LinearGradient>
+                    </TouchableOpacity>
+
+                    {/* Help Text */}
+                    <Text style={styles.helpText}>
+                      New driver? Contact your delivery provider to get started
+                    </Text>
                 </View>
-              )}
-            </View>
-          )}
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+
+                {/* Debug Panel for Development */}
+                {__DEV__ && (
+                  <View style={styles.debugContainer}>
+                    <TouchableOpacity 
+                      style={styles.debugToggle}
+                      onPress={() => setShowDebug(!showDebug)}
+                    >
+                      <LinearGradient
+                        colors={['#3b82f6', '#2563eb']}
+                        style={styles.debugToggleGradient}
+                      >
+                        <Text style={styles.debugToggleText}>
+                          {showDebug ? '🔧 Hide Debug' : '🔧 Show Debug'}
+                        </Text>
+                      </LinearGradient>
+                    </TouchableOpacity>
+
+                    {showDebug && (
+                      <View style={styles.debugPanel}>
+                        <Text style={styles.debugTitle}>Connection Debug</Text>
+                        
+                        <View style={styles.envInfo}>
+                          <Text style={styles.envLabel}>Current Environment:</Text>
+                          <Text style={styles.envValue}>API: {ENV.API_BASE_URL}</Text>
+                          <Text style={styles.envValue}>Host: {ENV.API_HOST}</Text>
+                          <Text style={styles.envValue}>Tenant: {ENV.DEFAULT_TENANT_ID}</Text>
+                        </View>
+
+                        <TouchableOpacity 
+                          style={styles.testButton}
+                          onPress={runConnectionTest}
+                          disabled={debugResults?.testing}
+                        >
+                          <LinearGradient
+                            colors={['#10b981', '#059669']}
+                            style={styles.testButtonGradient}
+                          >
+                            <Text style={styles.testButtonText}>
+                              {debugResults?.testing ? 'Testing...' : 'Test Connection'}
+                            </Text>
+                          </LinearGradient>
+                        </TouchableOpacity>
+
+                        {debugResults && !debugResults.testing && (
+                          <ScrollView style={styles.resultsContainer} nestedScrollEnabled>
+                            <Text style={styles.resultsTitle}>Test Results:</Text>
+                            {Object.entries(debugResults).map(([key, result]: [string, any]) => (
+                              <View key={key} style={styles.resultItem}>
+                                <Text style={[
+                                  styles.resultTitle,
+                                  { color: result.success ? '#10b981' : '#ef4444' }
+                                ]}>
+                                  {key}: {result.success ? '✅' : '❌'}
+                                </Text>
+                                <Text style={styles.resultMessage}>{result.message}</Text>
+                                {result.details && (
+                                  <Text style={styles.resultDetails}>
+                                    {JSON.stringify(result.details, null, 2).substring(0, 200)}...
+                                  </Text>
+                                )}
+                              </View>
+                            ))}
+                          </ScrollView>
+                        )}
+                      </View>
+                    )}
+                  </View>
+                )}
+              </Animated.View>
+            </ScrollView>
+          </KeyboardAvoidingView>
+        </SafeAreaView>
+      </LinearGradient>
+    </>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+  },
+  safeArea: {
+    flex: 1,
+  },
+  keyboardContainer: {
+    flex: 1,
   },
   scrollContainer: {
     flexGrow: 1,
     justifyContent: 'center',
-    padding: 20,
+    paddingHorizontal: Design.spacing[5],
+    paddingVertical: Design.spacing[10],
   },
-  formContainer: {
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+  contentContainer: {
+    alignItems: 'center',
   },
   header: {
     alignItems: 'center',
-    marginBottom: 40,
+    marginBottom: Design.spacing[10],
   },
   logoContainer: {
+    marginBottom: Design.spacing[6],
+  },
+  logoBackground: {
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: '#f0f8f0',
+    backgroundColor: 'rgba(255,255,255,0.15)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
+    ...Design.shadows.medium,
   },
   title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#333',
+    ...Design.typography.h1,
+    color: Design.colors.textInverse,
     textAlign: 'center',
-    marginBottom: 8,
+    marginBottom: Design.spacing[2],
+    letterSpacing: 2,
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
   },
   subtitle: {
-    fontSize: 16,
-    color: '#666',
+    ...Design.typography.h5,
+    color: 'rgba(255, 255, 255, 0.9)',
+    textAlign: 'center',
+    marginBottom: Design.spacing[1],
+  },
+  tagline: {
+    ...Design.typography.bodySmall,
+    color: 'rgba(255, 255, 255, 0.8)',
     textAlign: 'center',
   },
+  formCard: {
+    width: width * 0.9,
+    borderRadius: Design.borderRadius.xl,
+    backgroundColor: Design.colors.background,
+    padding: Design.spacing[8],
+    ...Design.shadows.large,
+  },
   inputContainer: {
-    marginBottom: 20,
+    marginBottom: Design.spacing[5],
   },
   label: {
-    fontSize: 16,
-    marginBottom: 8,
-    color: '#333',
+    ...Design.typography.label,
+    color: Design.colors.text,
+    marginBottom: Design.spacing[3],
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: Design.colors.inputBackground,
+    borderRadius: Design.borderRadius.md,
     borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 12,
-    backgroundColor: '#fafafa',
+    borderColor: Design.colors.inputBorder,
+    ...Design.shadows.small,
   },
-  inputIcon: {
-    paddingLeft: 15,
-    paddingRight: 10,
+  inputIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: Design.borderRadius.base,
+    backgroundColor: `${Design.colors.primary}15`,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: Design.spacing[2],
   },
   inputWithIcon: {
     flex: 1,
-    paddingVertical: 15,
-    paddingRight: 15,
-    fontSize: 16,
-    color: '#333',
+    paddingVertical: Design.spacing[3],
+    paddingHorizontal: Design.spacing[4],
+    ...Design.typography.body,
+    color: Design.colors.text,
+    minHeight: 48,
+  },
+  passwordToggle: {
+    padding: Design.spacing[3],
+  },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Design.colors.errorBackground,
+    padding: Design.spacing[3],
+    borderRadius: Design.borderRadius.md,
+    marginBottom: Design.spacing[5],
+    borderWidth: 1,
+    borderColor: Design.colors.errorBorder,
+  },
+  errorText: {
+    ...Design.typography.bodySmall,
+    color: Design.colors.errorText,
+    marginLeft: Design.spacing[2],
+    flex: 1,
   },
   loginButton: {
-    backgroundColor: '#4CAF50',
-    borderRadius: 12,
-    paddingVertical: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 20,
-    shadowColor: '#4CAF50',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
+    borderRadius: Design.borderRadius.md,
+    overflow: 'hidden',
+    marginTop: Design.spacing[3],
+    ...Design.shadows.medium,
   },
   disabledButton: {
-    backgroundColor: '#a5d6a7',
+    opacity: 0.6,
+  },
+  buttonGradient: {
+    paddingVertical: Design.spacing[4],
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 52,
   },
   buttonContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: Design.spacing[2],
   },
   loginButtonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '600',
-    marginRight: 8,
-  },
-  buttonIcon: {
-    marginLeft: 4,
+    ...Design.typography.button,
+    color: Design.colors.textInverse,
   },
   loadingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: Design.spacing[3],
   },
   loadingText: {
-    color: '#fff',
-    fontSize: 16,
-    marginLeft: 10,
-    fontWeight: '500',
-  },
-  errorText: {
-    color: '#f44336',
-    marginBottom: 15,
-    textAlign: 'center',
+    ...Design.typography.button,
+    color: Design.colors.textInverse,
   },
   helpText: {
-    marginTop: 24,
+    marginTop: Design.spacing[6],
     textAlign: 'center',
-    color: '#666',
-    fontSize: 14,
-    lineHeight: 20,
+    ...Design.typography.bodySmall,
+    color: Design.colors.textSecondary,
   },
   // Debug styles
   debugContainer: {
-    marginTop: 20,
-    padding: 16,
-    backgroundColor: '#f5f5f5',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#ddd',
+    width: width * 0.9,
+    marginTop: Design.spacing[5],
+    borderRadius: Design.borderRadius.lg,
+    overflow: 'hidden',
   },
   debugToggle: {
-    padding: 8,
-    backgroundColor: '#2196F3',
-    borderRadius: 4,
+    borderRadius: Design.borderRadius.md,
+    overflow: 'hidden',
+    marginBottom: Design.spacing[3],
+  },
+  debugToggleGradient: {
+    padding: Design.spacing[3],
     alignItems: 'center',
   },
   debugToggleText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '600',
+    ...Design.typography.buttonSmall,
+    color: Design.colors.textInverse,
   },
   debugPanel: {
-    marginTop: 12,
-    padding: 12,
-    backgroundColor: '#fff',
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: '#ccc',
+    backgroundColor: Design.colors.background,
+    padding: Design.spacing[4],
+    borderRadius: Design.borderRadius.md,
+    ...Design.shadows.small,
   },
   debugTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 8,
-    color: '#333',
+    ...Design.typography.h5,
+    color: Design.colors.text,
+    marginBottom: Design.spacing[3],
   },
   envInfo: {
-    marginBottom: 12,
-    padding: 8,
-    backgroundColor: '#f9f9f9',
-    borderRadius: 4,
+    marginBottom: Design.spacing[4],
+    padding: Design.spacing[3],
+    backgroundColor: Design.colors.backgroundSecondary,
+    borderRadius: Design.borderRadius.base,
   },
   envLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#666',
-    marginBottom: 4,
+    ...Design.typography.label,
+    color: Design.colors.textSecondary,
+    marginBottom: Design.spacing[2],
   },
   envValue: {
-    fontSize: 10,
-    color: '#333',
-    fontFamily: 'monospace',
+    ...Design.typography.caption,
+    color: Design.colors.text,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    marginBottom: Design.spacing[1],
   },
   testButton: {
-    padding: 8,
-    backgroundColor: '#4CAF50',
-    borderRadius: 4,
+    borderRadius: Design.borderRadius.base,
+    overflow: 'hidden',
+    marginBottom: Design.spacing[4],
+  },
+  testButtonGradient: {
+    padding: Design.spacing[3],
     alignItems: 'center',
-    marginBottom: 12,
   },
   testButtonText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '600',
+    ...Design.typography.buttonSmall,
+    color: Design.colors.textInverse,
   },
   resultsContainer: {
     maxHeight: 200,
-    backgroundColor: '#f9f9f9',
-    borderRadius: 4,
-    padding: 8,
+    backgroundColor: Design.colors.backgroundTertiary,
+    borderRadius: Design.borderRadius.base,
+    padding: Design.spacing[3],
   },
   resultsTitle: {
-    fontSize: 12,
-    fontWeight: '600',
-    marginBottom: 8,
-    color: '#333',
+    ...Design.typography.label,
+    color: Design.colors.text,
+    marginBottom: Design.spacing[3],
   },
   resultItem: {
-    marginBottom: 8,
-    padding: 6,
-    backgroundColor: '#fff',
-    borderRadius: 3,
+    marginBottom: Design.spacing[3],
+    padding: Design.spacing[3],
+    backgroundColor: Design.colors.background,
+    borderRadius: Design.borderRadius.sm,
     borderWidth: 1,
-    borderColor: '#eee',
+    borderColor: Design.colors.border,
   },
   resultTitle: {
-    fontSize: 11,
+    ...Design.typography.bodySmall,
     fontWeight: '600',
   },
   resultMessage: {
-    fontSize: 10,
-    color: '#666',
-    marginTop: 2,
+    ...Design.typography.caption,
+    color: Design.colors.textSecondary,
+    marginTop: Design.spacing[1],
   },
   resultDetails: {
-    fontSize: 9,
-    color: '#999',
-    fontFamily: 'monospace',
-    marginTop: 2,
+    fontSize: 10,
+    color: Design.colors.textMuted,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    marginTop: Design.spacing[1],
   },
 });
 

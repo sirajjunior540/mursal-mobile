@@ -51,7 +51,7 @@ class HttpClient {
 
     // Add Authorization header only if token exists and is valid
     if (token && token.trim()) {
-      defaultHeaders['Authorization'] = `Bearer ${token}`;
+      defaultHeaders.Authorization = `Bearer ${token}`;
     }
 
     // Log API calls for debugging
@@ -114,12 +114,12 @@ class HttpClient {
         }
       }
 
-      console.error(`API Error [${endpoint}]:`, error);
-      console.error('Request URL:', url);
-      
+      console.log(`API Error [${endpoint}]:`, error);
+      console.log('Request URL:', url);
+
       // Only log headers for non-authentication errors to reduce log noise
       if (!this.isAuthError(error)) {
-        console.error('Request headers:', defaultHeaders);
+        console.log('Request headers:', defaultHeaders);
       } else {
         console.log('🔍 Authentication error - headers not logged for security');
       }
@@ -127,7 +127,9 @@ class HttpClient {
       let errorMessage = 'Unknown error';
       if (error instanceof Error) {
         errorMessage = error.message;
-        console.error('Error stack:', error.stack);
+        if (__DEV__ && error.stack) {
+          console.log('Error stack:', error.stack);
+        }
 
         // Provide user-friendly messages for common errors
         if (error.message.includes('timeout')) {
@@ -220,7 +222,7 @@ class HttpClient {
   private async refreshAuthToken(): Promise<boolean> {
     try {
       console.log('🔄 Attempting to refresh authentication token...');
-      
+
       const refreshToken = await SecureStorage.getRefreshToken();
       if (!refreshToken) {
         console.log('❌ No refresh token available');
@@ -235,7 +237,7 @@ class HttpClient {
       };
 
       console.log('🔄 Making token refresh request to:', url);
-      
+
       const response = await fetch(url, {
         method: 'POST',
         headers,
@@ -248,28 +250,28 @@ class HttpClient {
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         console.error('❌ Token refresh failed:', response.status, errorData);
-        
+
         // If refresh token is invalid, clear all auth data
         if (response.status === 401 || response.status === 403) {
           console.log('🗑️ Refresh token invalid, clearing auth data');
           await SecureStorage.clearAll();
         }
-        
+
         return false;
       }
 
       const data = await response.json();
-      
+
       if (data.access) {
         await SecureStorage.setAuthToken(data.access);
         console.log('✅ New access token stored successfully');
-        
+
         // Update refresh token if provided
         if (data.refresh) {
           await SecureStorage.setRefreshToken(data.refresh);
           console.log('✅ New refresh token stored successfully');
         }
-        
+
         return true;
       } else {
         console.error('❌ Refresh response missing access token:', data);
@@ -286,7 +288,7 @@ class HttpClient {
    */
   private isAuthError(error: any): boolean {
     if (!error) return false;
-    
+
     const errorMessage = error instanceof Error ? error.message : String(error);
     const isAuthError = errorMessage.includes('401') || 
                        errorMessage.includes('403') || 
@@ -294,11 +296,11 @@ class HttpClient {
                        errorMessage.includes('Forbidden') ||
                        errorMessage.includes('authentication') ||
                        errorMessage.includes('token');
-    
+
     if (isAuthError) {
       console.log('🔍 Detected authentication error:', errorMessage);
     }
-    
+
     return isAuthError;
   }
 }
@@ -507,8 +509,8 @@ class ApiService {
           keys: Object.keys(item)
         });
       });
-      
-      const orders: Order[] = response.data.map(this.transformOrder);
+
+      const orders: Order[] = (response.data || []).map(this.transformOrder);
       return {
         success: true,
         data: orders,
@@ -526,7 +528,7 @@ class ApiService {
 
     // Transform backend response to match our Order type
     if (response.success && response.data) {
-      const orders: Order[] = response.data.map(this.transformOrder);
+      const orders: Order[] = (response.data || []).map(this.transformOrder);
       return {
         success: true,
         data: orders,
@@ -543,7 +545,7 @@ class ApiService {
 
     // Transform backend response to match our Order type
     if (response.success && response.data) {
-      const orders: Order[] = response.data.map(this.transformOrder);
+      const orders: Order[] = (response.data || []).map(this.transformOrder);
       return {
         success: true,
         data: orders,
@@ -560,7 +562,7 @@ class ApiService {
 
     // Transform backend response to match our Order type
     if (response.success && response.data) {
-      const orders: Order[] = response.data.map(this.transformOrder);
+      const orders: Order[] = (response.data || []).map(this.transformOrder);
       return {
         success: true,
         data: orders,
@@ -577,7 +579,7 @@ class ApiService {
 
     // Transform backend response to match our Order type
     if (response.success && response.data) {
-      const orders: Order[] = response.data.map(this.transformOrder);
+      const orders: Order[] = (response.data || []).map(this.transformOrder);
       return {
         success: true,
         data: orders,
@@ -592,27 +594,27 @@ class ApiService {
   private transformOrderStatus = (delivery: any, order: any): string => {
     const deliveryStatus = delivery?.status;
     const orderStatus = order?.status;
-    
+
     console.log('🔍 Transforming order status:', {
       deliveryStatus,
       orderStatus,
       hasDriver: !!delivery?.driver,
       driverId: delivery?.driver
     });
-    
+
     // If this is from available_orders endpoint, it should be pending
     // Available orders are those that drivers can accept
     if (!delivery?.driver || delivery?.driver === null || delivery?.driver === '') {
       console.log('📋 Order has no driver assigned - setting status to pending');
       return 'pending';
     }
-    
+
     // If delivery has a driver but status is still 'assigned', it means accepted but not picked up
     if (deliveryStatus === 'assigned' && delivery?.driver) {
       console.log('🚛 Order is assigned to driver - keeping assigned status');
       return 'assigned';
     }
-    
+
     // Use delivery status if available, then order status, default to pending
     const finalStatus = deliveryStatus || orderStatus || 'pending';
     console.log(`✅ Final order status: ${finalStatus}`);
@@ -628,7 +630,7 @@ class ApiService {
       hasDriver: 'driver' in backendData,
       topLevelKeys: Object.keys(backendData).slice(0, 10)
     });
-    
+
     // Check if this is a delivery object with nested order or a direct order object
     const isDelivery = backendData.order && typeof backendData.order === 'object';
     const order = isDelivery ? backendData.order : backendData;
@@ -644,15 +646,39 @@ class ApiService {
     });
 
     // Enhanced customer data extraction with debugging
-    const customerData = order.customer || 
-                        order.customer_details || 
-                        delivery?.customer || 
-                        delivery?.customer_details || 
-                        {};
+    console.log('🔍 Customer data extraction:', {
+      'order.customer': order.customer,
+      'order.customer_details': order.customer_details,
+      'order.customer_name': order.customer_name,
+      'order.customer_id': order.customer_id,
+      'delivery?.customer': delivery?.customer,
+      'customerIsId': typeof order.customer === 'number' || typeof order.customer === 'string',
+      'hasCustomerDetails': !!order.customer_details,
+      'customerDetailsKeys': order.customer_details ? Object.keys(order.customer_details) : []
+    });
+
+    let customerData = {};
     
+    // Handle case where customer is just an ID (needs to be fixed in backend)
+    if (typeof order.customer === 'number' || typeof order.customer === 'string') {
+      console.warn('⚠️ Customer field is just an ID, not an object. Backend should return customer_details.');
+      customerData = {
+        id: order.customer,
+        name: order.customer_name,
+        phone: order.customer_phone,
+        email: order.customer_email
+      };
+    } else {
+      customerData = order.customer_details ||  // Use customer_details first (contains full object)
+                    order.customer || 
+                    delivery?.customer_details || 
+                    delivery?.customer || 
+                    {};
+    }
+
     // Fallback customer data if missing
     const customer = {
-      id: customerData.id || order.customer_id || delivery?.customer_id || `customer_${order.id || 'unknown'}`,
+      id: customerData.id || order.customer_id || delivery?.customer_id || order.customer || `customer_${order.id || 'unknown'}`,
       name: customerData.name || 
             customerData.full_name || 
             order.customer_name || 
@@ -682,7 +708,7 @@ class ApiService {
     // CRITICAL: For available_orders endpoint, the root object IS the delivery
     // So backendData.id is the delivery ID we need for accept/decline
     const primaryId = backendData.id || delivery?.id || order.id || '';
-    
+
     console.log('🆔 ID Resolution:', {
       primaryId,
       backendDataId: backendData.id,
@@ -690,7 +716,7 @@ class ApiService {
       orderId: order.id,
       isFromAvailableOrders: !delivery && backendData.id && backendData.order
     });
-    
+
     return {
       id: primaryId,  // This must be the delivery ID for API calls
       deliveryId: delivery?.id || backendData.id || '', // Store delivery ID separately
@@ -746,7 +772,7 @@ class ApiService {
 
   async acceptOrder(orderId: string): Promise<ApiResponse<void>> {
     console.log(`🎯 Attempting to accept order/delivery: ${orderId}`);
-    
+
     // Try to get the order details to find the correct delivery ID
     try {
       const orderResponse = await this.getOrderDetails(orderId);
@@ -758,7 +784,7 @@ class ApiService {
     } catch (error) {
       console.warn(`⚠️ Could not get order details, proceeding with original ID: ${error}`);
     }
-    
+
     // Fallback to using the provided ID (might be delivery ID already)
     console.log(`🔄 Using provided ID ${orderId} for accept call`);
     return this.client.post<void>(`/api/v1/delivery/deliveries/${orderId}/accept/`);
@@ -766,13 +792,13 @@ class ApiService {
 
   async declineOrder(orderId: string): Promise<ApiResponse<void>> {
     console.log(`🚫 API: Attempting to decline order/delivery: ${orderId}`);
-    
+
     // Direct decline attempt
     const result = await this.client.post<void>(`/api/v1/delivery/deliveries/${orderId}/decline/`);
-    
+
     if (!result.success) {
       console.error(`❌ Decline failed for ID ${orderId}:`, result.error);
-      
+
       // If error mentions "you can only decline", it means backend needs fixing
       if (result.error?.toLowerCase().includes('you can only decline')) {
         console.error('⚠️ Backend decline logic needs update - see quick_backend_fix.py');
@@ -780,7 +806,7 @@ class ApiService {
     } else {
       console.log(`✅ Successfully declined order/delivery: ${orderId}`);
     }
-    
+
     return result;
   }
 
@@ -792,6 +818,10 @@ class ApiService {
   // Smart assignment methods
   async getOngoingDeliveries(): Promise<ApiResponse<any>> {
     return this.client.get<any>('/api/v1/delivery/deliveries/ongoing-deliveries/');
+  }
+
+  async getRouteOptimization(): Promise<ApiResponse<any>> {
+    return this.client.get<any>('/api/v1/delivery/deliveries/route-optimization/');
   }
 
   async smartAcceptDelivery(deliveryId: string, data: { location?: string; latitude?: number; longitude?: number; notes?: string }): Promise<ApiResponse<void>> {
@@ -811,10 +841,33 @@ class ApiService {
     return this.client.post<void>(`/api/v1/delivery/deliveries/${deliveryId}/decline/`, data);
   }
 
+  /**
+   * Estimate time for driver to reach pickup location
+   * @param deliveryId Delivery ID
+   * @param latitude Driver's current latitude
+   * @param longitude Driver's current longitude
+   * @param transportationMode Optional transportation mode (bike, car, van)
+   * @returns Estimate data including distance, travel time, and estimated arrival time
+   */
+  async estimatePickupTime(
+    deliveryId: string, 
+    latitude: number, 
+    longitude: number,
+    transportationMode?: string
+  ): Promise<ApiResponse<any>> {
+    const data = {
+      driver_latitude: latitude,
+      driver_longitude: longitude,
+      transportation_mode: transportationMode
+    };
+
+    return this.client.post<any>(`/api/v1/delivery/deliveries/${deliveryId}/estimate_pickup/`, data);
+  }
+
   // Get specific order details by ID
   async getOrderDetails(orderId: string): Promise<ApiResponse<Order>> {
     const response = await this.client.get<any>(`/api/v1/delivery/deliveries/${orderId}/`);
-    
+
     if (response.success && response.data) {
       const order = this.transformOrder(response.data);
       return {
@@ -823,7 +876,7 @@ class ApiService {
         message: response.message
       };
     }
-    
+
     return response as ApiResponse<Order>;
   }
 
@@ -887,8 +940,8 @@ class ApiService {
     console.log(`🎯 Calling location endpoint: ${endpoint}`);
 
     const result = await this.client.post<void>(endpoint, {
-      latitude: latitude.toString(),
-      longitude: longitude.toString()
+      latitude: latitude,
+      longitude: longitude
     });
 
     if (result.success) {
@@ -909,8 +962,8 @@ class ApiService {
 
     if (response.success && response.data) {
       console.log(`📦 Raw response data:`, response.data);
-      const orders: Order[] = response.data.map(this.transformOrder);
-      console.log(`📎 Found ${orders.length} available orders`);
+      const orders: Order[] = (response.data || []).map(this.transformOrder);
+      console.log(`📎 Found ${orders?.length || 0} available orders`);
 
       orders.forEach((order, index) => {
         console.log(`  📄 Order ${index + 1}: ${order.id} - ${order.customer.name} - $${order.total}`);
@@ -932,7 +985,7 @@ class ApiService {
     const response = await this.client.get<any[]>(`/api/v1/auth/drivers/nearby_drivers/?latitude=${latitude}&longitude=${longitude}&radius=${radius}`);
 
     if (response.success && response.data) {
-      const drivers: Driver[] = response.data.map((driverData: any) => ({
+      const drivers: Driver[] = (response.data || []).map((driverData: any) => ({
         id: driverData.id || '',
         firstName: driverData.first_name || driverData.firstName || '',
         lastName: driverData.last_name || driverData.lastName || '',
@@ -1025,52 +1078,26 @@ class ApiService {
     }
   }
 
-  // Location Updates
-  async updateLocation(latitude: number, longitude: number): Promise<ApiResponse<void>> {
-    console.log(`📍 API: Updating location: ${latitude}, ${longitude}`);
-
-    try {
-      const result = await this.client.post<void>('/api/v1/auth/drivers/update_location/', {
-        latitude,
-        longitude
-      });
-
-      if (result.success) {
-        console.log('✅ Location update API call successful');
-      } else {
-        console.error('❌ Location update API call failed:', result.error);
-      }
-
-      return result;
-    } catch (error) {
-      console.error('❌ Location update network error:', error);
-      return {
-        success: false,
-        data: null as any,
-        error: error instanceof Error ? error.message : 'Network error updating location'
-      };
-    }
-  }
 
   // Test polling endpoint
   async testPollingEndpoint(): Promise<ApiResponse<Order[]>> {
     console.log('🧪 Testing polling endpoint...');
-    
+
     try {
       const result = await this.client.get<any[]>('/api/v1/delivery/deliveries/available_orders/');
-      
+
       if (result.success && result.data) {
-        console.log('✅ Polling endpoint works, got', result.data.length, 'orders');
-        
+        console.log('✅ Polling endpoint works, got', result.data?.length || 0, 'orders');
+
         // Transform data if needed
-        const orders: Order[] = result.data.map(this.transformOrder);
+        const orders: Order[] = (result.data || []).map(this.transformOrder);
         return {
           success: true,
           data: orders,
           message: 'Polling endpoint test successful'
         };
       }
-      
+
       return result as ApiResponse<Order[]>;
     } catch (error) {
       console.error('❌ Polling endpoint test failed:', error);
@@ -1089,7 +1116,9 @@ export const apiService = new ApiService();
 // Export delivery-specific methods for convenience
 export const deliveryApi = {
   getOngoingDeliveries: () => apiService.getOngoingDeliveries(),
+  getRouteOptimization: () => apiService.getRouteOptimization(),
   getAvailableOrders: () => apiService.getAvailableOrders(),
+  getOrderDetails: (orderId: string) => apiService.getOrderDetails(orderId),
   smartAcceptDelivery: (deliveryId: string, data: any) => apiService.smartAcceptDelivery(deliveryId, data),
   smartUpdateStatus: (deliveryId: string, data: any) => apiService.smartUpdateStatus(deliveryId, data),
   declineDelivery: (deliveryId: string, data: any) => apiService.declineDelivery(deliveryId, data),

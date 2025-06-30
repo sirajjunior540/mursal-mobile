@@ -219,6 +219,11 @@ export class WebSocketClient {
    */
   private authenticate(): void {
     if (!this.config.authToken || !this.connected || !this.websocket) {
+      console.log('[WebSocketClient] Cannot authenticate:', {
+        hasToken: !!this.config.authToken,
+        connected: this.connected,
+        hasWebSocket: !!this.websocket
+      });
       return;
     }
 
@@ -230,11 +235,13 @@ export class WebSocketClient {
 
       const authMessage = {
         type: 'authenticate',
-        token: token
+        token,
+        // Add tenant information for multi-tenant WebSocket
+        tenant: 'sirajjunior'  // TODO: Get from config
       };
 
       this.sendMessage(authMessage);
-      console.log('[WebSocketClient] Authentication message sent');
+      console.log('[WebSocketClient] Authentication message sent with tenant info');
     } catch (error) {
       console.error('[WebSocketClient] Error sending authentication:', error);
       this.callbacks.onError?.(`Error sending authentication: ${error}`);

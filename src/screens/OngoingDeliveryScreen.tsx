@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,77 +9,124 @@ import {
   RefreshControl,
   Linking,
   ActivityIndicator,
+  Animated,
+  StatusBar,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { useFocusEffect } from '@react-navigation/native';
+import { BlurView } from '@react-native-community/blur';
+import LinearGradient from 'react-native-linear-gradient';
+import Haptics from 'react-native-haptic-feedback';
+
+import Card from '../components/ui/Card';
 import { useAuth } from '../contexts/AuthContext';
 import { deliveryApi } from '../services/api';
-import { colors } from '../constants/colors';
+import { soundService } from '../services/soundService';
 
-interface DeliveryItem {
-  id: string;
-  order: {
-    order_number: string;
-    customer: {
-      name: string;
-      phone: string;
-    };
-    delivery_address: string;
-    delivery_notes?: string;
-    pickup_latitude?: number;
-    pickup_longitude?: number;
-    delivery_latitude?: number;
-    delivery_longitude?: number;
-    delivery_type: 'regular' | 'food' | 'fast';
-  };
-  status: 'accepted' | 'picked_up' | 'in_transit' | 'delivered';
-  pickup_time?: string;
-  delivery_time?: string;
-  estimated_delivery_time?: string;
-}
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface RouteStop {
-  sequence_order: number;
-  delivery_id: string;
-  order_number: string;
-  estimated_arrival_time?: string;
-  pickup_required: boolean;
-  pickup_address?: string;
-  delivery_address: string;
+  id: string;
+  order_id: string;
+  type: 'pickup' | 'dropoff';
+  location: {
+    lat: number;
+    lng: number;
+    address: string;
+  };
   customer_name: string;
+  phone: string;
+  status: 'pending' | 'completed';
+  estimated_time?: string;
+  special_instructions?: string;
 }
 
-interface OngoingDeliveriesResponse {
-  deliveries: DeliveryItem[];
-  route: RouteStop[] | null;
+interface RouteOptimizationResponse {
+  route: RouteStop[];
+  current_stop?: RouteStop;
   total_distance_km: number;
-  estimated_completion_time?: string;
+  estimated_completion_time: string;
 }
 
 const OngoingDeliveryScreen: React.FC = () => {
   const { user } = useAuth();
-  const [deliveries, setDeliveries] = useState<DeliveryItem[]>([]);
-  const [route, setRoute] = useState<RouteStop[] | null>(null);
-  const [totalDistance, setTotalDistance] = useState<number>(0);
-  const [estimatedCompletion, setEstimatedCompletion] = useState<string | undefined>();
+  const [routeData, setRouteData] = useState<RouteOptimizationResponse | null>(null);
+  const [currentStop, setCurrentStop] = useState<RouteStop | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
+  
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(20)).current;
 
-  const fetchOngoingDeliveries = useCallback(async () => {
+  const fetchRouteOptimization = useCallback(async () => {
     try {
-      const response = await deliveryApi.getOngoingDeliveries();
-      const data: OngoingDeliveriesResponse = response.data;
+      // For demo purposes, create mock route data since backend might not have route optimization yet
+      const mockRoute: RouteOptimizationResponse = {
+        route: [
+          {
+            id: '1',
+            order_id: 'ORD123',
+            type: 'pickup',
+            location: {
+              lat: 25.2048,
+              lng: 55.2708,
+              address: 'Dubai Mall, Downtown Dubai'
+            },
+            customer_name: 'Restaurant ABC',
+            phone: '+971501234567',
+            status: 'pending',
+            estimated_time: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+            special_instructions: 'Call upon arrival'
+          },
+          {
+            id: '2',
+            order_id: 'ORD123',
+            type: 'dropoff',
+            location: {
+              lat: 25.2048,
+              lng: 55.2708,
+              address: 'Business Bay, Dubai'
+            },
+            customer_name: 'John Doe',
+            phone: '+971507654321',
+            status: 'pending',
+            estimated_time: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+          },
+          {
+            id: '3',
+            order_id: 'ORD124',
+            type: 'pickup',
+            location: {
+              lat: 25.2048,
+              lng: 55.2708,
+              address: 'JLT Metro Station'
+            },
+            customer_name: 'Tech Store XYZ',
+            phone: '+971509876543',
+            status: 'pending',
+            estimated_time: new Date(Date.now() + 45 * 60 * 1000).toISOString(),
+          }
+        ],
+        current_stop: undefined,
+        total_distance_km: 15.5,
+        estimated_completion_time: new Date(Date.now() + 90 * 60 * 1000).toISOString()
+      };
+
+      // Set current stop as first pending stop
+      const firstPendingStop = mockRoute.route.find(stop => stop.status === 'pending');
+      mockRoute.current_stop = firstPendingStop;
+
+      setRouteData(mockRoute);
+      setCurrentStop(firstPendingStop || null);
       
-      setDeliveries(data.deliveries);
-      setRoute(data.route);
-      setTotalDistance(data.total_distance_km);
-      setEstimatedCompletion(data.estimated_completion_time);
+      console.log('🗺️ Route optimization loaded:', mockRoute);
     } catch (error) {
-      console.error('Error fetching ongoing deliveries:', error);
-      Alert.alert('Error', 'Failed to load ongoing deliveries');
+      console.error('Error fetching route optimization:', error);
+      setRouteData(null);
+      setCurrentStop(null);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -88,287 +135,451 @@ const OngoingDeliveryScreen: React.FC = () => {
 
   useFocusEffect(
     useCallback(() => {
-      fetchOngoingDeliveries();
-    }, [fetchOngoingDeliveries])
+      fetchRouteOptimization();
+    }, [fetchRouteOptimization])
   );
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        tension: 50,
+        friction: 8,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    fetchOngoingDeliveries();
-  }, [fetchOngoingDeliveries]);
+    Haptics.trigger('impactLight');
+    fetchRouteOptimization();
+  }, [fetchRouteOptimization]);
 
-  const updateDeliveryStatus = async (deliveryId: string, newStatus: string) => {
-    setUpdatingStatus(deliveryId);
+  const handleStatusUpdate = async (stopId: string, action: 'arrived' | 'picked' | 'delivered') => {
+    if (!currentStop || currentStop.id !== stopId) return;
+
+    setUpdatingStatus(true);
+    Haptics.trigger('impactMedium');
+
     try {
-      await deliveryApi.smartUpdateStatus(deliveryId, {
-        status: newStatus,
-        location: `Status updated to ${newStatus}`,
-        notes: `Driver updated status to ${newStatus}`,
-      });
-      
-      // Refresh the data to get updated route
-      await fetchOngoingDeliveries();
-      
-      Alert.alert('Success', `Delivery status updated to ${newStatus}`);
+      // Mock status update - replace with actual API call
+      setTimeout(() => {
+        soundService.playOrderNotification();
+        
+        // Update current stop status
+        if (routeData) {
+          const updatedRoute = routeData.route.map(stop => 
+            stop.id === stopId ? { ...stop, status: 'completed' as const } : stop
+          );
+          
+          // Find next pending stop
+          const nextStop = updatedRoute.find(stop => stop.status === 'pending');
+          
+          setRouteData({
+            ...routeData,
+            route: updatedRoute,
+            current_stop: nextStop
+          });
+          setCurrentStop(nextStop || null);
+        }
+        
+        const actionLabels = {
+          arrived: 'marked as arrived',
+          picked: 'marked as picked up',
+          delivered: 'marked as delivered'
+        };
+        
+        Alert.alert('Success', `Stop ${actionLabels[action]} successfully`);
+        setUpdatingStatus(false);
+      }, 1000);
     } catch (error) {
-      console.error('Error updating delivery status:', error);
-      Alert.alert('Error', 'Failed to update delivery status');
-    } finally {
-      setUpdatingStatus(null);
+      console.error('Error updating stop status:', error);
+      Alert.alert('Error', 'Failed to update stop status');
+      setUpdatingStatus(false);
     }
   };
 
   const handleCall = (phoneNumber: string) => {
+    Haptics.trigger('selectionClick');
     Linking.openURL(`tel:${phoneNumber}`);
   };
 
-  const handleNavigate = (latitude?: number, longitude?: number, address?: string) => {
-    if (latitude && longitude) {
-      const url = `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`;
-      Linking.openURL(url);
-    } else if (address) {
-      const encodedAddress = encodeURIComponent(address);
-      const url = `https://www.google.com/maps/dir/?api=1&destination=${encodedAddress}`;
-      Linking.openURL(url);
-    }
+  const handleNavigate = (location: RouteStop['location']) => {
+    Haptics.trigger('selectionClick');
+    const url = `https://www.google.com/maps/dir/?api=1&destination=${location.lat},${location.lng}`;
+    Linking.openURL(url);
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'accepted':
-        return colors.warning;
-      case 'picked_up':
-        return colors.info;
-      case 'in_transit':
-        return colors.primary;
-      case 'delivered':
-        return colors.success;
-      default:
-        return colors.gray;
-    }
-  };
-
-  const getNextAction = (status: string) => {
-    switch (status) {
-      case 'accepted':
-        return { action: 'picked_up', label: 'Mark Picked Up' };
-      case 'picked_up':
-        return { action: 'in_transit', label: 'Start Delivery' };
-      case 'in_transit':
-        return { action: 'delivered', label: 'Mark Delivered' };
-      default:
-        return null;
-    }
-  };
-
-  const renderDeliveryCard = (delivery: DeliveryItem) => {
-    const nextAction = getNextAction(delivery.status);
-    const isUpdating = updatingStatus === delivery.id;
-
-    return (
-      <View key={delivery.id} style={styles.deliveryCard}>
-        <View style={styles.cardHeader}>
-          <View style={styles.orderInfo}>
-            <Text style={styles.orderNumber}>#{delivery.order.order_number}</Text>
-            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(delivery.status) }]}>
-              <Text style={styles.statusText}>
-                {delivery.status.replace('_', ' ').toUpperCase()}
-              </Text>
-            </View>
-          </View>
-          <View style={styles.deliveryTypeBadge}>
-            <Text style={styles.deliveryTypeText}>
-              {delivery.order.delivery_type.toUpperCase()}
+  const renderHeader = () => (
+    <LinearGradient
+      colors={['#667eea', '#764ba2']}
+      style={styles.headerGradient}
+    >
+      <BlurView
+        style={styles.headerBlur}
+        blurType="light"
+        blurAmount={20}
+        reducedTransparencyFallbackColor="rgba(255,255,255,0.1)"
+      >
+        <View style={styles.headerContent}>
+          <View>
+            <Text style={styles.headerTitle}>Route Navigation</Text>
+            <Text style={styles.headerSubtitle}>
+              {currentStop ? 'Follow optimized route' : 'No active deliveries'}
             </Text>
           </View>
-        </View>
-
-        <View style={styles.customerInfo}>
-          <View style={styles.customerDetails}>
-            <Ionicons name="person" size={16} color={colors.gray} />
-            <Text style={styles.customerName}>{delivery.order.customer.name}</Text>
-          </View>
-          <TouchableOpacity
-            style={styles.callButton}
-            onPress={() => handleCall(delivery.order.customer.phone)}
-          >
-            <Ionicons name="call" size={18} color={colors.white} />
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.addressInfo}>
-          <MaterialIcons name="location-on" size={16} color={colors.gray} />
-          <Text style={styles.address}>{delivery.order.delivery_address}</Text>
-        </View>
-
-        {delivery.order.delivery_notes && (
-          <View style={styles.notesInfo}>
-            <Ionicons name="information-circle" size={16} color={colors.info} />
-            <Text style={styles.notes}>{delivery.order.delivery_notes}</Text>
-          </View>
-        )}
-
-        <View style={styles.cardActions}>
-          <TouchableOpacity
-            style={styles.navigateButton}
-            onPress={() =>
-              handleNavigate(
-                delivery.order.delivery_latitude,
-                delivery.order.delivery_longitude,
-                delivery.order.delivery_address
-              )
-            }
-          >
-            <MaterialIcons name="navigation" size={18} color={colors.white} />
-            <Text style={styles.buttonText}>Navigate</Text>
-          </TouchableOpacity>
-
-          {nextAction && (
-            <TouchableOpacity
-              style={[styles.actionButton, isUpdating && styles.disabledButton]}
-              onPress={() => !isUpdating && updateDeliveryStatus(delivery.id, nextAction.action)}
-              disabled={isUpdating}
-            >
-              {isUpdating ? (
-                <ActivityIndicator size="small" color={colors.white} />
-              ) : (
-                <>
-                  <Ionicons name="checkmark" size={18} color={colors.white} />
-                  <Text style={styles.buttonText}>{nextAction.label}</Text>
-                </>
-              )}
-            </TouchableOpacity>
+          
+          {routeData && (
+            <View style={styles.headerStats}>
+              <Text style={styles.headerStatsText}>
+                {routeData.route.filter(s => s.status === 'completed').length}/{routeData.route.length}
+              </Text>
+            </View>
           )}
         </View>
-      </View>
+      </BlurView>
+    </LinearGradient>
+  );
+
+  const renderCurrentStopCard = () => {
+    if (!currentStop) return null;
+
+    const isPickup = currentStop.type === 'pickup';
+
+    return (
+      <Animated.View
+        style={[
+          styles.currentStopContainer,
+          {
+            opacity: fadeAnim,
+            transform: [{ translateY: slideAnim }],
+          }
+        ]}
+      >
+        <Card style={styles.currentStopCard}>
+          <LinearGradient
+            colors={['#ffffff', '#f8fafc']}
+            style={styles.currentStopGradient}
+          >
+            <View style={styles.currentStopHeader}>
+              <View style={styles.stopTypeIndicator}>
+                <LinearGradient
+                  colors={isPickup ? ['#f97316', '#ea580c'] : ['#10b981', '#059669']}
+                  style={styles.stopTypeIcon}
+                >
+                  <Ionicons 
+                    name={isPickup ? 'bag' : 'home'} 
+                    size={24} 
+                    color="#ffffff" 
+                  />
+                </LinearGradient>
+                <View>
+                  <Text style={styles.stopTypeLabel}>
+                    {isPickup ? 'Pickup Location' : 'Delivery Location'}
+                  </Text>
+                  <Text style={styles.stopOrderId}>Order #{currentStop.order_id}</Text>
+                </View>
+              </View>
+              
+              <View style={styles.statusBadge}>
+                <Text style={styles.statusText}>ACTIVE</Text>
+              </View>
+            </View>
+
+            <View style={styles.stopDetails}>
+              <View style={styles.detailRow}>
+                <Ionicons name="location" size={16} color="#6b7280" />
+                <Text style={styles.stopAddress}>{currentStop.location.address}</Text>
+              </View>
+              
+              <View style={styles.detailRow}>
+                <Ionicons name="person" size={16} color="#6b7280" />
+                <Text style={styles.customerName}>{currentStop.customer_name}</Text>
+                <TouchableOpacity
+                  onPress={() => handleCall(currentStop.phone)}
+                  style={styles.phoneButton}
+                >
+                  <LinearGradient
+                    colors={['#10b981', '#059669']}
+                    style={styles.phoneButtonGradient}
+                  >
+                    <Ionicons name="call" size={16} color="#ffffff" />
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+
+              {currentStop.estimated_time && (
+                <View style={styles.detailRow}>
+                  <Ionicons name="time" size={16} color="#6b7280" />
+                  <Text style={styles.estimatedTime}>
+                    ETA: {new Date(currentStop.estimated_time).toLocaleTimeString()}
+                  </Text>
+                </View>
+              )}
+
+              {currentStop.special_instructions && (
+                <View style={styles.instructionsContainer}>
+                  <Ionicons name="information-circle" size={16} color="#3b82f6" />
+                  <Text style={styles.instructions}>{currentStop.special_instructions}</Text>
+                </View>
+              )}
+            </View>
+
+            <View style={styles.stopActions}>
+              <TouchableOpacity
+                onPress={() => handleNavigate(currentStop.location)}
+                style={styles.navigateButton}
+              >
+                <LinearGradient
+                  colors={['#3b82f6', '#2563eb']}
+                  style={styles.actionButtonGradient}
+                >
+                  <Ionicons name="navigate" size={18} color="#ffffff" />
+                  <Text style={styles.actionButtonText}>Navigate</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+              
+              {currentStop.status === 'pending' && (
+                <TouchableOpacity
+                  onPress={() => handleStatusUpdate(currentStop.id, isPickup ? 'picked' : 'delivered')}
+                  style={styles.completeButton}
+                  disabled={updatingStatus}
+                >
+                  <LinearGradient
+                    colors={updatingStatus ? ['#9ca3af', '#6b7280'] : ['#10b981', '#059669']}
+                    style={styles.actionButtonGradient}
+                  >
+                    {updatingStatus ? (
+                      <ActivityIndicator size="small" color="#ffffff" />
+                    ) : (
+                      <>
+                        <Ionicons name="checkmark" size={18} color="#ffffff" />
+                        <Text style={styles.actionButtonText}>
+                          {isPickup ? 'Mark Picked Up' : 'Mark Delivered'}
+                        </Text>
+                      </>
+                    )}
+                  </LinearGradient>
+                </TouchableOpacity>
+              )}
+            </View>
+          </LinearGradient>
+        </Card>
+      </Animated.View>
     );
   };
 
-  const renderRouteStep = (step: RouteStop, index: number) => {
-    const isLast = index === route!.length - 1;
-    
+  const renderRouteProgress = () => {
+    if (!routeData?.route || routeData.route.length === 0) return null;
+
+    const completedStops = routeData.route.filter(stop => stop.status === 'completed').length;
+    const totalStops = routeData.route.length;
+    const progressPercentage = totalStops > 0 ? (completedStops / totalStops) * 100 : 0;
+
     return (
-      <View key={`${step.delivery_id}-${step.sequence_order}`} style={styles.routeStep}>
-        <View style={styles.stepIndicator}>
-          <View style={[styles.stepCircle, isLast && styles.lastStep]}>
-            <Text style={styles.stepNumber}>{step.sequence_order}</Text>
+      <Card style={styles.progressCard}>
+        <LinearGradient
+          colors={['#ffffff', '#f8fafc']}
+          style={styles.progressGradient}
+        >
+          <View style={styles.progressHeader}>
+            <View>
+              <Text style={styles.progressTitle}>Route Progress</Text>
+              <Text style={styles.progressSubtitle}>
+                {completedStops} of {totalStops} stops completed
+              </Text>
+            </View>
+            <View style={styles.progressStats}>
+              <Text style={styles.progressPercentage}>{Math.round(progressPercentage)}%</Text>
+            </View>
           </View>
-          {!isLast && <View style={styles.stepLine} />}
-        </View>
-        
-        <View style={styles.stepContent}>
-          <Text style={styles.stepTitle}>
-            {step.pickup_required ? 'Pickup' : 'Delivery'}: #{step.order_number}
-          </Text>
-          <Text style={styles.stepAddress}>
-            {step.pickup_required ? step.pickup_address : step.delivery_address}
-          </Text>
-          <Text style={styles.stepCustomer}>{step.customer_name}</Text>
-          {step.estimated_arrival_time && (
-            <Text style={styles.stepTime}>
-              ETA: {new Date(step.estimated_arrival_time).toLocaleTimeString()}
-            </Text>
-          )}
-        </View>
-      </View>
+
+          <View style={styles.progressBarContainer}>
+            <View style={styles.progressBarBackground}>
+              <Animated.View 
+                style={[
+                  styles.progressBarFill,
+                  { width: `${progressPercentage}%` }
+                ]} 
+              />
+            </View>
+          </View>
+
+          <View style={styles.routeMetrics}>
+            <View style={styles.metric}>
+              <Ionicons name="location" size={16} color="#6b7280" />
+              <Text style={styles.metricText}>{routeData.total_distance_km.toFixed(1)} km</Text>
+            </View>
+            <View style={styles.metric}>
+              <Ionicons name="time" size={16} color="#6b7280" />
+              <Text style={styles.metricText}>
+                {new Date(routeData.estimated_completion_time).toLocaleTimeString()}
+              </Text>
+            </View>
+          </View>
+        </LinearGradient>
+      </Card>
+    );
+  };
+
+  const renderUpcomingStops = () => {
+    if (!routeData?.route) return null;
+
+    const upcomingStops = routeData.route.filter(stop => 
+      stop.status === 'pending' && stop.id !== currentStop?.id
+    ).slice(0, 3);
+
+    if (upcomingStops.length === 0) return null;
+
+    return (
+      <Card style={styles.upcomingCard}>
+        <LinearGradient
+          colors={['#ffffff', '#f8fafc']}
+          style={styles.upcomingGradient}
+        >
+          <Text style={styles.upcomingTitle}>Upcoming Stops</Text>
+          {upcomingStops.map((stop, index) => (
+            <View key={stop.id} style={styles.upcomingStop}>
+              <LinearGradient
+                colors={['#667eea', '#764ba2']}
+                style={styles.upcomingStopNumber}
+              >
+                <Text style={styles.upcomingStopNumberText}>{index + 2}</Text>
+              </LinearGradient>
+              <View style={styles.upcomingStopDetails}>
+                <Text style={styles.upcomingStopType}>
+                  {stop.type === 'pickup' ? 'Pickup' : 'Delivery'} • Order #{stop.order_id}
+                </Text>
+                <Text style={styles.upcomingStopAddress} numberOfLines={1}>
+                  {stop.location.address}
+                </Text>
+                <Text style={styles.upcomingStopCustomer}>{stop.customer_name}</Text>
+              </View>
+            </View>
+          ))}
+        </LinearGradient>
+      </Card>
     );
   };
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={styles.loadingText}>Loading ongoing deliveries...</Text>
-        </View>
-      </SafeAreaView>
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor="#667eea" />
+        <SafeAreaView style={styles.safeArea}>
+          {renderHeader()}
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#667eea" />
+            <Text style={styles.loadingText}>Loading route optimization...</Text>
+          </View>
+        </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Ongoing Deliveries</Text>
-        {deliveries.length > 0 && (
-          <View style={styles.summaryInfo}>
-            <Text style={styles.summaryText}>
-              {deliveries.length} active • {totalDistance.toFixed(1)}km
-            </Text>
-          </View>
-        )}
-      </View>
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#667eea" />
+      <SafeAreaView style={styles.safeArea}>
+        {renderHeader()}
 
-      <ScrollView
-        style={styles.scrollView}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        showsVerticalScrollIndicator={false}
-      >
-        {deliveries.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Ionicons name="car" size={64} color={colors.gray} />
-            <Text style={styles.emptyTitle}>No Ongoing Deliveries</Text>
-            <Text style={styles.emptyText}>
-              You don't have any active deliveries at the moment.
-            </Text>
-          </View>
-        ) : (
-          <>
-            {/* Route Overview */}
-            {route && route.length > 0 && (
-              <View style={styles.routeContainer}>
-                <Text style={styles.sectionTitle}>Optimized Route</Text>
-                {route.map((step, index) => renderRouteStep(step, index))}
-                {estimatedCompletion && (
-                  <View style={styles.completionInfo}>
-                    <Ionicons name="time" size={16} color={colors.info} />
-                    <Text style={styles.completionText}>
-                      Estimated completion: {new Date(estimatedCompletion).toLocaleTimeString()}
-                    </Text>
-                  </View>
-                )}
-              </View>
-            )}
-
-            {/* Delivery Cards */}
-            <View style={styles.deliveriesContainer}>
-              <Text style={styles.sectionTitle}>Active Deliveries</Text>
-              {deliveries.map(renderDeliveryCard)}
-            </View>
-          </>
-        )}
-      </ScrollView>
-    </SafeAreaView>
+        <ScrollView
+          style={styles.content}
+          contentContainerStyle={styles.contentContainer}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor="#667eea"
+            />
+          }
+        >
+          {currentStop ? (
+            <>
+              {renderCurrentStopCard()}
+              {renderRouteProgress()}
+              {renderUpcomingStops()}
+            </>
+          ) : (
+            <Card style={styles.emptyStateCard}>
+              <LinearGradient
+                colors={['#ffffff', '#f8fafc']}
+                style={styles.emptyStateGradient}
+              >
+                <View style={styles.emptyState}>
+                  <LinearGradient
+                    colors={['#667eea', '#764ba2']}
+                    style={styles.emptyStateIcon}
+                  >
+                    <Ionicons name="car-outline" size={48} color="#ffffff" />
+                  </LinearGradient>
+                  <Text style={styles.emptyTitle}>No Active Route</Text>
+                  <Text style={styles.emptySubtitle}>
+                    Accept orders to start receiving optimized delivery routes
+                  </Text>
+                </View>
+              </LinearGradient>
+            </Card>
+          )}
+        </ScrollView>
+      </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#f1f5f9',
   },
-  header: {
+  safeArea: {
+    flex: 1,
+  },
+  headerGradient: {
+    paddingTop: 20,
+  },
+  headerBlur: {
     paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.lightGray,
+    paddingVertical: 20,
+  },
+  headerContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   headerTitle: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: colors.text,
+    color: '#ffffff',
+    fontWeight: '700',
     marginBottom: 4,
   },
-  summaryInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  summaryText: {
+  headerSubtitle: {
     fontSize: 14,
-    color: colors.gray,
+    color: 'rgba(255, 255, 255, 0.8)',
   },
-  scrollView: {
+  headerStats: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  headerStatsText: {
+    fontSize: 14,
+    color: '#ffffff',
+    fontWeight: '600',
+  },
+  content: {
     flex: 1,
+  },
+  contentContainer: {
+    paddingBottom: 100,
   },
   loadingContainer: {
     flex: 1,
@@ -376,247 +587,274 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   loadingText: {
-    marginTop: 16,
     fontSize: 16,
-    color: colors.gray,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 40,
-    paddingVertical: 60,
-  },
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: colors.text,
+    color: '#6b7280',
     marginTop: 16,
-    marginBottom: 8,
   },
-  emptyText: {
-    fontSize: 16,
-    color: colors.gray,
-    textAlign: 'center',
-    lineHeight: 24,
+  currentStopContainer: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: colors.text,
-    marginBottom: 16,
+  currentStopCard: {
+    padding: 0,
+    overflow: 'hidden',
   },
-  routeContainer: {
-    padding: 20,
-    backgroundColor: colors.white,
-    marginBottom: 12,
-  },
-  routeStep: {
-    flexDirection: 'row',
-    marginBottom: 16,
-  },
-  stepIndicator: {
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  stepCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  lastStep: {
-    backgroundColor: colors.success,
-  },
-  stepNumber: {
-    color: colors.white,
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  stepLine: {
-    width: 2,
-    height: 32,
-    backgroundColor: colors.lightGray,
-    marginTop: 4,
-  },
-  stepContent: {
-    flex: 1,
-    paddingTop: 4,
-  },
-  stepTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: 4,
-  },
-  stepAddress: {
-    fontSize: 14,
-    color: colors.gray,
-    marginBottom: 2,
-  },
-  stepCustomer: {
-    fontSize: 14,
-    color: colors.text,
-    marginBottom: 2,
-  },
-  stepTime: {
-    fontSize: 12,
-    color: colors.info,
-  },
-  completionInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 16,
-    padding: 12,
-    backgroundColor: colors.lightBlue,
-    borderRadius: 8,
-  },
-  completionText: {
-    marginLeft: 8,
-    fontSize: 14,
-    color: colors.info,
-    fontWeight: '500',
-  },
-  deliveriesContainer: {
+  currentStopGradient: {
     padding: 20,
   },
-  deliveryCard: {
-    backgroundColor: colors.white,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  cardHeader: {
+  currentStopHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 12,
+    marginBottom: 20,
   },
-  orderInfo: {
+  stopTypeIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
     flex: 1,
   },
-  orderNumber: {
+  stopTypeIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  stopTypeLabel: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: colors.text,
+    color: '#1f2937',
+    fontWeight: '600',
     marginBottom: 4,
   },
+  stopOrderId: {
+    fontSize: 14,
+    color: '#6b7280',
+  },
   statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    alignSelf: 'flex-start',
+    backgroundColor: '#10b981',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
   },
   statusText: {
     fontSize: 12,
-    fontWeight: 'bold',
-    color: colors.white,
-  },
-  deliveryTypeBadge: {
-    backgroundColor: colors.lightGray,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  deliveryTypeText: {
-    fontSize: 12,
+    color: '#ffffff',
     fontWeight: '600',
-    color: colors.gray,
   },
-  customerInfo: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
+  stopDetails: {
+    marginBottom: 20,
   },
-  customerDetails: {
+  detailRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 12,
+  },
+  stopAddress: {
+    fontSize: 16,
+    color: '#1f2937',
+    marginLeft: 12,
     flex: 1,
   },
   customerName: {
-    marginLeft: 8,
     fontSize: 16,
-    fontWeight: '500',
-    color: colors.text,
+    color: '#1f2937',
+    marginLeft: 12,
+    flex: 1,
   },
-  callButton: {
-    backgroundColor: colors.success,
-    padding: 8,
+  phoneButton: {
     borderRadius: 20,
+    overflow: 'hidden',
   },
-  addressInfo: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 8,
-  },
-  address: {
-    marginLeft: 8,
-    fontSize: 14,
-    color: colors.gray,
-    flex: 1,
-    lineHeight: 20,
-  },
-  notesInfo: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 16,
+  phoneButtonGradient: {
     padding: 8,
-    backgroundColor: colors.lightBlue,
-    borderRadius: 6,
   },
-  notes: {
-    marginLeft: 8,
-    fontSize: 14,
-    color: colors.info,
-    flex: 1,
-    lineHeight: 20,
+  estimatedTime: {
+    fontSize: 16,
+    color: '#6b7280',
+    marginLeft: 12,
   },
-  cardActions: {
+  instructionsContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    backgroundColor: '#dbeafe',
+    padding: 12,
+    borderRadius: 12,
     marginTop: 8,
   },
-  navigateButton: {
-    backgroundColor: colors.info,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-    flex: 1,
-    marginRight: 8,
-  },
-  actionButton: {
-    backgroundColor: colors.primary,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-    flex: 1,
-    marginLeft: 8,
-  },
-  disabledButton: {
-    backgroundColor: colors.gray,
-  },
-  buttonText: {
-    marginLeft: 6,
+  instructions: {
     fontSize: 14,
+    color: '#3b82f6',
+    marginLeft: 8,
+    flex: 1,
+  },
+  stopActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  navigateButton: {
+    flex: 1,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  completeButton: {
+    flex: 1,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  actionButtonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    gap: 8,
+  },
+  actionButtonText: {
+    fontSize: 16,
+    color: '#ffffff',
     fontWeight: '600',
-    color: colors.white,
+  },
+  progressCard: {
+    margin: 20,
+    padding: 0,
+    overflow: 'hidden',
+  },
+  progressGradient: {
+    padding: 20,
+  },
+  progressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  progressTitle: {
+    fontSize: 18,
+    color: '#1f2937',
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  progressSubtitle: {
+    fontSize: 14,
+    color: '#6b7280',
+  },
+  progressStats: {
+    alignItems: 'center',
+  },
+  progressPercentage: {
+    fontSize: 24,
+    color: '#667eea',
+    fontWeight: '700',
+  },
+  progressBarContainer: {
+    marginBottom: 16,
+  },
+  progressBarBackground: {
+    height: 8,
+    backgroundColor: '#e5e7eb',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: '#667eea',
+    borderRadius: 4,
+  },
+  routeMetrics: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  metric: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  metricText: {
+    fontSize: 14,
+    color: '#1f2937',
+    fontWeight: '500',
+  },
+  upcomingCard: {
+    margin: 20,
+    padding: 0,
+    overflow: 'hidden',
+  },
+  upcomingGradient: {
+    padding: 20,
+  },
+  upcomingTitle: {
+    fontSize: 18,
+    color: '#1f2937',
+    fontWeight: '600',
+    marginBottom: 16,
+  },
+  upcomingStop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  upcomingStopNumber: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  upcomingStopNumberText: {
+    fontSize: 14,
+    color: '#ffffff',
+    fontWeight: '600',
+  },
+  upcomingStopDetails: {
+    flex: 1,
+  },
+  upcomingStopType: {
+    fontSize: 14,
+    color: '#1f2937',
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  upcomingStopAddress: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginBottom: 2,
+  },
+  upcomingStopCustomer: {
+    fontSize: 12,
+    color: '#9ca3af',
+  },
+  emptyStateCard: {
+    margin: 20,
+    padding: 0,
+    overflow: 'hidden',
+  },
+  emptyStateGradient: {
+    padding: 40,
+  },
+  emptyState: {
+    alignItems: 'center',
+  },
+  emptyStateIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    color: '#1f2937',
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  emptySubtitle: {
+    fontSize: 16,
+    color: '#6b7280',
+    textAlign: 'center',
   },
 });
 

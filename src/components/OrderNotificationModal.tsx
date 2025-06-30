@@ -19,6 +19,7 @@ import { COLORS, FONTS } from '../constants';
 import { calculateDistance } from '../utils/locationUtils';
 import { requestLocationPermissions } from '../utils/permissions';
 import { notificationService } from '../services/notificationService';
+import { apiService } from '../services/api';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -41,7 +42,7 @@ const OrderNotificationModal: React.FC<OrderNotificationModalProps> = ({
   order,
   onAccept,
   onDecline,
-  autoCloseTime = 30,
+  autoCloseTime = 10,
 }) => {
   // All hooks must be called before any early returns
   const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
@@ -53,6 +54,12 @@ const OrderNotificationModal: React.FC<OrderNotificationModalProps> = ({
   const [driverLocation, setDriverLocation] = useState<DriverLocation | null>(null);
   const [distance, setDistance] = useState<string>('Calculating...');
   const [timeRemaining, setTimeRemaining] = useState(autoCloseTime);
+  const [pickupEstimate, setPickupEstimate] = useState<{
+    distance_km: number;
+    travel_time_minutes: number;
+    estimated_arrival_time: string;
+  } | null>(null);
+  const [estimating, setEstimating] = useState<boolean>(false);
 
   const stopCountdown = useCallback((): void => {
     if (countdownRef.current) {
@@ -105,7 +112,7 @@ const OrderNotificationModal: React.FC<OrderNotificationModalProps> = ({
           const deliveryLng = order?.delivery_longitude || 
             (typeof order?.deliveryAddress === 'object' && order?.deliveryAddress?.coordinates?.longitude) || 
             undefined;
-          
+
           if (deliveryLat && deliveryLng) {
             const dist = calculateDistance(
               latitude,
@@ -114,13 +121,16 @@ const OrderNotificationModal: React.FC<OrderNotificationModalProps> = ({
               deliveryLng
             );
             setDistance(`${dist.toFixed(1)} km away`);
+
+            // Get pickup time estimate
+            getPickupTimeEstimate(latitude, longitude);
           } else {
             setDistance('Distance unavailable');
           }
         },
         (error) => {
           console.error('Error getting location:', error?.message || error);
-          
+
           // Provide more specific error messages based on error code
           let errorMessage = 'Location unavailable';
           if (error && typeof error === 'object' && 'code' in error) {
@@ -139,7 +149,7 @@ const OrderNotificationModal: React.FC<OrderNotificationModalProps> = ({
                 break;
             }
           }
-          
+
           setDistance(errorMessage);
         },
         {
@@ -150,7 +160,7 @@ const OrderNotificationModal: React.FC<OrderNotificationModalProps> = ({
       );
     } catch (error) {
       console.error('Error requesting location permission:', error?.message || error);
-      
+
       // Handle permission request errors
       if (error && typeof error === 'object' && 'message' in error) {
         if (error.message.includes('permission')) {
@@ -219,13 +229,15 @@ const OrderNotificationModal: React.FC<OrderNotificationModalProps> = ({
 
   // Animation effects
   useEffect(() => {
+    let animationRef: Animated.CompositeAnimation | null = null;
+
     if (visible && order) {
       // Play notification sound and vibration when modal becomes visible
       notificationService.playOrderSound();
       notificationService.vibrateForOrder();
-      
+
       // Entrance animation
-      Animated.parallel([
+      animationRef = Animated.parallel([
         Animated.timing(opacityAnim, {
           toValue: 1,
           duration: 300,
@@ -243,10 +255,11 @@ const OrderNotificationModal: React.FC<OrderNotificationModalProps> = ({
           friction: 8,
           useNativeDriver: true,
         }),
-      ]).start();
+      ]);
+      animationRef.start();
     } else {
       // Exit animation
-      Animated.parallel([
+      animationRef = Animated.parallel([
         Animated.timing(opacityAnim, {
           toValue: 0,
           duration: 200,
@@ -257,8 +270,16 @@ const OrderNotificationModal: React.FC<OrderNotificationModalProps> = ({
           duration: 200,
           useNativeDriver: true,
         }),
-      ]).start();
+      ]);
+      animationRef.start();
     }
+
+    // Cleanup function
+    return () => {
+      if (animationRef) {
+        animationRef.stop();
+      }
+    };
   }, [visible, order, opacityAnim, slideAnim, scaleAnim]);
 
   // Early return if no order data (after hooks)
@@ -312,9 +333,40 @@ const OrderNotificationModal: React.FC<OrderNotificationModalProps> = ({
               <View style={styles.notificationIcon}>
                 <Ionicons name="notifications" size={24} color={COLORS.primary.default} />
               </View>
-              <View>
-                <Text style={styles.headerTitle}>New Order</Text>
-                <Text style={styles.headerSubtitle}>Order #{order.orderNumber || order.id}</Text>
+              <View style={styles.headerTextContainer}>
+                <View style={styles.headerTopRow}>
+                  <Text style={styles.headerTitle}>New Order</Text>
+                  {/* Order Type Badge */}
+                  {order.delivery_type && (
+                    <View style={[
+                      styles.orderTypeBadge, 
+                      order.delivery_type === 'food' && styles.foodBadge,
+                      order.delivery_type === 'fast' && styles.fastBadge
+                    ]}>
+                      <Ionicons 
+                        name={order.delivery_type === 'food' ? 'restaurant' : order.delivery_type === 'fast' ? 'flash' : 'cube'} 
+                        size={12} 
+                        color="#fff" 
+                      />
+                      <Text style={styles.orderTypeText}>
+                        {order.delivery_type.toUpperCase()}
+                      </Text>
+                    </View>
+                  )}
+                  {/* Priority Badge */}
+                  {order.priority && order.priority !== 'normal' && (
+                    <View style={[
+                      styles.priorityBadge,
+                      order.priority === 'urgent' && styles.urgentBadge,
+                      order.priority === 'high' && styles.highBadge
+                    ]}>
+                      <Text style={styles.priorityText}>
+                        {order.priority === 'urgent' ? '🔴' : '🟠'} {order.priority.toUpperCase()}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+                <Text style={styles.headerSubtitle}>Order #{order.order_number || order.orderNumber || order.id}</Text>
               </View>
             </View>
 
@@ -349,6 +401,43 @@ const OrderNotificationModal: React.FC<OrderNotificationModalProps> = ({
             </View>
           </View>
 
+          {/* Order Details */}
+          <View style={styles.orderDetailsSection}>
+            <View style={styles.detailRow}>
+              <View style={styles.detailItem}>
+                <Ionicons name="cash-outline" size={18} color={COLORS.text.secondary} />
+                <Text style={styles.detailLabel}>Total</Text>
+                <Text style={styles.detailValue}>
+                  ${order.total ? parseFloat(String(order.total)).toFixed(2) : '0.00'}
+                </Text>
+              </View>
+              <View style={styles.detailDivider} />
+              <View style={styles.detailItem}>
+                <Ionicons 
+                  name={order.payment_method === 'cash' ? 'cash' : 'card-outline'} 
+                  size={18} 
+                  color={COLORS.text.secondary} 
+                />
+                <Text style={styles.detailLabel}>Payment</Text>
+                <Text style={styles.detailValue}>
+                  {order.payment_method === 'cash' ? 'Cash' : 'Card'}
+                </Text>
+              </View>
+              {order.delivery_fee && (
+                <>
+                  <View style={styles.detailDivider} />
+                  <View style={styles.detailItem}>
+                    <Ionicons name="car-outline" size={18} color={COLORS.text.secondary} />
+                    <Text style={styles.detailLabel}>Earnings</Text>
+                    <Text style={styles.detailValue}>
+                      ${parseFloat(String(order.delivery_fee)).toFixed(2)}
+                    </Text>
+                  </View>
+                </>
+              )}
+            </View>
+          </View>
+
           {/* Location and Distance */}
           <View style={styles.locationSection}>
             <View style={styles.locationHeader}>
@@ -366,75 +455,94 @@ const OrderNotificationModal: React.FC<OrderNotificationModalProps> = ({
               </View>
             </View>
 
-            {driverLocation && order.deliveryAddress?.coordinates && (
-              <TouchableOpacity style={styles.routeButton} onPress={openMapsForRoute}>
-                <Ionicons name="navigate" size={16} color={COLORS.primary.default} />
-                <Text style={styles.routeButtonText}>View Route</Text>
-              </TouchableOpacity>
-            )}
+            <View style={styles.routeButtonContainer}>
+              {driverLocation && order.deliveryAddress?.coordinates ? (
+                <TouchableOpacity style={styles.routeButton} onPress={openMapsForRoute}>
+                  <Ionicons name="navigate" size={16} color={COLORS.primary.default} />
+                  <Text style={styles.routeButtonText}>View Route</Text>
+                </TouchableOpacity>
+              ) : (
+                <View style={styles.routeButtonPlaceholder} />
+              )}
+            </View>
 
             {/* Custom Map Preview */}
-            {(() => {
-              const deliveryLat = order?.delivery_latitude || 
-                (typeof order?.deliveryAddress === 'object' && order?.deliveryAddress?.coordinates?.latitude) || 
-                undefined;
-              const deliveryLng = order?.delivery_longitude || 
-                (typeof order?.deliveryAddress === 'object' && order?.deliveryAddress?.coordinates?.longitude) || 
-                undefined;
-              
-              return deliveryLat && deliveryLng ? (
-                <View style={styles.mapPreviewContainer}>
-                  <View style={styles.customMapView}>
-                    {/* Map background with grid pattern */}
-                    <View style={styles.mapBackground}>
-                      {/* Grid lines for map appearance */}
-                      {Array.from({ length: 6 }, (_, i) => (
-                        <View key={`h-${i}`} style={[styles.gridLine, styles.horizontalLine, { top: `${i * 20}%` }]} />
-                      ))}
-                      {Array.from({ length: 8 }, (_, i) => (
-                        <View key={`v-${i}`} style={[styles.gridLine, styles.verticalLine, { left: `${i * 12.5}%` }]} />
-                      ))}
-                    </View>
-                    
-                    {/* Delivery location marker */}
-                    <View style={[styles.deliveryMarker, styles.centerMarker]}>
-                      <Ionicons name="location" size={24} color={COLORS.white} />
-                    </View>
-                    
-                    {/* Driver location marker if available */}
-                    {driverLocation && (
-                      <View style={[styles.driverMarker, styles.driverMarkerPosition]}>
-                        <Ionicons name="car-sport" size={18} color={COLORS.white} />
+            <View style={styles.mapPreviewContainer}>
+              {(() => {
+                const deliveryLat = order?.delivery_latitude || 
+                  (typeof order?.deliveryAddress === 'object' && order?.deliveryAddress?.coordinates?.latitude) || 
+                  undefined;
+                const deliveryLng = order?.delivery_longitude || 
+                  (typeof order?.deliveryAddress === 'object' && order?.deliveryAddress?.coordinates?.longitude) || 
+                  undefined;
+
+                if (deliveryLat && deliveryLng) {
+                  return (
+                    <View style={styles.customMapView}>
+                      {/* Map background with grid pattern */}
+                      <View style={styles.mapBackground}>
+                        {/* Grid lines for map appearance */}
+                        {Array.from({ length: 6 }, (_, i) => (
+                          <View key={`h-${i}`} style={[styles.gridLine, styles.horizontalLine, { top: `${i * 20}%` }]} />
+                        ))}
+                        {Array.from({ length: 8 }, (_, i) => (
+                          <View key={`v-${i}`} style={[styles.gridLine, styles.verticalLine, { left: `${i * 12.5}%` }]} />
+                        ))}
                       </View>
-                    )}
-                    
-                    {/* Map info overlay */}
-                    <View style={styles.mapInfoOverlay}>
-                      <Text style={styles.mapInfoText}>
-                        📍 {getAddressString(order.deliveryAddress || order.delivery_address)}
-                      </Text>
-                      {deliveryLat && deliveryLng && (
+
+                      {/* Delivery location marker */}
+                      <View style={[styles.deliveryMarker, styles.centerMarker]}>
+                        <Ionicons name="location" size={24} color={COLORS.white} />
+                      </View>
+
+                      {/* Driver location marker container - always present */}
+                      <View style={[styles.driverMarkerContainer, styles.driverMarkerPosition]}>
+                        {driverLocation ? (
+                          <View style={styles.driverMarker}>
+                            <Ionicons name="car-sport" size={18} color={COLORS.white} />
+                          </View>
+                        ) : (
+                          <View style={styles.driverMarkerPlaceholder} />
+                        )}
+                      </View>
+
+                      {/* Map info overlay */}
+                      <View style={styles.mapInfoOverlay}>
+                        <Text style={styles.mapInfoText}>
+                          📍 {getAddressString(order.deliveryAddress || order.delivery_address)}
+                        </Text>
                         <Text style={styles.mapCoordinatesText}>
                           {deliveryLat.toFixed(4)}, {deliveryLng.toFixed(4)}
                         </Text>
-                      )}
+                      </View>
                     </View>
-                  </View>
-                </View>
-              ) : null;
-            })()}
+                  );
+                } else {
+                  return (
+                    <View style={styles.mapPlaceholderView}>
+                      <Ionicons name="map-outline" size={32} color="#ccc" />
+                      <Text style={styles.mapPlaceholderText}>Location not available</Text>
+                    </View>
+                  );
+                }
+              })()}
+            </View>
           </View>
 
           {/* Contact Customer Button */}
-          {order.customer?.phone && (
-            <TouchableOpacity 
-              style={styles.contactButton}
-              onPress={() => Linking.openURL(`tel:${order.customer!.phone}`).catch(console.error)}
-            >
-              <Ionicons name="chatbubble-ellipses" size={18} color={COLORS.primary.default} />
-              <Text style={styles.contactButtonText}>Contact Customer</Text>
-            </TouchableOpacity>
-          )}
+          <View style={styles.contactButtonContainer}>
+            {order.customer?.phone ? (
+              <TouchableOpacity 
+                style={styles.contactButton}
+                onPress={() => Linking.openURL(`tel:${order.customer!.phone}`).catch(console.error)}
+              >
+                <Ionicons name="chatbubble-ellipses" size={18} color={COLORS.primary.default} />
+                <Text style={styles.contactButtonText}>Contact Customer</Text>
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.contactButtonPlaceholder} />
+            )}
+          </View>
 
           {/* Order Details */}
           <View style={styles.orderDetails}>
@@ -449,12 +557,16 @@ const OrderNotificationModal: React.FC<OrderNotificationModalProps> = ({
               </View>
             </View>
 
-            {order.specialInstructions && (
-              <View style={styles.instructionsContainer}>
-                <Text style={styles.instructionsLabel}>Special Instructions:</Text>
-                <Text style={styles.instructions}>{order.specialInstructions}</Text>
-              </View>
-            )}
+            <View style={styles.instructionsWrapper}>
+              {order.specialInstructions ? (
+                <View style={styles.instructionsContainer}>
+                  <Text style={styles.instructionsLabel}>Special Instructions:</Text>
+                  <Text style={styles.instructions}>{order.specialInstructions}</Text>
+                </View>
+              ) : (
+                <View style={styles.instructionsPlaceholder} />
+              )}
+            </View>
           </View>
 
           {/* Action Buttons */}
@@ -496,6 +608,19 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     height: 150,
   },
+  mapPlaceholderView: {
+    height: 150,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+    borderRadius: 12,
+  },
+  mapPlaceholderText: {
+    fontSize: 14,
+    color: '#999',
+    marginTop: 8,
+    fontFamily: FONTS.regular,
+  },
   mapView: {
     width: '100%',
     height: '100%',
@@ -515,6 +640,10 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 5,
   },
+  driverMarkerContainer: {
+    width: 36,
+    height: 36,
+  },
   driverMarker: {
     width: 36,
     height: 36,
@@ -530,6 +659,21 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 5,
   },
+  driverMarkerPlaceholder: {
+    width: 36,
+    height: 36,
+  },
+  routeButtonContainer: {
+    minHeight: 44,
+    marginBottom: 12,
+  },
+  routeButtonPlaceholder: {
+    height: 44,
+  },
+  contactButtonContainer: {
+    minHeight: 44,
+    marginBottom: 20,
+  },
   contactButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -538,13 +682,15 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 12,
     paddingHorizontal: 16,
-    marginBottom: 20,
   },
   contactButtonText: {
     fontSize: 14,
     fontFamily: FONTS.medium,
     color: COLORS.primary.default,
     marginLeft: 8,
+  },
+  contactButtonPlaceholder: {
+    height: 44,
   },
   container: {
     backgroundColor: COLORS.white,
@@ -725,6 +871,9 @@ const styles = StyleSheet.create({
     color: COLORS.text.primary,
     marginLeft: 8,
   },
+  instructionsWrapper: {
+    minHeight: 20,
+  },
   instructionsContainer: {
     backgroundColor: '#FFF3CD',
     borderRadius: 12,
@@ -741,6 +890,9 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.regular,
     color: '#856404',
     lineHeight: 20,
+  },
+  instructionsPlaceholder: {
+    height: 20,
   },
   actionButtons: {
     flexDirection: 'row',
@@ -839,6 +991,84 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.8)',
     textAlign: 'center',
     marginTop: 2,
+  },
+  // New styles for improved notification
+  headerTextContainer: {
+    flex: 1,
+  },
+  headerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  orderTypeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#667eea',
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 8,
+    gap: 3,
+  },
+  foodBadge: {
+    backgroundColor: '#ff6b6b',
+  },
+  fastBadge: {
+    backgroundColor: '#ffd93d',
+  },
+  orderTypeText: {
+    fontSize: 9,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  priorityBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 8,
+    backgroundColor: '#ffa94d',
+  },
+  urgentBadge: {
+    backgroundColor: '#ff4757',
+  },
+  highBadge: {
+    backgroundColor: '#ff6348',
+  },
+  priorityText: {
+    fontSize: 9,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  orderDetailsSection: {
+    marginBottom: 16,
+    paddingHorizontal: 20,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    padding: 12,
+  },
+  detailItem: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 4,
+  },
+  detailDivider: {
+    width: 1,
+    height: 30,
+    backgroundColor: '#e9ecef',
+    marginHorizontal: 8,
+  },
+  detailLabel: {
+    fontSize: 12,
+    color: COLORS.text.secondary,
+    fontFamily: FONTS.regular,
+  },
+  detailValue: {
+    fontSize: 14,
+    color: COLORS.text.primary,
+    fontFamily: FONTS.bold,
   },
 });
 
