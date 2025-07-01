@@ -99,11 +99,23 @@ export const DriverProvider: React.FC<DriverProviderProps> = ({ children }) => {
         await getDriverProfile();
         await getDriverBalance();
 
-        // Initialize location service
+        // Initialize location service with backend integration
         try {
           const { locationService } = await import('../services/locationService');
+          
+          // Set location update callback to send to backend
+          locationService.setLocationUpdateCallback(async (location) => {
+            console.log('📍 Location update received:', location);
+            try {
+              // Update backend with current location for DistanceCalculationService
+              await updateDriverLocation(location.latitude, location.longitude);
+            } catch (error) {
+              console.warn('⚠️ Failed to send location update to backend:', error);
+            }
+          });
+          
           await locationService.initialize();
-          console.log('✅ Location service initialized in DriverContext');
+          console.log('✅ Location service initialized with backend integration');
         } catch (error) {
           console.error('❌ Error initializing location service:', error);
         }
@@ -324,6 +336,35 @@ export const DriverProvider: React.FC<DriverProviderProps> = ({ children }) => {
     }
   };
 
+  const updateDriverLocation = async (latitude: number, longitude: number): Promise<void> => {
+    try {
+      console.log(`📍 Updating driver location to backend: ${latitude}, ${longitude}`);
+      const response = await apiService.updateDriverLocation(latitude, longitude);
+
+      if (response.success) {
+        console.log('✅ Driver location updated successfully');
+        
+        // Update local driver state with new coordinates
+        if (state.driver) {
+          const updatedDriver = {
+            ...state.driver,
+            current_latitude: latitude,
+            current_longitude: longitude,
+            last_location_update: new Date().toISOString()
+          };
+          dispatch({ type: 'SET_DRIVER', payload: updatedDriver });
+          await Storage.setItem(STORAGE_KEYS.DRIVER_DATA, updatedDriver);
+        }
+      } else {
+        console.warn('⚠️ Failed to update driver location:', response.error);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to update driver location';
+      console.error('❌ Error updating driver location:', message);
+      // Don't throw error - location updates shouldn't break the app
+    }
+  };
+
   const contextValue: DriverContextType = {
     driver: state.driver,
     balance: state.balance,
@@ -335,6 +376,7 @@ export const DriverProvider: React.FC<DriverProviderProps> = ({ children }) => {
     requestWithdrawal,
     addDeposit,
     recordCashCollection,
+    updateDriverLocation,
   };
 
   return (

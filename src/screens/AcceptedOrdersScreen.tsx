@@ -39,7 +39,7 @@ const filterOptions: FilterOption[] = [
 const AcceptedOrdersScreen: React.FC = () => {
   const navigation = useNavigation();
   const { 
-    orders: acceptedOrders, 
+    driverOrders: acceptedOrders, 
     refreshOrders, 
     isLoading,
     error,
@@ -80,9 +80,19 @@ const AcceptedOrdersScreen: React.FC = () => {
 
   useEffect(() => {
     // Load driver's accepted orders on mount
-    if (driver?.id) {
-      getDriverOrders?.();
-    }
+    const loadOrders = async () => {
+      if (driver?.id && getDriverOrders) {
+        try {
+          console.log('📋 Loading driver orders in AcceptedOrdersScreen...');
+          await getDriverOrders();
+        } catch (error) {
+          console.error('❌ Error loading driver orders:', error);
+          // Error is handled by the context, just log here
+        }
+      }
+    };
+    
+    loadOrders();
   }, [driver?.id, getDriverOrders]);
 
   const handleRefresh = useCallback(async () => {

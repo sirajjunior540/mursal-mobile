@@ -32,7 +32,7 @@ import { orderActionService } from '../services/orderActionService';
 import { navigationService } from '../services/navigationService';
 
 const OrderDetailsScreen: React.FC = () => {
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<NativeStackNavigationProp<any>>();
   const route = useRoute();
   const { orderId, autoNavigate } = route.params as any;
   

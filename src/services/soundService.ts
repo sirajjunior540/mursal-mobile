@@ -62,14 +62,14 @@ class SoundService {
   /**
    * Play order notification sound
    */
-  playOrderNotification(): void {
+  playOrderNotification = (): void => {
     if (!this.config.enabled) {
       return;
     }
 
     try {
       // Play the notification sound
-      if (this.orderSound) {
+      if (this.orderSound && this.orderSound.play) {
         this.orderSound.setVolume(this.config.volume);
         this.orderSound.play((success: boolean) => {
           if (!success) {

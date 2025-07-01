@@ -258,7 +258,7 @@ export const getStatusColor = (status: string): string => {
     cancelled: Design.colors.cancelled,  // Red
     failed: Design.colors.failed,        // Red
   };
-  return statusColors[status.toLowerCase()] || Design.colors.gray500;
+  return statusColors[status?.toLowerCase?.()] || Design.colors.gray500;
 };
 
 // Typography Helpers

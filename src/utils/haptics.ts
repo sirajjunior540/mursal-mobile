@@ -1,72 +1,172 @@
-import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
-import { Platform } from 'react-native';
+import { Platform, Vibration } from 'react-native';
+
+// Try to import react-native-haptic-feedback, fallback to Vibration API if not available
+let ReactNativeHapticFeedback: any = null;
+try {
+  ReactNativeHapticFeedback = require('react-native-haptic-feedback').default || require('react-native-haptic-feedback');
+} catch (e) {
+  console.warn('react-native-haptic-feedback not installed, using Vibration API fallback');
+}
 
 const options = {
   enableVibrateFallback: true,
   ignoreAndroidSystemSettings: false,
 };
 
+// Fallback vibration patterns
+const VIBRATION_PATTERNS = {
+  light: 10,
+  medium: 20,
+  heavy: 30,
+  success: [0, 10, 30, 10],
+  warning: [0, 20, 40, 20],
+  error: [0, 30, 40, 30],
+  selection: 5,
+};
+
 export const haptics = {
   // Light tap feedback for button presses and selections
   light: () => {
-    if (Platform.OS === 'ios') {
-      ReactNativeHapticFeedback.trigger('impactLight', options);
-    } else {
-      ReactNativeHapticFeedback.trigger('soft', options);
+    try {
+      if (ReactNativeHapticFeedback) {
+        if (Platform.OS === 'ios') {
+          ReactNativeHapticFeedback.trigger('impactLight', options);
+        } else {
+          ReactNativeHapticFeedback.trigger('soft', options);
+        }
+      } else {
+        Vibration.vibrate(VIBRATION_PATTERNS.light);
+      }
+    } catch (error) {
+      console.warn('Haptics error:', error);
+      Vibration.vibrate(VIBRATION_PATTERNS.light);
     }
   },
 
   // Medium feedback for important actions
   medium: () => {
-    if (Platform.OS === 'ios') {
-      ReactNativeHapticFeedback.trigger('impactMedium', options);
-    } else {
-      ReactNativeHapticFeedback.trigger('soft', options);
+    try {
+      if (ReactNativeHapticFeedback) {
+        if (Platform.OS === 'ios') {
+          ReactNativeHapticFeedback.trigger('impactMedium', options);
+        } else {
+          ReactNativeHapticFeedback.trigger('soft', options);
+        }
+      } else {
+        Vibration.vibrate(VIBRATION_PATTERNS.medium);
+      }
+    } catch (error) {
+      console.warn('Haptics error:', error);
+      Vibration.vibrate(VIBRATION_PATTERNS.medium);
     }
   },
 
   // Heavy feedback for critical actions
   heavy: () => {
-    if (Platform.OS === 'ios') {
-      ReactNativeHapticFeedback.trigger('impactHeavy', options);
-    } else {
-      ReactNativeHapticFeedback.trigger('rigid', options);
+    try {
+      if (ReactNativeHapticFeedback) {
+        if (Platform.OS === 'ios') {
+          ReactNativeHapticFeedback.trigger('impactHeavy', options);
+        } else {
+          ReactNativeHapticFeedback.trigger('rigid', options);
+        }
+      } else {
+        Vibration.vibrate(VIBRATION_PATTERNS.heavy);
+      }
+    } catch (error) {
+      console.warn('Haptics error:', error);
+      Vibration.vibrate(VIBRATION_PATTERNS.heavy);
     }
   },
 
   // Success feedback
   success: () => {
-    if (Platform.OS === 'ios') {
-      ReactNativeHapticFeedback.trigger('notificationSuccess', options);
-    } else {
-      ReactNativeHapticFeedback.trigger('soft', options);
+    try {
+      if (ReactNativeHapticFeedback) {
+        if (Platform.OS === 'ios') {
+          ReactNativeHapticFeedback.trigger('notificationSuccess', options);
+        } else {
+          ReactNativeHapticFeedback.trigger('soft', options);
+        }
+      } else {
+        Vibration.vibrate(VIBRATION_PATTERNS.success);
+      }
+    } catch (error) {
+      console.warn('Haptics error:', error);
+      Vibration.vibrate(VIBRATION_PATTERNS.success);
     }
   },
 
   // Warning feedback
   warning: () => {
-    if (Platform.OS === 'ios') {
-      ReactNativeHapticFeedback.trigger('notificationWarning', options);
-    } else {
-      ReactNativeHapticFeedback.trigger('soft', options);
+    try {
+      if (ReactNativeHapticFeedback) {
+        if (Platform.OS === 'ios') {
+          ReactNativeHapticFeedback.trigger('notificationWarning', options);
+        } else {
+          ReactNativeHapticFeedback.trigger('soft', options);
+        }
+      } else {
+        Vibration.vibrate(VIBRATION_PATTERNS.warning);
+      }
+    } catch (error) {
+      console.warn('Haptics error:', error);
+      Vibration.vibrate(VIBRATION_PATTERNS.warning);
     }
   },
 
   // Error feedback
   error: () => {
-    if (Platform.OS === 'ios') {
-      ReactNativeHapticFeedback.trigger('notificationError', options);
-    } else {
-      ReactNativeHapticFeedback.trigger('rigid', options);
+    try {
+      if (ReactNativeHapticFeedback) {
+        if (Platform.OS === 'ios') {
+          ReactNativeHapticFeedback.trigger('notificationError', options);
+        } else {
+          ReactNativeHapticFeedback.trigger('rigid', options);
+        }
+      } else {
+        Vibration.vibrate(VIBRATION_PATTERNS.error);
+      }
+    } catch (error) {
+      console.warn('Haptics error:', error);
+      Vibration.vibrate(VIBRATION_PATTERNS.error);
     }
   },
 
   // Selection feedback (for toggles, tabs, etc.)
   selection: () => {
-    if (Platform.OS === 'ios') {
-      ReactNativeHapticFeedback.trigger('selection', options);
-    } else {
-      ReactNativeHapticFeedback.trigger('soft', options);
+    try {
+      if (ReactNativeHapticFeedback) {
+        if (Platform.OS === 'ios') {
+          ReactNativeHapticFeedback.trigger('selection', options);
+        } else {
+          ReactNativeHapticFeedback.trigger('soft', options);
+        }
+      } else {
+        Vibration.vibrate(VIBRATION_PATTERNS.selection);
+      }
+    } catch (error) {
+      console.warn('Haptics error:', error);
+      Vibration.vibrate(VIBRATION_PATTERNS.selection);
+    }
+  },
+
+  // Notification feedback for incoming orders
+  notification: () => {
+    try {
+      if (ReactNativeHapticFeedback) {
+        if (Platform.OS === 'ios') {
+          ReactNativeHapticFeedback.trigger('notificationSuccess', options);
+        } else {
+          ReactNativeHapticFeedback.trigger('soft', options);
+        }
+      } else {
+        // Special pattern for notifications
+        Vibration.vibrate([0, 200, 100, 200]);
+      }
+    } catch (error) {
+      console.warn('Haptics error:', error);
+      Vibration.vibrate([0, 200, 100, 200]);
     }
   },
 };

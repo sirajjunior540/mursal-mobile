@@ -528,7 +528,8 @@ class ApiService {
 
     // Transform backend response to match our Order type
     if (response.success && response.data) {
-      const orders: Order[] = (response.data || []).map(this.transformOrder);
+      const dataArray = Array.isArray(response.data) ? response.data : [response.data];
+      const orders: Order[] = dataArray.map(this.transformOrder);
       return {
         success: true,
         data: orders,
@@ -545,7 +546,8 @@ class ApiService {
 
     // Transform backend response to match our Order type
     if (response.success && response.data) {
-      const orders: Order[] = (response.data || []).map(this.transformOrder);
+      const dataArray = Array.isArray(response.data) ? response.data : [response.data];
+      const orders: Order[] = dataArray.map(this.transformOrder);
       return {
         success: true,
         data: orders,
@@ -562,7 +564,8 @@ class ApiService {
 
     // Transform backend response to match our Order type
     if (response.success && response.data) {
-      const orders: Order[] = (response.data || []).map(this.transformOrder);
+      const dataArray = Array.isArray(response.data) ? response.data : [response.data];
+      const orders: Order[] = dataArray.map(this.transformOrder);
       return {
         success: true,
         data: orders,
@@ -574,8 +577,128 @@ class ApiService {
   }
 
   async getDriverOrders(): Promise<ApiResponse<Order[]>> {
-    // Use the custom action endpoint for current driver's deliveries
-    const response = await this.client.get<any[]>('/api/v1/delivery/deliveries/by_driver/');
+    console.log('📋 Fetching driver orders...');
+    
+    // Use by_driver endpoint as primary since it has complete order data
+    // Based on backend testing, this endpoint includes ASSIGNED status deliveries
+    console.log('🚛 Using by_driver endpoint (includes complete order data)...');
+    
+    try {
+      const response = await this.client.get<any[]>('/api/v1/delivery/deliveries/by_driver/');
+      
+      if (response.success && response.data) {
+        console.log(`🔍 Raw backend response: ${response.data.length} delivery records`);
+        
+        const orders: Order[] = (response.data || []).map((backendItem, index) => {
+          const transformedOrder = this.transformOrder(backendItem);
+          console.log(`✅ Transformed order ${transformedOrder.id}:`, {
+            status: transformedOrder.status,
+            hasCoordinates: !!(transformedOrder.pickup_latitude && transformedOrder.delivery_latitude),
+            pickup_lat: transformedOrder.pickup_latitude,
+            delivery_lat: transformedOrder.delivery_latitude
+          });
+          return transformedOrder;
+        });
+        
+        console.log(`✅ Found ${orders.length} driver orders via by_driver endpoint`);
+        console.log('📋 Final transformed orders:', orders.map(o => ({
+          id: o.id,
+          status: o.status,
+          hasPickup: !!(o.pickup_latitude && o.pickup_longitude),
+          hasDelivery: !!(o.delivery_latitude && o.delivery_longitude),
+          customer: o.customer?.name
+        })));
+        
+        return {
+          success: true,
+          data: orders,
+          message: response.message
+        };
+      }
+
+      return response as ApiResponse<Order[]>;
+      
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.warn(`⚠️ by_driver endpoint failed: ${errorMessage}`);
+      
+      // If by_driver fails, try ongoing-deliveries as fallback (but it has incomplete data)
+      if (errorMessage.includes('429') || errorMessage.includes('404') || errorMessage.includes('403')) {
+        console.log('🔄 Falling back to ongoing-deliveries endpoint (incomplete data)...');
+        
+        try {
+          const fallbackResponse = await this.client.get<any>('/api/v1/delivery/deliveries/ongoing-deliveries/');
+          
+          if (fallbackResponse.success && fallbackResponse.data) {
+            // Extract deliveries array from the response
+            const deliveriesData = fallbackResponse.data.deliveries || fallbackResponse.data;
+            const ordersArray = Array.isArray(deliveriesData) ? deliveriesData : [deliveriesData];
+            
+            const orders: Order[] = ordersArray.map(this.transformOrder);
+            console.log(`⚠️ Found ${orders.length} driver orders via ongoing-deliveries endpoint (fallback - incomplete data)`);
+            return {
+              success: true,
+              data: orders,
+              message: 'Retrieved via fallback endpoint (incomplete order data)'
+            };
+          }
+          
+          return fallbackResponse as ApiResponse<Order[]>;
+          
+        } catch (fallbackError) {
+          console.error('❌ Both endpoints failed:', fallbackError);
+          return {
+            success: false,
+            data: [],
+            error: 'Failed to fetch driver orders from both endpoints'
+          };
+        }
+      }
+      
+      // Re-throw other errors
+      throw error;
+    }
+  }
+
+  async getRouteOptimization(): Promise<ApiResponse<any>> {
+    console.log('🗺️ Fetching route optimization from backend...');
+    return this.client.get<any>('/api/v1/delivery/deliveries/route-optimization/');
+  }
+
+  async getOngoingDeliveries(): Promise<ApiResponse<Order[]>> {
+    console.log('🚚 Fetching ongoing deliveries...');
+    const response = await this.client.get<any[]>('/api/v1/delivery/deliveries/ongoing-deliveries/');
+
+    // Transform backend response to match our Order type
+    if (response.success && response.data) {
+      const orders: Order[] = (response.data || []).map(this.transformOrder);
+      return {
+        success: true,
+        data: orders,
+        message: response.message
+      };
+    }
+
+    return response as ApiResponse<Order[]>;
+  }
+
+  async updateDriverLocation(latitude: number, longitude: number): Promise<ApiResponse<void>> {
+    console.log(`📍 Updating driver location: ${latitude}, ${longitude}`);
+    return this.client.post<void>('/api/v1/auth/drivers/update-location/', {
+      latitude,
+      longitude,
+      timestamp: new Date().toISOString()
+    });
+  }
+
+  async smartAcceptOrder(orderId: string): Promise<ApiResponse<any>> {
+    console.log(`🎯 Smart accepting order: ${orderId}`);
+    return this.client.post<any>(`/api/v1/delivery/deliveries/${orderId}/smart_accept/`);
+  }
+
+  async getAvailableOrdersWithDistance(): Promise<ApiResponse<Order[]>> {
+    console.log('📍 Fetching available orders with distance filtering...');
+    const response = await this.client.get<any[]>('/api/v1/delivery/deliveries/available_orders/');
 
     // Transform backend response to match our Order type
     if (response.success && response.data) {
@@ -609,10 +732,10 @@ class ApiService {
       return 'pending';
     }
 
-    // If delivery has a driver but status is still 'assigned', it means accepted but not picked up
-    if (deliveryStatus === 'assigned' && delivery?.driver) {
-      console.log('🚛 Order is assigned to driver - keeping assigned status');
-      return 'assigned';
+    // If delivery has a driver, use the delivery status directly
+    if (delivery?.driver && deliveryStatus) {
+      console.log(`🚛 Order has driver - using delivery status: ${deliveryStatus}`);
+      return deliveryStatus;
     }
 
     // Use delivery status if available, then order status, default to pending
@@ -748,6 +871,13 @@ class ApiService {
         zipCode: '',
         coordinates: undefined
       },
+      // CRITICAL: Add coordinate fields that RouteNavigationScreen expects
+      pickup_latitude: parseFloat(order.pickup_latitude) || null,
+      pickup_longitude: parseFloat(order.pickup_longitude) || null,
+      delivery_latitude: parseFloat(order.delivery_latitude) || null,
+      delivery_longitude: parseFloat(order.delivery_longitude) || null,
+      pickup_address: order.pickup_address || '',
+      delivery_address: order.delivery_address || '',
       status: this.transformOrderStatus(delivery, order),
       paymentMethod: order.payment_method || 'cash',
       subtotal: parseFloat(order.subtotal) || 0,
@@ -771,22 +901,26 @@ class ApiService {
   }
 
   async acceptOrder(orderId: string): Promise<ApiResponse<void>> {
-    console.log(`🎯 Attempting to accept order/delivery: ${orderId}`);
-
-    // Try to get the order details to find the correct delivery ID
+    console.log(`🎯 Attempting to accept order: ${orderId}`);
+    
+    // Debug: Check current user info before making the request
     try {
-      const orderResponse = await this.getOrderDetails(orderId);
-      if (orderResponse.success && orderResponse.data?.deliveryId) {
-        const deliveryId = orderResponse.data.deliveryId;
-        console.log(`✅ Found delivery ID ${deliveryId} for order ${orderId}, using for accept call`);
-        return this.client.post<void>(`/api/v1/delivery/deliveries/${deliveryId}/accept/`);
+      const userResponse = await this.client.get<any>('/whoami/');
+      console.log('🔍 Current user info:', {
+        username: userResponse.data?.username,
+        role: userResponse.data?.role,
+        is_driver: userResponse.data?.role === 'driver',
+        id: userResponse.data?.id
+      });
+      
+      if (userResponse.data?.role !== 'driver') {
+        console.warn('⚠️ User role is not "driver":', userResponse.data?.role);
+        console.warn('💡 User needs role="driver" for driver operations to work');
       }
     } catch (error) {
-      console.warn(`⚠️ Could not get order details, proceeding with original ID: ${error}`);
+      console.warn('⚠️ Could not get user info:', error);
     }
-
-    // Fallback to using the provided ID (might be delivery ID already)
-    console.log(`🔄 Using provided ID ${orderId} for accept call`);
+    
     return this.client.post<void>(`/api/v1/delivery/deliveries/${orderId}/accept/`);
   }
 
@@ -880,6 +1014,11 @@ class ApiService {
     return response as ApiResponse<Order>;
   }
 
+  // User Management
+  async getCurrentUser(): Promise<ApiResponse<any>> {
+    return this.client.get<any>('/whoami/');
+  }
+
   // Balance Management
   async getDriverBalance(): Promise<ApiResponse<DriverBalance>> {
     return this.client.get<DriverBalance>('/api/v1/auth/drivers/balance/');
@@ -962,7 +1101,8 @@ class ApiService {
 
     if (response.success && response.data) {
       console.log(`📦 Raw response data:`, response.data);
-      const orders: Order[] = (response.data || []).map(this.transformOrder);
+      const dataArray = Array.isArray(response.data) ? response.data : [response.data];
+      const orders: Order[] = dataArray.map(this.transformOrder);
       console.log(`📎 Found ${orders?.length || 0} available orders`);
 
       orders.forEach((order, index) => {
@@ -985,7 +1125,8 @@ class ApiService {
     const response = await this.client.get<any[]>(`/api/v1/auth/drivers/nearby_drivers/?latitude=${latitude}&longitude=${longitude}&radius=${radius}`);
 
     if (response.success && response.data) {
-      const drivers: Driver[] = (response.data || []).map((driverData: any) => ({
+      const dataArray = Array.isArray(response.data) ? response.data : [response.data];
+      const drivers: Driver[] = dataArray.map((driverData: any) => ({
         id: driverData.id || '',
         firstName: driverData.first_name || driverData.firstName || '',
         lastName: driverData.last_name || driverData.lastName || '',

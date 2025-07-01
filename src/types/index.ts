@@ -207,7 +207,8 @@ export interface AuthContextType {
 }
 
 export interface OrderContextType {
-  orders: Order[];
+  orders: Order[];           // Available orders (for dashboard/route)
+  driverOrders: Order[];     // Driver's accepted orders
   orderHistory: Order[];
   isLoading: boolean;
   error: string | null;
@@ -218,6 +219,7 @@ export interface OrderContextType {
   getOrderHistory: (filter?: 'today' | 'week' | 'month') => Promise<void>;
   getOrderDetails: (orderId: string) => Promise<Order | null>;
   getDriverOrders: () => Promise<void>;
+  getRouteOptimization: () => Promise<any>;
   setOrderNotificationCallback: (callback: ((order: Order) => void) | null) => void;
   setOrderAcceptedCallback: (callback: ((orderId: string) => void) | null) => void;
   canAcceptOrder: (order: Order) => boolean;
@@ -234,6 +236,7 @@ export interface DriverContextType {
   requestWithdrawal: (amount: number) => Promise<void>;
   addDeposit: (amount: number) => Promise<void>;
   recordCashCollection: (orderId: string, amount: number) => Promise<void>;
+  updateDriverLocation: (latitude: number, longitude: number) => Promise<void>;
 }
 
 // API Response Types

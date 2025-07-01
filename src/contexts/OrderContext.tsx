@@ -12,6 +12,7 @@ type OrderAction =
   | { type: 'SET_LOADING'; payload: boolean }
   | { type: 'SET_ERROR'; payload: string | null }
   | { type: 'SET_ORDERS'; payload: Order[] }
+  | { type: 'SET_DRIVER_ORDERS'; payload: Order[] }
   | { type: 'SET_ORDER_HISTORY'; payload: Order[] }
   | { type: 'UPDATE_ORDER'; payload: Order }
   | { type: 'REMOVE_ORDER'; payload: string }
@@ -20,7 +21,8 @@ type OrderAction =
 
 // State Type
 interface OrderState {
-  orders: Order[];
+  orders: Order[];           // Available orders (for dashboard/route)
+  driverOrders: Order[];     // Driver's accepted orders  
   orderHistory: Order[];
   isLoading: boolean;
   error: string | null;
@@ -29,6 +31,7 @@ interface OrderState {
 // Initial State
 const initialState: OrderState = {
   orders: [],
+  driverOrders: [],
   orderHistory: [],
   isLoading: false,
   error: null,
@@ -52,6 +55,13 @@ const orderReducer = (state: OrderState, action: OrderAction): OrderState => {
       return {
         ...state,
         orders: action.payload,
+        isLoading: false,
+        error: null,
+      };
+    case 'SET_DRIVER_ORDERS':
+      return {
+        ...state,
+        driverOrders: action.payload,
         isLoading: false,
         error: null,
       };
@@ -96,6 +106,7 @@ const orderReducer = (state: OrderState, action: OrderAction): OrderState => {
       return {
         ...state,
         orders: [],
+        driverOrders: [],
         orderHistory: [],
         error: null,
       };
@@ -356,26 +367,23 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({ children, apiBaseU
       return;
     }
 
-    console.log('🔄 Refreshing orders from API...');
+    console.log('🔄 Refreshing orders with distance filtering and smart assignment...');
     isLoadingRef.current = true;
     dispatch({ type: 'SET_LOADING', payload: true });
 
     try {
-      const response = await apiService.getActiveOrders();
+      // Use distance-filtered available orders endpoint which includes smart assignment
+      const response = await apiService.getAvailableOrdersWithDistance();
 
       if (response.success && response.data) {
-        console.log('✅ Orders fetched successfully:', response.data.length, 'orders');
+        console.log('✅ Available orders fetched successfully:', response.data.length, 'orders');
+        console.log('📋 Orders are pre-filtered by backend with smart assignment and distance criteria');
 
-        // Filter to only show available orders (pending/assigned) for driver to accept
-        const availableOrders = response.data.filter(order => 
-          order.status === 'pending' || order.status === 'assigned'
-        );
+        // Backend already filtered orders, so use them directly
+        dispatch({ type: 'SET_ORDERS', payload: response.data });
 
-        console.log(`📋 Filtered to ${availableOrders.length} available orders from ${response.data.length} total`);
-        dispatch({ type: 'SET_ORDERS', payload: availableOrders });
-
-        // Cache the filtered data
-        await Storage.setItem(STORAGE_KEYS.ACTIVE_ORDERS, availableOrders);
+        // Cache the data
+        await Storage.setItem(STORAGE_KEYS.ACTIVE_ORDERS, response.data);
 
         // Clear any previous errors
         dispatch({ type: 'SET_ERROR', payload: null });
@@ -390,11 +398,11 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({ children, apiBaseU
           }, 1000);
         }
       } else {
-        console.error('❌ Failed to fetch orders:', response.error);
-        dispatch({ type: 'SET_ERROR', payload: response.error || 'Failed to fetch orders' });
+        console.error('❌ Failed to fetch available orders:', response.error);
+        dispatch({ type: 'SET_ERROR', payload: response.error || 'Failed to fetch available orders' });
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to fetch orders';
+      const message = error instanceof Error ? error.message : 'Failed to fetch available orders';
       console.error('💥 Order refresh error:', message);
 
       // Only show error if not a network/auth related error during startup
@@ -412,38 +420,54 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({ children, apiBaseU
 
   const acceptOrder = useCallback(async (orderId: string): Promise<boolean> => {
     try {
-      const response = await apiService.acceptOrder(orderId);
+      console.log(`🎯 Accepting order with smart assignment: ${orderId}`);
+      
+      // Try smart accept first (includes assignment validation)
+      let response = await apiService.smartAcceptOrder(orderId);
+      
+      // If smart accept fails, fall back to regular accept
+      if (!response.success) {
+        console.warn(`⚠️ Smart accept failed, trying regular accept: ${response.error}`);
+        response = await apiService.acceptOrder(orderId);
+      }
 
       if (response.success) {
-        // Remove accepted order from active orders list (driver moves to order details)
+        console.log(`✅ Order ${orderId} accepted successfully on backend`);
+        
+        // Remove accepted order from available orders list
         const updatedOrders = ordersRef.current.filter(order => order.id !== orderId);
-
         dispatch({ type: 'SET_ORDERS', payload: updatedOrders });
-
+        
         // Update cache
         await Storage.setItem(STORAGE_KEYS.ACTIVE_ORDERS, updatedOrders);
 
         // Mark order as handled to stop notifications
         realtimeService.markOrderAsHandled(orderId);
-        console.log(`✅ Order ${orderId} accepted and removed from active list - notifications stopped`);
+        console.log(`🔕 Order ${orderId} marked as handled - notifications stopped`);
+        
+        // Refresh driver orders to show the accepted order in AcceptedOrders screen
+        console.log('🔄 Refreshing driver orders after acceptance...');
+        await getDriverOrders();
         
         // Trigger accepted callback if set (for ongoing deliveries refresh)
         if (acceptedCallback) {
-          console.log('📋 Triggering accepted callback for ongoing deliveries refresh');
+          console.log('📋 Triggering accepted callback');
           acceptedCallback(orderId);
         }
 
         return true;
       } else {
+        console.error(`❌ Failed to accept order ${orderId}:`, response.error);
         dispatch({ type: 'SET_ERROR', payload: response.error || 'Failed to accept order' });
         return false;
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to accept order';
+      console.error(`❌ Error accepting order ${orderId}:`, message);
       dispatch({ type: 'SET_ERROR', payload: message });
       return false;
     }
-  }, [acceptedCallback]); // Remove state.orders dependency
+  }, [acceptedCallback, getDriverOrders]);
 
   const declineOrder = useCallback(async (orderId: string): Promise<void> => {
     try {
@@ -561,23 +585,67 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({ children, apiBaseU
     dispatch({ type: 'SET_LOADING', payload: true });
 
     try {
+      console.log('📋 Fetching driver orders...');
       const response = await apiService.getDriverOrders();
 
       if (response.success && response.data) {
-        dispatch({ type: 'SET_ORDERS', payload: response.data });
+        console.log(`✅ Found ${response.data.length} driver orders`);
+        dispatch({ type: 'SET_DRIVER_ORDERS', payload: response.data });
 
-        // Cache the data
-        await Storage.setItem(STORAGE_KEYS.ACTIVE_ORDERS, response.data);
+        // Cache the data with a different key for driver orders
+        await Storage.setItem(STORAGE_KEYS.ORDER_HISTORY, response.data);
+        
+        // Clear any previous errors on success
+        dispatch({ type: 'SET_ERROR', payload: null });
       } else {
-        throw new Error(response.error || 'Failed to fetch driver orders');
+        const errorMsg = response.error || 'Failed to fetch driver orders';
+        console.error('❌ API returned error:', errorMsg);
+        
+        // Don't throw error for certain cases, just log
+        if (errorMsg.includes('429') || errorMsg.includes('403') || errorMsg.includes('404')) {
+          console.warn('⚠️ Driver orders endpoint issue - user may need proper role assignment');
+          dispatch({ type: 'SET_DRIVER_ORDERS', payload: [] }); // Show empty list instead of error
+          dispatch({ type: 'SET_ERROR', payload: null });
+        } else {
+          throw new Error(errorMsg);
+        }
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to fetch driver orders';
-      dispatch({ type: 'SET_ERROR', payload: message });
+      console.error('❌ Error fetching driver orders:', message);
+      
+      // For auth/permission errors, don't show error to user
+      if (message.includes('429') || message.includes('403') || message.includes('404')) {
+        console.warn('⚠️ Suppressing driver orders error - likely auth/permission issue');
+        dispatch({ type: 'SET_DRIVER_ORDERS', payload: [] });
+        dispatch({ type: 'SET_ERROR', payload: null });
+      } else {
+        dispatch({ type: 'SET_ERROR', payload: message });
+      }
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false });
     }
   }, []); // Empty dependency array since this function doesn't depend on any state
+
+  const getRouteOptimization = useCallback(async (): Promise<any> => {
+    try {
+      console.log('🗺️ Getting route optimization from backend...');
+      const response = await apiService.getRouteOptimization();
+
+      if (response.success && response.data) {
+        console.log('✅ Route optimization received:', response.data);
+        return response.data;
+      } else {
+        console.error('❌ Failed to get route optimization:', response.error);
+        return null;
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to get route optimization';
+      console.error('❌ Error getting route optimization:', message);
+      return null;
+    }
+  }, []);
+
 
   const setOrderNotificationCallback = useCallback((callback: ((order: Order) => void) | null) => {
     setNotificationCallback(() => callback);
@@ -587,32 +655,63 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({ children, apiBaseU
     setAcceptedCallback(() => callback);
   }, []);
 
-  // Function to check if driver can accept an order (capacity management)
+  // Function to check if driver can accept an order (smart assignment logic)
   const canAcceptOrder = (order: Order): boolean => {
     if (!order) return false;
     
-    // Get current accepted orders count by type
-    const currentAcceptedOrders = state.orders.filter(o => 
-      o.status === 'assigned' || o.status === 'accepted'
+    // Get current driver orders (accepted/ongoing)
+    const currentDriverOrders = state.driverOrders.filter(o => 
+      o.status === 'assigned' || o.status === 'accepted' || o.status === 'in_transit'
     );
     
-    const foodOrders = currentAcceptedOrders.filter(o => 
+    // Check for food/fast delivery restrictions
+    const foodOrders = currentDriverOrders.filter(o => 
+      o.delivery_type === 'food' || o.delivery_type === 'fast' ||
       o.deliveryType === 'food' || o.deliveryType === 'fast'
     );
-    const regularOrders = currentAcceptedOrders.filter(o => 
-      o.deliveryType === 'regular' || !o.deliveryType
+    const regularOrders = currentDriverOrders.filter(o => 
+      (o.delivery_type === 'regular' || o.deliveryType === 'regular') || 
+      (!o.delivery_type && !o.deliveryType)
     );
     
-    // Check capacity limits
-    if (order.deliveryType === 'food' || order.deliveryType === 'fast') {
-      return foodOrders.length < 1; // Max 1 food/fast order
-    } else {
-      return regularOrders.length < 5; // Max 5 regular orders
+    console.log('🔍 Smart assignment check:', {
+      orderType: order.delivery_type || order.deliveryType || 'regular',
+      currentFoodOrders: foodOrders.length,
+      currentRegularOrders: regularOrders.length,
+      totalDriverOrders: currentDriverOrders.length
+    });
+    
+    // Smart assignment rules:
+    // 1. If driver has food/fast delivery, they can't accept new orders
+    if (foodOrders.length > 0) {
+      console.log('❌ Driver already has food/fast delivery - cannot accept new orders');
+      return false;
     }
+    
+    // 2. Food/fast orders have priority and block other orders
+    if (order.delivery_type === 'food' || order.delivery_type === 'fast' || 
+        order.deliveryType === 'food' || order.deliveryType === 'fast') {
+      if (currentDriverOrders.length > 0) {
+        console.log('❌ Driver has ongoing orders - cannot accept food/fast delivery');
+        return false;
+      }
+      console.log('✅ Food/fast delivery can be accepted - no ongoing orders');
+      return true;
+    }
+    
+    // 3. Regular orders - check capacity limits
+    if (regularOrders.length >= 5) {
+      console.log('❌ Driver at capacity for regular orders (5/5)');
+      return false;
+    }
+    
+    console.log('✅ Regular order can be accepted');
+    return true;
   };
 
   const contextValue: OrderContextType = {
     orders: state.orders,
+    driverOrders: state.driverOrders,
     orderHistory: state.orderHistory,
     isLoading: state.isLoading,
     error: state.error,
@@ -623,6 +722,7 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({ children, apiBaseU
     getOrderHistory,
     getOrderDetails,
     getDriverOrders,
+    getRouteOptimization,
     setOrderNotificationCallback,
     setOrderAcceptedCallback,
     canAcceptOrder,

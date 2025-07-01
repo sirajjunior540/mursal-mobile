@@ -19,6 +19,7 @@ import ContextErrorBoundary from './src/components/ContextErrorBoundary';
 import { LoadingOverlay } from './src/components/LoadingOverlay';
 import { NetworkStatus } from './src/components/NetworkStatus';
 import { AppUpdatePrompt } from './src/components/AppUpdatePrompt';
+import IncomingOrderModal from './src/components/IncomingOrderModal';
 
 // Screens
 import { SplashScreen } from './src/screens/SplashScreen';
@@ -33,9 +34,10 @@ import RouteNavigationScreen from './src/screens/RouteNavigationScreen';
 
 // Context providers
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
-import { OrderProvider } from './src/contexts/OrderContext';
+import { OrderProvider, useOrders } from './src/contexts/OrderContext';
 import { DriverProvider } from './src/contexts/DriverContext';
 import { TenantProvider } from './src/contexts/TenantContext';
+import { Order } from './src/types';
 
 // Services and utilities
 import { theme } from './src/shared/styles/theme';
@@ -131,9 +133,14 @@ const MainTabs = () => {
         options={{ tabBarLabel: 'Home' }}
       />
       <Tab.Screen 
+        name="RouteNavigation" 
+        component={RouteNavigationScreen} 
+        options={{ tabBarLabel: 'Available' }}
+      />
+      <Tab.Screen 
         name="AcceptedOrders" 
         component={AcceptedOrdersScreen} 
-        options={{ tabBarLabel: 'Orders' }}
+        options={{ tabBarLabel: 'My Orders' }}
       />
       <Tab.Screen 
         name="History" 
@@ -146,6 +153,79 @@ const MainTabs = () => {
         options={{ tabBarLabel: 'Profile' }}
       />
     </Tab.Navigator>
+  );
+};
+
+// Incoming Order Modal Manager Component
+const IncomingOrderManager = () => {
+  const { 
+    acceptOrder, 
+    declineOrder, 
+    setOrderNotificationCallback, 
+    canAcceptOrder 
+  } = useOrders();
+  const [incomingOrder, setIncomingOrder] = useState<Order | null>(null);
+  const [showModal, setShowModal] = useState(false);
+
+  useEffect(() => {
+    // Set up the notification callback
+    setOrderNotificationCallback((order: Order) => {
+      console.log('🔔 New order notification received:', order.id);
+      setIncomingOrder(order);
+      setShowModal(true);
+    });
+
+    // Cleanup
+    return () => {
+      setOrderNotificationCallback(null);
+    };
+  }, [setOrderNotificationCallback]);
+
+  const handleAccept = async (orderId: string) => {
+    try {
+      console.log('✅ Accepting order:', orderId);
+      const success = await acceptOrder(orderId);
+      if (success) {
+        setShowModal(false);
+        setIncomingOrder(null);
+      }
+    } catch (error) {
+      console.error('❌ Error accepting order:', error);
+    }
+  };
+
+  const handleDecline = async (orderId: string) => {
+    try {
+      console.log('❌ Declining order:', orderId);
+      await declineOrder(orderId);
+      setShowModal(false);
+      setIncomingOrder(null);
+    } catch (error) {
+      console.error('❌ Error declining order:', error);
+    }
+  };
+
+  const handleSkip = (orderId: string) => {
+    console.log('⏭️ Skipping order:', orderId);
+    setShowModal(false);
+    setIncomingOrder(null);
+  };
+
+  const handleClose = () => {
+    setShowModal(false);
+    setIncomingOrder(null);
+  };
+
+  return (
+    <IncomingOrderModal
+      visible={showModal}
+      order={incomingOrder}
+      onAccept={handleAccept}
+      onDecline={handleDecline}
+      onSkip={handleSkip}
+      onClose={handleClose}
+      timerDuration={30}
+    />
   );
 };
 
@@ -346,6 +426,7 @@ function App() {
                           websocketUrl={WEBSOCKET_URL}
                         >
                           <AppNavigator />
+                          <IncomingOrderManager />
                           <NetworkStatus />
                           <AppUpdatePrompt checkForUpdates={true} />
                         </OrderProvider>
