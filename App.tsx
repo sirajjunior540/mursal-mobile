@@ -16,16 +16,13 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import { logger } from './src/infrastructure/logging/logger';
 import ErrorBoundary from './src/components/ErrorBoundary';
 import ContextErrorBoundary from './src/components/ContextErrorBoundary';
-import { LoadingOverlay } from './src/components/LoadingOverlay';
 import { NetworkStatus } from './src/components/NetworkStatus';
-import { AppUpdatePrompt } from './src/components/AppUpdatePrompt';
 import IncomingOrderModal from './src/components/IncomingOrderModal';
 
 // Screens
 import { SplashScreen } from './src/screens/SplashScreen';
 import LoginScreen from './src/screens/auth/LoginScreen';
 import OrderDetailsScreen from './src/screens/OrderDetailsScreen';
-import OngoingDeliveryScreen from './src/screens/OngoingDeliveryScreen';
 import AcceptedOrdersScreen from './src/screens/AcceptedOrdersScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
@@ -45,7 +42,7 @@ import { locationService } from './src/services/locationService';
 import { requestNotificationPermissions } from './src/utils/permissions';
 import { notificationService } from './src/services/notificationService';
 import { haptics } from './src/utils/haptics';
-import { ENV, getApiUrl, getWebSocketUrl } from './src/config/environment';
+import { ENV, getTenantHost } from './src/config/environment';
 
 // Environment configuration
 const API_BASE_URL = ENV.API_BASE_URL;
@@ -161,8 +158,7 @@ const IncomingOrderManager = () => {
   const { 
     acceptOrder, 
     declineOrder, 
-    setOrderNotificationCallback, 
-    canAcceptOrder 
+    setOrderNotificationCallback
   } = useOrders();
   const [incomingOrder, setIncomingOrder] = useState<Order | null>(null);
   const [showModal, setShowModal] = useState(false);
@@ -170,7 +166,6 @@ const IncomingOrderManager = () => {
   useEffect(() => {
     // Set up the notification callback
     setOrderNotificationCallback((order: Order) => {
-      console.log('🔔 New order notification received:', order.id);
       setIncomingOrder(order);
       setShowModal(true);
     });
@@ -181,32 +176,27 @@ const IncomingOrderManager = () => {
     };
   }, [setOrderNotificationCallback]);
 
-  const handleAccept = async (orderId: string) => {
+  const handleAccept = async (_orderId: string) => {
     try {
-      console.log('✅ Accepting order:', orderId);
-      const success = await acceptOrder(orderId);
+      const success = await acceptOrder(_orderId);
       if (success) {
         setShowModal(false);
         setIncomingOrder(null);
       }
     } catch (error) {
-      console.error('❌ Error accepting order:', error);
     }
   };
 
-  const handleDecline = async (orderId: string) => {
+  const handleDecline = async (_orderId: string) => {
     try {
-      console.log('❌ Declining order:', orderId);
-      await declineOrder(orderId);
+      await declineOrder(_orderId);
       setShowModal(false);
       setIncomingOrder(null);
     } catch (error) {
-      console.error('❌ Error declining order:', error);
     }
   };
 
   const handleSkip = (orderId: string) => {
-    console.log('⏭️ Skipping order:', orderId);
     setShowModal(false);
     setIncomingOrder(null);
   };
@@ -361,7 +351,7 @@ function App() {
           const response = await fetch(`${API_BASE_URL}/whoami/`, {
             method: 'GET',
             headers: {
-              'Host': 'sirajjunior.192.168.1.137',
+              'Host': getTenantHost(),
               'Content-Type': 'application/json',
             },
           });
@@ -406,7 +396,7 @@ function App() {
   }, []);
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
+    <GestureHandlerRootView style={styles.container}>
       <ErrorBoundary>
         <SafeAreaProvider>
           <StatusBar 
@@ -428,7 +418,6 @@ function App() {
                           <AppNavigator />
                           <IncomingOrderManager />
                           <NetworkStatus />
-                          <AppUpdatePrompt checkForUpdates={true} />
                         </OrderProvider>
                       </ContextErrorBoundary>
                     </DriverProvider>
@@ -444,10 +433,14 @@ function App() {
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
   loadingContainer: {
     flex: 1,
     backgroundColor: theme.colors.background,
   },
 });
+
 
 export default App;

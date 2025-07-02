@@ -53,11 +53,15 @@ class SecureStorage {
    */
   static async removeSecureItem(key: string): Promise<void> {
     try {
-      await Keychain.resetInternetCredentials(key);
+      await Keychain.resetInternetCredentials({ server: key });
     } catch (error) {
       console.error('Error removing secure item:', error);
       // Fallback to AsyncStorage
-      await AsyncStorage.removeItem(`secure_${key}`);
+      try {
+        await AsyncStorage.removeItem(`secure_${key}`);
+      } catch (fallbackError) {
+        console.error('Fallback removal also failed:', fallbackError);
+      }
     }
   }
 

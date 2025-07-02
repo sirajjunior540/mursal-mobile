@@ -449,6 +449,21 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({ children, apiBaseU
         console.log('🔄 Refreshing driver orders after acceptance...');
         await getDriverOrders();
         
+        // Check if driver can still accept more orders before deciding to refresh
+        const acceptedOrder = ordersRef.current.find(order => order.id === orderId);
+        const shouldPreserveOrders = acceptedOrder && 
+          (acceptedOrder.delivery_type === 'regular' || !acceptedOrder.delivery_type);
+        
+        if (shouldPreserveOrders) {
+          console.log('📋 Regular order accepted - preserving other available orders for multiple acceptance');
+          // For regular orders, don't refresh immediately as driver can accept more
+          // The realtime service will handle updates
+        } else {
+          console.log('🔄 Food/fast order accepted - refreshing available orders...');
+          // For food/fast orders, refresh as driver cannot accept more
+          await refreshOrders();
+        }
+        
         // Trigger accepted callback if set (for ongoing deliveries refresh)
         if (acceptedCallback) {
           console.log('📋 Triggering accepted callback');

@@ -5,6 +5,7 @@ import {
   DriverBalance, 
   Order, 
   OrderStatus,
+  PaymentMethod,
   BalanceTransaction,
   LoginRequest,
   LoginResponse,
@@ -13,7 +14,195 @@ import {
 } from '../types';
 import { API_CONFIG, TENANT_CONFIG, STORAGE_KEYS } from '../constants';
 import { Storage, SecureStorage } from '../utils';
-import { ENV, getApiUrl, getTenantHost, apiDebug } from '../config/environment';
+import { ENV, getTenantHost, apiDebug } from '../config/environment';
+
+// Backend data interfaces
+export interface BackendDelivery {
+  id: string;
+  order_id?: string;
+  order?: BackendOrder;
+  driver?: string | null;
+  driver_id?: string;
+  driver_name?: string;
+  delivery_status?: string;
+  status?: string;
+  tracking_url?: string;
+  proof_of_delivery?: string;
+  signature?: string;
+  created_at?: string;
+  updated_at?: string;
+  pickup_time?: string;
+  delivery_time?: string;
+  estimated_delivery_time?: string;
+  customer_id?: string | number;
+  customer_name?: string;
+  customer_phone?: string;
+  customer_email?: string;
+  customer?: BackendCustomer;
+  customer_details?: BackendCustomer;
+}
+
+export interface BackendOrder {
+  id: string;
+  order_number?: string;
+  orderNumber?: string;
+  customer?: BackendCustomer;
+  customer_name?: string;
+  customer_phone?: string;
+  customer_email?: string;
+  customer_id?: string | number;
+  customer_details?: BackendCustomer;
+  total_amount?: string | number;
+  delivery_fee?: string | number;
+  payment_status?: string;
+  order_status?: string;
+  status?: string;
+  special_instructions?: string;
+  items?: BackendOrderItem[];
+  order_items?: BackendOrderItem[];
+  created_at?: string;
+  delivery_address?: string;
+  delivery_notes?: string;
+  estimated_delivery_time?: string;
+  pickup_time?: string;
+  delivery_time?: string;
+  // Coordinate fields
+  pickup_latitude?: string | number;
+  pickup_longitude?: string | number;
+  delivery_latitude?: string | number;
+  delivery_longitude?: string | number;
+  pickup_address?: string;
+  // Payment method
+  payment_method?: string;
+  // Additional order fields
+  subtotal?: string | number;
+  tax?: string | number;
+  total?: string | number;
+  scheduled_delivery_time?: string;
+}
+
+interface BackendCustomer {
+  id?: string;
+  user?: {
+    first_name?: string;
+    last_name?: string;
+  };
+  name?: string;
+  full_name?: string;
+  first_name?: string;
+  last_name?: string;
+  phone?: string;
+  phone_number?: string;
+  email?: string;
+}
+
+interface BackendOrderItem {
+  id?: string;
+  product_details?: {
+    name?: string;
+  };
+  product?: {
+    name?: string;
+  };
+  name?: string;
+  quantity?: number;
+  price?: string | number;
+  notes?: string;
+}
+
+interface RouteOptimizationResponse {
+  optimized_route?: Array<{
+    delivery_id: string;
+    order_id: string;
+    sequence: number;
+    estimated_distance_km?: number;
+    estimated_duration_minutes?: number;
+    pickup_coordinates?: {
+      latitude: number;
+      longitude: number;
+    };
+    delivery_coordinates?: {
+      latitude: number;
+      longitude: number;
+    };
+  }>;
+  total_distance_km?: number;
+  total_duration_minutes?: number;
+  optimization_algorithm?: string;
+  created_at?: string;
+}
+
+interface SmartAcceptResponse {
+  accepted: boolean;
+  delivery_id?: string;
+  message?: string;
+  assignment_reason?: string;
+  estimated_pickup_time?: string;
+}
+
+interface EstimatePickupResponse {
+  estimated_pickup_time?: string;
+  estimated_duration_minutes?: number;
+  estimated_distance_km?: number;
+  route_instructions?: string[];
+}
+
+interface BackendDriver {
+  id: string;
+  first_name?: string;
+  lastName?: string;
+  firstName?: string;
+  last_name?: string;
+  email?: string;
+  phone?: string;
+  phone_number?: string;
+  rating?: number;
+  total_deliveries?: number;
+  is_available?: boolean;
+  is_online?: boolean;
+  profile_image?: string;
+  avatar?: string;
+  distance_km?: number;
+  vehicle?: {
+    type?: string;
+    model?: string;
+    license_plate?: string;
+  };
+}
+
+// Token response interface
+export interface TokenResponse {
+  access?: string;
+  token?: string;
+  refresh?: string;
+}
+
+// User info response interface
+export interface UserInfoResponse {
+  username?: string;
+  role?: string;
+  is_driver?: boolean;
+  id?: string;
+}
+
+// Smart delivery request data interface
+interface SmartDeliveryData {
+  location?: string;
+  latitude?: number;
+  longitude?: number;
+  notes?: string;
+}
+
+// Smart status update data interface
+interface SmartStatusUpdateData extends SmartDeliveryData {
+  status: string;
+}
+
+// Decline delivery data interface
+interface DeclineDeliveryData {
+  location?: string;
+  reason?: string;
+}
 
 /**
  * HTTP Client for API requests
@@ -46,7 +235,9 @@ class HttpClient {
 
     const defaultHeaders: Record<string, string> = {
       'Content-Type': 'application/json',
-      'Host': getTenantHost(), // Required for Django tenant resolution
+      // For physical phone, try both Host header and custom header
+      'Host': getTenantHost(),
+      'X-Tenant-Host': getTenantHost(),
     };
 
     // Add Authorization header only if token exists and is valid
@@ -56,7 +247,7 @@ class HttpClient {
 
     // Log API calls for debugging
     apiDebug(`${options.method || 'GET'} ${url}`);
-    apiDebug('Host header:', getTenantHost());
+    apiDebug('Headers:', defaultHeaders);
     if (token) {
       apiDebug('Using auth token:', `${token.substring(0, 20)}...`);
     } else {
@@ -72,7 +263,7 @@ class HttpClient {
     };
 
     try {
-      console.log('Making API request to:', url);
+      apiDebug('Making API request to:', url);
 
       // React Native compatible timeout using Promise.race
       const fetchPromise = fetch(url, config);
@@ -94,7 +285,7 @@ class HttpClient {
         throw new Error(data?.message || data?.detail || `HTTP ${response.status}`);
       }
 
-      console.log(`API Success: ${url}`, data);
+      apiDebug(`API Success: ${url}`, data);
       return {
         success: true,
         data,
@@ -114,7 +305,7 @@ class HttpClient {
         }
       }
 
-      console.log(`API Error [${endpoint}]:`, error);
+      apiDebug(`API Error [${endpoint}]:`, error);
       console.log('Request URL:', url);
 
       // Only log headers for non-authentication errors to reduce log noise
@@ -135,11 +326,11 @@ class HttpClient {
         if (error.message.includes('timeout')) {
           errorMessage = 'Request timed out. Please check your internet connection and try again.';
         } else if (error.message.includes('Network request failed')) {
-          errorMessage = 'Network error. Please check your internet connection and try again.';
+          errorMessage = `Network error. Cannot reach ${this.baseURL}. Check if phone and computer are on same WiFi network.`;
         } else if (error.message.includes('fetch')) {
-          errorMessage = 'Connection failed. Please check if the server is running and try again.';
+          errorMessage = `Connection failed to ${this.baseURL}. Check if Django server is running with: python manage.py runserver 0.0.0.0:8000`;
         } else if (error.message.includes('ERR_NETWORK')) {
-          errorMessage = `Network connection failed. Check if server is accessible at ${  this.baseURL}`;
+          errorMessage = `Network connection failed. Server ${this.baseURL} not accessible from phone.`;
         }
       }
 
@@ -155,14 +346,14 @@ class HttpClient {
     return this.request<T>(endpoint, { method: 'GET' });
   }
 
-  async post<T>(endpoint: string, data?: any): Promise<ApiResponse<T>> {
+  async post<T, D = unknown>(endpoint: string, data?: D): Promise<ApiResponse<T>> {
     return this.request<T>(endpoint, {
       method: 'POST',
       body: data ? JSON.stringify(data) : undefined,
     });
   }
 
-  async put<T>(endpoint: string, data?: any): Promise<ApiResponse<T>> {
+  async put<T, D = unknown>(endpoint: string, data?: D): Promise<ApiResponse<T>> {
     return this.request<T>(endpoint, {
       method: 'PUT',
       body: data ? JSON.stringify(data) : undefined,
@@ -173,7 +364,7 @@ class HttpClient {
     return this.request<T>(endpoint, { method: 'DELETE' });
   }
 
-  async patch<T>(endpoint: string, data?: any): Promise<ApiResponse<T>> {
+  async patch<T, D = unknown>(endpoint: string, data?: D): Promise<ApiResponse<T>> {
     return this.request<T>(endpoint, {
       method: 'PATCH',
       body: data ? JSON.stringify(data) : undefined,
@@ -211,7 +402,7 @@ class HttpClient {
 
       return token;
     } catch (error) {
-      console.error('⚠️ Token validation error:', error);
+      apiDebug('Token validation error:', error);
       return token; // Return token anyway, let server validate
     }
   }
@@ -238,18 +429,24 @@ class HttpClient {
 
       console.log('🔄 Making token refresh request to:', url);
 
-      const response = await fetch(url, {
+      // React Native compatible timeout using Promise.race
+      const fetchPromise = fetch(url, {
         method: 'POST',
         headers,
         body: JSON.stringify({
           refresh: refreshToken
         }),
-        signal: AbortSignal.timeout(this.timeout),
       });
+      
+      const timeoutPromise = new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new Error(`Token refresh timeout after ${this.timeout}ms`)), this.timeout)
+      );
+
+      const response = await Promise.race([fetchPromise, timeoutPromise]);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        console.error('❌ Token refresh failed:', response.status, errorData);
+        apiDebug('Token refresh failed:', response.status, errorData);
 
         // If refresh token is invalid, clear all auth data
         if (response.status === 401 || response.status === 403) {
@@ -274,11 +471,11 @@ class HttpClient {
 
         return true;
       } else {
-        console.error('❌ Refresh response missing access token:', data);
+        apiDebug('Refresh response missing access token:', data);
         return false;
       }
     } catch (error) {
-      console.error('❌ Token refresh network error:', error);
+      apiDebug('Token refresh network error:', error);
       return false;
     }
   }
@@ -286,7 +483,7 @@ class HttpClient {
   /**
    * Check if an error is an authentication error
    */
-  private isAuthError(error: any): boolean {
+  private isAuthError(error: unknown): boolean {
     if (!error) return false;
 
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -332,7 +529,7 @@ class ApiService {
     const tenantId = credentials.tenantId || 'sirajjunior';
 
     // First, get the JWT token
-    const tokenResponse = await this.client.post<any>('/api/v1/auth/token/', {
+    const tokenResponse = await this.client.post<TokenResponse>('/api/v1/auth/token/', {
       username: credentials.username,
       password: credentials.password
     });
@@ -340,17 +537,17 @@ class ApiService {
     if (!tokenResponse.success || !tokenResponse.data) {
       return {
         success: false,
-        data: null as any,
+        data: null!,
         error: tokenResponse.error || 'Invalid email or password'
       };
     }
 
     // Store the access token securely
-    const token = tokenResponse.data.access || tokenResponse.data.token;
-    await SecureStorage.setAuthToken(token);
+    const token = tokenResponse.data?.access || tokenResponse.data?.token;
+    await SecureStorage.setAuthToken(token || '');
 
     // Store refresh token if available
-    if (tokenResponse.data.refresh) {
+    if (tokenResponse.data?.refresh) {
       await SecureStorage.setRefreshToken(tokenResponse.data.refresh);
     }
 
@@ -360,7 +557,7 @@ class ApiService {
     if (!driverResponse.success || !driverResponse.data) {
       return {
         success: false,
-        data: null as any,
+        data: null!,
         error: 'Failed to fetch driver profile'
       };
     }
@@ -373,8 +570,8 @@ class ApiService {
       firstName: driverResponse.data.firstName || '',
       lastName: driverResponse.data.lastName || '',
       phone: driverResponse.data.phone || '',
-      token,
-      tenantId
+      token: token || '',
+      tenantId: tenantId || 'sirajjunior'
     };
 
     const tenant: Tenant = {
@@ -425,24 +622,25 @@ class ApiService {
       ? `/api/v1/auth/drivers/${driverId}/` 
       : '/api/v1/auth/drivers/';
 
-    const response = await this.client.get<any>(endpoint);
+    const response = await this.client.get<unknown>(endpoint);
 
     // Transform backend response to match our Driver type
     if (response.success && response.data) {
+      const driverData = response.data as Record<string, unknown>;
       const driver: Driver = {
-        id: response.data.id || '',
-        firstName: response.data.first_name || response.data.firstName || '',
-        lastName: response.data.last_name || response.data.lastName || '',
-        email: response.data.email || '',
-        phone: response.data.phone_number || response.data.phone || '',
-        rating: response.data.rating || 0,
-        totalDeliveries: response.data.total_deliveries || 0,
-        isOnline: response.data.is_available || response.data.is_online || false,
-        profileImage: response.data.profile_image || response.data.avatar,
-        vehicleInfo: response.data.vehicle ? {
-          type: response.data.vehicle.type,
-          model: response.data.vehicle.model,
-          licensePlate: response.data.vehicle.license_plate
+        id: String(driverData.id || ''),
+        firstName: String(driverData.first_name || driverData.firstName || ''),
+        lastName: String(driverData.last_name || driverData.lastName || ''),
+        email: String(driverData.email || ''),
+        phone: String(driverData.phone_number || driverData.phone || ''),
+        rating: Number(driverData.rating || 0),
+        totalDeliveries: Number(driverData.total_deliveries || 0),
+        isOnline: Boolean(driverData.is_available || driverData.is_online || false),
+        profileImage: String(driverData.profile_image || driverData.avatar || ''),
+        vehicleInfo: driverData.vehicle ? {
+          type: String((driverData.vehicle as Record<string, unknown>).type || ''),
+          model: String((driverData.vehicle as Record<string, unknown>).model || ''),
+          licensePlate: String((driverData.vehicle as Record<string, unknown>).license_plate || '')
         } : undefined
       };
 
@@ -453,7 +651,11 @@ class ApiService {
       };
     }
 
-    return response;
+    return {
+      success: false,
+      data: null!,
+      error: 'Failed to fetch driver profile'
+    };
   }
 
   async updateDriverStatus(isOnline: boolean): Promise<ApiResponse<void>> {
@@ -476,7 +678,7 @@ class ApiService {
     if (!driverId) {
       return {
         success: false,
-        data: null as any,
+        data: null!,
         error: 'Driver ID not found'
       };
     }
@@ -493,7 +695,7 @@ class ApiService {
   // Orders
   async getActiveOrders(): Promise<ApiResponse<Order[]>> {
     // Get available orders for the driver to accept (unassigned/broadcast orders)
-    const response = await this.client.get<any[]>('/api/v1/delivery/deliveries/available_orders/');
+    const response = await this.client.get<BackendDelivery[]>('/api/v1/delivery/deliveries/available_orders/');
 
     // Transform backend response to match our Order type
     if (response.success && response.data) {
@@ -502,7 +704,7 @@ class ApiService {
         console.log(`Order ${index}:`, {
           id: item.id,
           order_id: item.order?.id,
-          order_number: item.order?.order_number || item.order_number,
+          order_number: item.order?.order_number,
           has_order_object: !!item.order,
           driver: item.driver,
           status: item.status,
@@ -524,7 +726,7 @@ class ApiService {
   async getOrderHistory(filter?: string): Promise<ApiResponse<Order[]>> {
     // Use the correct ViewSet endpoint for deliveries with optional filtering
     const endpoint = filter ? `/api/v1/delivery/deliveries/?${filter}` : '/api/v1/delivery/deliveries/';
-    const response = await this.client.get<any[]>(endpoint);
+    const response = await this.client.get<BackendDelivery[]>(endpoint);
 
     // Transform backend response to match our Order type
     if (response.success && response.data) {
@@ -542,7 +744,7 @@ class ApiService {
 
   async getCompletedOrders(): Promise<ApiResponse<Order[]>> {
     // Use the custom action endpoint for completed deliveries
-    const response = await this.client.get<any[]>('/api/v1/delivery/deliveries/completed/');
+    const response = await this.client.get<BackendDelivery[]>('/api/v1/delivery/deliveries/completed/');
 
     // Transform backend response to match our Order type
     if (response.success && response.data) {
@@ -560,7 +762,7 @@ class ApiService {
 
   async getFailedOrders(): Promise<ApiResponse<Order[]>> {
     // Use the custom action endpoint for failed deliveries
-    const response = await this.client.get<any[]>('/api/v1/delivery/deliveries/failed/');
+    const response = await this.client.get<BackendDelivery[]>('/api/v1/delivery/deliveries/failed/');
 
     // Transform backend response to match our Order type
     if (response.success && response.data) {
@@ -584,12 +786,12 @@ class ApiService {
     console.log('🚛 Using by_driver endpoint (includes complete order data)...');
     
     try {
-      const response = await this.client.get<any[]>('/api/v1/delivery/deliveries/by_driver/');
+      const response = await this.client.get<BackendDelivery[]>('/api/v1/delivery/deliveries/by_driver/');
       
       if (response.success && response.data) {
         console.log(`🔍 Raw backend response: ${response.data.length} delivery records`);
         
-        const orders: Order[] = (response.data || []).map((backendItem, index) => {
+        const orders: Order[] = (response.data || []).map((backendItem) => {
           const transformedOrder = this.transformOrder(backendItem);
           console.log(`✅ Transformed order ${transformedOrder.id}:`, {
             status: transformedOrder.status,
@@ -627,11 +829,11 @@ class ApiService {
         console.log('🔄 Falling back to ongoing-deliveries endpoint (incomplete data)...');
         
         try {
-          const fallbackResponse = await this.client.get<any>('/api/v1/delivery/deliveries/ongoing-deliveries/');
+          const fallbackResponse = await this.client.get<BackendDelivery[]>('/api/v1/delivery/deliveries/ongoing-deliveries/');
           
           if (fallbackResponse.success && fallbackResponse.data) {
             // Extract deliveries array from the response
-            const deliveriesData = fallbackResponse.data.deliveries || fallbackResponse.data;
+            const deliveriesData = fallbackResponse.data;
             const ordersArray = Array.isArray(deliveriesData) ? deliveriesData : [deliveriesData];
             
             const orders: Order[] = ordersArray.map(this.transformOrder);
@@ -660,14 +862,14 @@ class ApiService {
     }
   }
 
-  async getRouteOptimization(): Promise<ApiResponse<any>> {
+  async getRouteOptimization(): Promise<ApiResponse<RouteOptimizationResponse>> {
     console.log('🗺️ Fetching route optimization from backend...');
-    return this.client.get<any>('/api/v1/delivery/deliveries/route-optimization/');
+    return this.client.get<RouteOptimizationResponse>('/api/v1/delivery/deliveries/route-optimization/');
   }
 
   async getOngoingDeliveries(): Promise<ApiResponse<Order[]>> {
     console.log('🚚 Fetching ongoing deliveries...');
-    const response = await this.client.get<any[]>('/api/v1/delivery/deliveries/ongoing-deliveries/');
+    const response = await this.client.get<BackendDelivery[]>('/api/v1/delivery/deliveries/ongoing-deliveries/');
 
     // Transform backend response to match our Order type
     if (response.success && response.data) {
@@ -691,14 +893,14 @@ class ApiService {
     });
   }
 
-  async smartAcceptOrder(orderId: string): Promise<ApiResponse<any>> {
+  async smartAcceptOrder(orderId: string): Promise<ApiResponse<SmartAcceptResponse>> {
     console.log(`🎯 Smart accepting order: ${orderId}`);
-    return this.client.post<any>(`/api/v1/delivery/deliveries/${orderId}/smart_accept/`);
+    return this.client.post<SmartAcceptResponse>(`/api/v1/delivery/deliveries/${orderId}/smart_accept/`);
   }
 
   async getAvailableOrdersWithDistance(): Promise<ApiResponse<Order[]>> {
     console.log('📍 Fetching available orders with distance filtering...');
-    const response = await this.client.get<any[]>('/api/v1/delivery/deliveries/available_orders/');
+    const response = await this.client.get<BackendDelivery[]>('/api/v1/delivery/deliveries/available_orders/');
 
     // Transform backend response to match our Order type
     if (response.success && response.data) {
@@ -714,7 +916,7 @@ class ApiService {
   }
 
   // Helper function to determine correct order status
-  private transformOrderStatus = (delivery: any, order: any): string => {
+  private transformOrderStatus = (delivery: BackendDelivery, order: BackendOrder): string => {
     const deliveryStatus = delivery?.status;
     const orderStatus = order?.status;
 
@@ -745,19 +947,24 @@ class ApiService {
   };
 
   // Helper method to transform backend delivery/order to frontend Order type
-  private transformOrder = (backendData: any): Order => {
-    // Debug log to understand structure
+  private transformOrder = (backendData: unknown): Order => {
+    // Type guard to safely access properties
+    if (!backendData || typeof backendData !== 'object') {
+      throw new Error('Invalid backend data provided to transformOrder');
+    }
+    
+    const data = backendData as Record<string, unknown>;
     console.log('🔄 transformOrder input:', {
-      hasId: !!backendData.id,
-      hasOrder: !!(backendData.order && typeof backendData.order === 'object'),
-      hasDriver: 'driver' in backendData,
-      topLevelKeys: Object.keys(backendData).slice(0, 10)
+      hasId: !!data.id,
+      hasOrder: !!(data.order && typeof data.order === 'object'),
+      hasDriver: 'driver' in data,
+      topLevelKeys: Object.keys(data).slice(0, 10)
     });
 
-    // Check if this is a delivery object with nested order or a direct order object
-    const isDelivery = backendData.order && typeof backendData.order === 'object';
-    const order = isDelivery ? backendData.order : backendData;
-    const delivery = isDelivery ? backendData : null;
+    // Use type-safe extraction utilities - simplified inline
+    const isDelivery = data.order && typeof data.order === 'object';
+    const order = isDelivery ? (data.order as unknown as BackendOrder) : (data as unknown as BackendOrder);
+    const delivery = isDelivery ? (data as unknown as BackendDelivery) : null;
 
     console.log('🔍 Transforming order data:', {
       isDelivery,
@@ -780,34 +987,36 @@ class ApiService {
       'customerDetailsKeys': order.customer_details ? Object.keys(order.customer_details) : []
     });
 
-    let customerData = {};
+    let customerData: BackendCustomer = {};
     
     // Handle case where customer is just an ID (needs to be fixed in backend)
     if (typeof order.customer === 'number' || typeof order.customer === 'string') {
       console.warn('⚠️ Customer field is just an ID, not an object. Backend should return customer_details.');
       customerData = {
-        id: order.customer,
+        id: String(order.customer),
         name: order.customer_name,
         phone: order.customer_phone,
         email: order.customer_email
       };
     } else {
-      customerData = order.customer_details ||  // Use customer_details first (contains full object)
-                    order.customer || 
-                    delivery?.customer_details || 
-                    delivery?.customer || 
+      customerData = (order.customer_details as BackendCustomer) ||  // Use customer_details first (contains full object)
+                    (order.customer as BackendCustomer) || 
+                    (delivery?.customer_details as BackendCustomer) || 
+                    (delivery?.customer as BackendCustomer) || 
                     {};
     }
 
     // Fallback customer data if missing
     const customer = {
-      id: customerData.id || order.customer_id || delivery?.customer_id || order.customer || `customer_${order.id || 'unknown'}`,
+      id: String(customerData.id || order.customer_id || delivery?.customer_id || order.customer || `customer_${order.id || 'unknown'}`),
       name: customerData.name || 
             customerData.full_name || 
             order.customer_name || 
             delivery?.customer_name ||
             `${customerData.first_name || ''} ${customerData.last_name || ''}`.trim() ||
-            'Unknown Customer',
+            (customerData.user?.first_name && customerData.user?.last_name ? 
+              `${customerData.user.first_name} ${customerData.user.last_name}` : 
+            'Unknown Customer'),
       phone: customerData.phone || 
              customerData.phone_number || 
              order.customer_phone || 
@@ -830,27 +1039,26 @@ class ApiService {
 
     // CRITICAL: For available_orders endpoint, the root object IS the delivery
     // So backendData.id is the delivery ID we need for accept/decline
-    const primaryId = backendData.id || delivery?.id || order.id || '';
+    const primaryId = String((backendData as Record<string, unknown>).id || delivery?.id || order.id || '');
 
     console.log('🆔 ID Resolution:', {
       primaryId,
-      backendDataId: backendData.id,
+      backendDataId: (backendData as Record<string, unknown>).id,
       deliveryId: delivery?.id,
       orderId: order.id,
-      isFromAvailableOrders: !delivery && backendData.id && backendData.order
+      isFromAvailableOrders: !delivery && (backendData as Record<string, unknown>).id && (backendData as Record<string, unknown>).order
     });
 
     return {
       id: primaryId,  // This must be the delivery ID for API calls
-      deliveryId: delivery?.id || backendData.id || '', // Store delivery ID separately
-      orderId: order.id || '', // Store order ID separately
+      deliveryId: delivery?.id || String((backendData as Record<string, unknown>).id || ''), // Store delivery ID separately
       orderNumber: order.order_number || order.orderNumber || `#${order.id}`,
       customer,
-      items: (order.items || order.order_items || []).map((item: any) => ({
+      items: (order?.items || order?.order_items || []).map((item: BackendOrderItem) => ({
         id: item.id || '',
         name: item.product_details?.name || item.product?.name || item.name || '',
         quantity: item.quantity || 1,
-        price: parseFloat(item.price) || 0,
+        price: parseFloat(String(item.price ?? 0)) || 0,
         specialInstructions: item.notes || ''
       })),
       deliveryAddress: {
@@ -863,40 +1071,25 @@ class ApiService {
         deliveryInstructions: order.delivery_notes || '',
         coordinates: undefined // Could be parsed from address if needed
       },
-      restaurantAddress: {
-        id: '',
-        street: '', // Restaurant info not in current backend
-        city: '',
-        state: '',
-        zipCode: '',
-        coordinates: undefined
-      },
       // CRITICAL: Add coordinate fields that RouteNavigationScreen expects
-      pickup_latitude: parseFloat(order.pickup_latitude) || null,
-      pickup_longitude: parseFloat(order.pickup_longitude) || null,
-      delivery_latitude: parseFloat(order.delivery_latitude) || null,
-      delivery_longitude: parseFloat(order.delivery_longitude) || null,
+      pickup_latitude: order.pickup_latitude ? parseFloat(String(order.pickup_latitude)) : undefined,
+      pickup_longitude: order.pickup_longitude ? parseFloat(String(order.pickup_longitude)) : undefined,
+      delivery_latitude: order.delivery_latitude ? parseFloat(String(order.delivery_latitude)) : undefined,
+      delivery_longitude: order.delivery_longitude ? parseFloat(String(order.delivery_longitude)) : undefined,
       pickup_address: order.pickup_address || '',
       delivery_address: order.delivery_address || '',
-      status: this.transformOrderStatus(delivery, order),
-      paymentMethod: order.payment_method || 'cash',
-      subtotal: parseFloat(order.subtotal) || 0,
-      deliveryFee: parseFloat(order.delivery_fee) || 0,
-      tax: parseFloat(order.tax) || 0,
-      tip: 0, // Tip not in current backend
-      total: parseFloat(order.total) || 0,
+      status: this.transformOrderStatus(delivery || {} as BackendDelivery, order) as OrderStatus,
+      paymentMethod: (order.payment_method || 'cash') as PaymentMethod,
+      subtotal: order.subtotal ? parseFloat(String(order.subtotal)) : 0,
+      deliveryFee: order.delivery_fee ? parseFloat(String(order.delivery_fee)) : 0,
+      tax: order.tax ? parseFloat(String(order.tax)) : 0,
+      total: order.total ? parseFloat(String(order.total)) : 0,
       estimatedDeliveryTime: delivery?.estimated_delivery_time || order.scheduled_delivery_time || '',
       specialInstructions: order.delivery_notes || '',
       orderTime: order.created_at ? new Date(order.created_at) : new Date(),
-      acceptedTime: delivery?.created_at ? new Date(delivery.created_at) : undefined,
-      pickedUpTime: delivery?.pickup_time ? new Date(delivery.pickup_time) : undefined,
-      deliveredTime: delivery?.delivery_time ? new Date(delivery.delivery_time) : undefined,
       // Add delivery-specific fields if this is a delivery object
-      driverId: delivery?.driver,
-      driverName: delivery?.driver_name,
-      // Debug info
-      _rawDriverId: delivery?.driver,
-      _hasDelivery: !!delivery
+      driverId: delivery?.driver || undefined,
+      driverName: delivery?.driver_name || undefined
     };
   }
 
@@ -905,7 +1098,7 @@ class ApiService {
     
     // Debug: Check current user info before making the request
     try {
-      const userResponse = await this.client.get<any>('/whoami/');
+      const userResponse = await this.client.get<UserInfoResponse>('/whoami/');
       console.log('🔍 Current user info:', {
         username: userResponse.data?.username,
         role: userResponse.data?.role,
@@ -945,33 +1138,59 @@ class ApiService {
   }
 
   async updateOrderStatus(orderId: string, status: OrderStatus): Promise<ApiResponse<void>> {
-    // Use the custom action endpoint for updating delivery status
-    return this.client.post<void>(`/api/v1/delivery/deliveries/${orderId}/update_status/`, { status });
+    console.log(`🔄 Updating order ${orderId} status to: ${status}`);
+    
+    // Try the standard update_status endpoint first
+    try {
+      const result = await this.client.post<void>(`/api/v1/delivery/deliveries/${orderId}/update_status/`, { status });
+      if (result.success) {
+        console.log(`✅ Successfully updated order ${orderId} status to ${status}`);
+        return result;
+      }
+    } catch (error) {
+      console.warn(`⚠️ Standard update_status failed for ${orderId}:`, error);
+    }
+
+    // Try smart_update_status as fallback
+    try {
+      console.log(`🔄 Trying smart_update_status for order ${orderId}`);
+      const result = await this.client.post<void>(`/api/v1/delivery/deliveries/${orderId}/smart_update_status/`, { 
+        status,
+        location: 'Driver App',
+        notes: `Status updated to ${status} via mobile app`
+      });
+      if (result.success) {
+        console.log(`✅ Successfully updated order ${orderId} status to ${status} via smart_update`);
+        return result;
+      }
+    } catch (error) {
+      console.warn(`⚠️ Smart update_status also failed for ${orderId}:`, error);
+    }
+
+    // If both fail, return error
+    return {
+      success: false,
+      data: undefined,
+      error: `Failed to update order ${orderId} status to ${status}. Both update_status and smart_update_status endpoints failed.`
+    };
   }
 
-  // Smart assignment methods
-  async getOngoingDeliveries(): Promise<ApiResponse<any>> {
-    return this.client.get<any>('/api/v1/delivery/deliveries/ongoing-deliveries/');
-  }
+  // Smart assignment methods - removed duplicates, using typed versions above
 
-  async getRouteOptimization(): Promise<ApiResponse<any>> {
-    return this.client.get<any>('/api/v1/delivery/deliveries/route-optimization/');
-  }
-
-  async smartAcceptDelivery(deliveryId: string, data: { location?: string; latitude?: number; longitude?: number; notes?: string }): Promise<ApiResponse<void>> {
+  async smartAcceptDelivery(deliveryId: string, data: SmartDeliveryData): Promise<ApiResponse<void>> {
     return this.client.post<void>(`/api/v1/delivery/deliveries/${deliveryId}/smart_accept/`, data);
   }
 
-  async smartUpdateStatus(deliveryId: string, data: { status: string; location?: string; latitude?: number; longitude?: number; notes?: string }): Promise<ApiResponse<void>> {
+  async smartUpdateStatus(deliveryId: string, data: SmartStatusUpdateData): Promise<ApiResponse<void>> {
     return this.client.post<void>(`/api/v1/delivery/deliveries/${deliveryId}/smart_update_status/`, data);
   }
 
-  async getAvailableOrders(): Promise<ApiResponse<any[]>> {
+  async getAvailableOrders(): Promise<ApiResponse<BackendDelivery[]>> {
     // Get smart-filtered available orders for the driver
-    return this.client.get<any[]>('/api/v1/delivery/deliveries/available_orders/');
+    return this.client.get<BackendDelivery[]>('/api/v1/delivery/deliveries/available_orders/');
   }
 
-  async declineDelivery(deliveryId: string, data: { location?: string; reason?: string }): Promise<ApiResponse<void>> {
+  async declineDelivery(deliveryId: string, data: DeclineDeliveryData): Promise<ApiResponse<void>> {
     return this.client.post<void>(`/api/v1/delivery/deliveries/${deliveryId}/decline/`, data);
   }
 
@@ -988,19 +1207,19 @@ class ApiService {
     latitude: number, 
     longitude: number,
     transportationMode?: string
-  ): Promise<ApiResponse<any>> {
+  ): Promise<ApiResponse<EstimatePickupResponse>> {
     const data = {
       driver_latitude: latitude,
       driver_longitude: longitude,
       transportation_mode: transportationMode
     };
 
-    return this.client.post<any>(`/api/v1/delivery/deliveries/${deliveryId}/estimate_pickup/`, data);
+    return this.client.post<EstimatePickupResponse>(`/api/v1/delivery/deliveries/${deliveryId}/estimate_pickup/`, data);
   }
 
   // Get specific order details by ID
   async getOrderDetails(orderId: string): Promise<ApiResponse<Order>> {
-    const response = await this.client.get<any>(`/api/v1/delivery/deliveries/${orderId}/`);
+    const response = await this.client.get<BackendDelivery>(`/api/v1/delivery/deliveries/${orderId}/`);
 
     if (response.success && response.data) {
       const order = this.transformOrder(response.data);
@@ -1015,8 +1234,8 @@ class ApiService {
   }
 
   // User Management
-  async getCurrentUser(): Promise<ApiResponse<any>> {
-    return this.client.get<any>('/whoami/');
+  async getCurrentUser(): Promise<ApiResponse<UserInfoResponse>> {
+    return this.client.get<UserInfoResponse>('/whoami/');
   }
 
   // Balance Management
@@ -1070,7 +1289,7 @@ class ApiService {
       console.error('❌ Cannot update location: Driver ID not found');
       return {
         success: false,
-        data: null as any,
+        data: null!,
         error: 'Driver ID not found'
       };
     }
@@ -1079,8 +1298,8 @@ class ApiService {
     console.log(`🎯 Calling location endpoint: ${endpoint}`);
 
     const result = await this.client.post<void>(endpoint, {
-      latitude: latitude,
-      longitude: longitude
+      latitude,
+      longitude
     });
 
     if (result.success) {
@@ -1097,7 +1316,7 @@ class ApiService {
     console.log('🔄 Polling for new available orders...');
 
     // Get available broadcast orders that drivers can accept
-    const response = await this.client.get<any[]>('/api/v1/delivery/deliveries/available_orders/');
+    const response = await this.client.get<BackendDelivery[]>('/api/v1/delivery/deliveries/available_orders/');
 
     if (response.success && response.data) {
       console.log(`📦 Raw response data:`, response.data);
@@ -1106,7 +1325,7 @@ class ApiService {
       console.log(`📎 Found ${orders?.length || 0} available orders`);
 
       orders.forEach((order, index) => {
-        console.log(`  📄 Order ${index + 1}: ${order.id} - ${order.customer.name} - $${order.total}`);
+        console.log(`  📄 Order ${index + 1}: ${order.id} - ${order.customer?.name || 'Unknown Customer'} - $${order.total}`);
       });
 
       return {
@@ -1122,11 +1341,11 @@ class ApiService {
   }
 
   async getNearbyDrivers(latitude: number, longitude: number, radius: number = 5): Promise<ApiResponse<Driver[]>> {
-    const response = await this.client.get<any[]>(`/api/v1/auth/drivers/nearby_drivers/?latitude=${latitude}&longitude=${longitude}&radius=${radius}`);
+    const response = await this.client.get<BackendDriver[]>(`/api/v1/auth/drivers/nearby_drivers/?latitude=${latitude}&longitude=${longitude}&radius=${radius}`);
 
     if (response.success && response.data) {
       const dataArray = Array.isArray(response.data) ? response.data : [response.data];
-      const drivers: Driver[] = dataArray.map((driverData: any) => ({
+      const drivers: Driver[] = dataArray.map((driverData: BackendDriver) => ({
         id: driverData.id || '',
         firstName: driverData.first_name || driverData.firstName || '',
         lastName: driverData.last_name || driverData.lastName || '',
@@ -1137,9 +1356,9 @@ class ApiService {
         isOnline: driverData.is_available || driverData.is_online || false,
         profileImage: driverData.profile_image || driverData.avatar,
         vehicleInfo: driverData.vehicle ? {
-          type: driverData.vehicle.type,
-          model: driverData.vehicle.model,
-          licensePlate: driverData.vehicle.license_plate
+          type: driverData.vehicle.type || '',
+          model: driverData.vehicle.model || '',
+          licensePlate: driverData.vehicle.license_plate || ''
         } : undefined,
         distance: driverData.distance_km
       }));
@@ -1189,7 +1408,7 @@ class ApiService {
       console.error('❌ Cannot update FCM token: Driver ID not found');
       return {
         success: false,
-        data: null as any,
+        data: null!,
         error: 'Driver ID not found'
       };
     }
@@ -1213,7 +1432,7 @@ class ApiService {
       console.error('❌ FCM token update network error:', error);
       return {
         success: false,
-        data: null as any,
+        data: null!,
         error: error instanceof Error ? error.message : 'Network error updating FCM token'
       };
     }
@@ -1225,7 +1444,7 @@ class ApiService {
     console.log('🧪 Testing polling endpoint...');
 
     try {
-      const result = await this.client.get<any[]>('/api/v1/delivery/deliveries/available_orders/');
+      const result = await this.client.get<BackendDelivery[]>('/api/v1/delivery/deliveries/available_orders/');
 
       if (result.success && result.data) {
         console.log('✅ Polling endpoint works, got', result.data?.length || 0, 'orders');
@@ -1260,7 +1479,7 @@ export const deliveryApi = {
   getRouteOptimization: () => apiService.getRouteOptimization(),
   getAvailableOrders: () => apiService.getAvailableOrders(),
   getOrderDetails: (orderId: string) => apiService.getOrderDetails(orderId),
-  smartAcceptDelivery: (deliveryId: string, data: any) => apiService.smartAcceptDelivery(deliveryId, data),
-  smartUpdateStatus: (deliveryId: string, data: any) => apiService.smartUpdateStatus(deliveryId, data),
-  declineDelivery: (deliveryId: string, data: any) => apiService.declineDelivery(deliveryId, data),
+  smartAcceptDelivery: (deliveryId: string, data: SmartDeliveryData) => apiService.smartAcceptDelivery(deliveryId, data),
+  smartUpdateStatus: (deliveryId: string, data: SmartStatusUpdateData) => apiService.smartUpdateStatus(deliveryId, data),
+  declineDelivery: (deliveryId: string, data: DeclineDeliveryData) => apiService.declineDelivery(deliveryId, data),
 };

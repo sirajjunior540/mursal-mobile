@@ -9,7 +9,6 @@ import {
   Animated,
   StatusBar,
   TouchableOpacity,
-  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from 'react-native-vector-icons/Ionicons';
@@ -17,14 +16,13 @@ import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import Haptics from 'react-native-haptic-feedback';
 
-import Card from '../components/ui/Card';
 import IncomingOrderModal from '../components/IncomingOrderModal';
+import AppLogo from '../components/AppLogo';
 
 import { useOrders } from '../contexts/OrderContext';
 import { useDriver } from '../contexts/DriverContext';
-import { Order } from '../types';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+import { Order } from '@/types';
+import { Design, getCardStyle } from '../constants/designSystem';
 
 interface DashboardStackParamList extends Record<string, object | undefined> {
   AcceptedOrders: undefined;
@@ -40,7 +38,8 @@ const DashboardScreen: React.FC = () => {
     refreshOrders, 
     acceptOrder, 
     declineOrder,
-    setOrderNotificationCallback 
+    setOrderNotificationCallback,
+    canAcceptOrder 
   } = useOrders();
   const { driver, updateOnlineStatus } = useDriver();
   
@@ -68,7 +67,6 @@ const DashboardScreen: React.FC = () => {
 
     // Set up notification callback for new orders
     const handleNewOrder = (order: Order) => {
-      console.log('📱 New order received in Dashboard:', order.id);
       setIncomingOrder(order);
       setShowIncomingModal(true);
       Haptics.trigger('notificationSuccess');
@@ -79,7 +77,7 @@ const DashboardScreen: React.FC = () => {
     return () => {
       setOrderNotificationCallback(null);
     };
-  }, [setOrderNotificationCallback]);
+  }, [setOrderNotificationCallback, fadeAnim, slideAnim]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -100,7 +98,7 @@ const DashboardScreen: React.FC = () => {
   }, [driver, updateOnlineStatus]);
 
   const handleAcceptOrder = useCallback(async (orderId: string) => {
-    console.log('✅ Accepting order:', orderId);
+    
     Haptics.trigger('notificationSuccess');
     setShowIncomingModal(false);
     
@@ -117,13 +115,12 @@ const DashboardScreen: React.FC = () => {
         Alert.alert('Error', 'Failed to accept order');
       }
     } catch (error) {
-      console.error('Error accepting order:', error);
-      Alert.alert('Error', 'Failed to accept order');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to accept order';
+      Alert.alert('Error', `Failed to accept order: ${errorMessage}`);
     }
   }, [acceptOrder, navigation]);
 
   const handleDeclineOrder = useCallback(async (orderId: string) => {
-    console.log('❌ Declining order:', orderId);
     Haptics.trigger('impactLight');
     setShowIncomingModal(false);
     
@@ -131,27 +128,67 @@ const DashboardScreen: React.FC = () => {
       await declineOrder(orderId);
       Alert.alert('Order Declined', 'The order has been declined');
     } catch (error) {
-      console.error('Error declining order:', error);
       Alert.alert('Error', 'Failed to decline order');
     }
   }, [declineOrder]);
 
   const handleSkipOrder = useCallback((orderId: string) => {
-    console.log('⏭️ Skipping order:', orderId);
-    Haptics.trigger('selectionClick');
+    Haptics.trigger('selection');
     setShowIncomingModal(false);
+    
+    // If we have the incoming order, add it back to available orders
+    if (incomingOrder && incomingOrder.id === orderId) {
+      // Trigger a refresh to ensure the order appears in the list
+      setTimeout(() => {
+        refreshOrders().catch(() => {
+          // Handle refresh error silently
+        });
+      }, 500);
+    }
+    
     Alert.alert('Order Skipped', 'The order has been skipped and moved to available orders');
+  }, [incomingOrder, refreshOrders]);
+
+  // Test function to trigger popup manually
+  const testIncomingOrder = useCallback(() => {
+    const testDeliveryId = `test-delivery-${Date.now()}`;
+    const testOrder: Order = {
+      id: testDeliveryId, // Use delivery ID as the primary ID
+      deliveryId: testDeliveryId, // Store delivery ID separately 
+      order_number: `TEST-${Math.floor(Math.random() * 1000)}`,
+      customer_details: { 
+        id: 'test-customer', 
+        name: 'Test Customer',
+        phone: '+1234567890'
+      },
+      delivery_address: 'Test Delivery Address, Ajman',
+      pickup_address: 'Test Pickup Location',
+      total: 45.50,
+      delivery_fee: 12.00,
+      delivery_type: 'food',
+      priority: 'high',
+      status: 'pending',
+      created_at: new Date(),
+      estimated_delivery_time: '25 min'
+    };
+    
+    setIncomingOrder(testOrder);
+    setShowIncomingModal(true);
+    Haptics.trigger('notificationSuccess');
   }, []);
 
   const renderHeader = () => (
     <View style={styles.header}>
       <View style={styles.headerContent}>
-        <View>
-          <Text style={styles.greeting}>
-            {new Date().getHours() < 12 ? 'Good Morning' : 
-             new Date().getHours() < 18 ? 'Good Afternoon' : 'Good Evening'}
-          </Text>
-          <Text style={styles.driverName}>{driver?.firstName || 'Driver'}</Text>
+        <View style={styles.headerLeft}>
+          <AppLogo size="small" showText={false} style={styles.headerLogo} />
+          <View style={styles.greetingContainer}>
+            <Text style={styles.greeting}>
+              {new Date().getHours() < 12 ? 'Good Morning' : 
+               new Date().getHours() < 18 ? 'Good Afternoon' : 'Good Evening'}
+            </Text>
+            <Text style={styles.driverName}>{driver?.firstName || 'Driver'}</Text>
+          </View>
         </View>
         
         <TouchableOpacity
@@ -163,7 +200,7 @@ const DashboardScreen: React.FC = () => {
         >
           <View style={[
             styles.onlineIndicator,
-            { backgroundColor: driver?.isOnline ? '#10B981' : '#6B7280' }
+            driver?.isOnline ? styles.onlineIndicatorActive : styles.onlineIndicatorInactive
           ]} />
           <Text style={[
             styles.onlineToggleText,
@@ -183,7 +220,7 @@ const DashboardScreen: React.FC = () => {
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.statsScroll}
       >
-        <View style={[styles.statCard, { backgroundColor: '#3B82F6' }]}>
+        <View style={[styles.statCard, styles.statCardBlue]}>
           <View style={styles.statIcon}>
             <Ionicons name="cube" size={24} color="#ffffff" />
           </View>
@@ -191,7 +228,7 @@ const DashboardScreen: React.FC = () => {
           <Text style={styles.statLabel}>Available Orders</Text>
         </View>
 
-        <View style={[styles.statCard, { backgroundColor: '#10B981' }]}>
+        <View style={[styles.statCard, styles.statCardGreen]}>
           <View style={styles.statIcon}>
             <Ionicons name="checkmark-circle" size={24} color="#ffffff" />
           </View>
@@ -199,7 +236,7 @@ const DashboardScreen: React.FC = () => {
           <Text style={styles.statLabel}>Completed</Text>
         </View>
 
-        <View style={[styles.statCard, { backgroundColor: '#F59E0B' }]}>
+        <View style={[styles.statCard, styles.statCardYellow]}>
           <View style={styles.statIcon}>
             <Ionicons name="star" size={24} color="#ffffff" />
           </View>
@@ -207,12 +244,12 @@ const DashboardScreen: React.FC = () => {
           <Text style={styles.statLabel}>Rating</Text>
         </View>
 
-        <View style={[styles.statCard, { backgroundColor: '#8B5CF6' }]}>
+        <View style={[styles.statCard, styles.statCardPurple]}>
           <View style={styles.statIcon}>
             <Ionicons name="cash" size={24} color="#ffffff" />
           </View>
           <Text style={styles.statValue}>$0</Text>
-          <Text style={styles.statLabel}>Today's Earnings</Text>
+          <Text style={styles.statLabel}>Today&apos;s Earnings</Text>
         </View>
       </ScrollView>
     </View>
@@ -223,7 +260,7 @@ const DashboardScreen: React.FC = () => {
       <Text style={styles.sectionTitle}>Quick Actions</Text>
       <View style={styles.quickActions}>
         <TouchableOpacity 
-          style={[styles.quickActionButton, { backgroundColor: '#8B5CF6' }]}
+          style={[styles.quickActionButton, styles.quickActionButtonPurple]}
           onPress={() => navigation.navigate('AcceptedOrders')}
         >
           <Ionicons name="list" size={24} color="#ffffff" />
@@ -231,20 +268,131 @@ const DashboardScreen: React.FC = () => {
         </TouchableOpacity>
 
         <TouchableOpacity 
-          style={[styles.quickActionButton, { backgroundColor: '#3B82F6' }]}
+          style={[styles.quickActionButton, styles.quickActionButtonBlue]}
           onPress={handleRefresh}
         >
           <Ionicons name="refresh" size={24} color="#ffffff" />
           <Text style={styles.quickActionText}>Refresh Orders</Text>
         </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={[styles.quickActionButton, styles.quickActionButtonYellow]}
+          onPress={testIncomingOrder}
+        >
+          <Ionicons name="notifications" size={24} color="#ffffff" />
+          <Text style={styles.quickActionText}>Test Popup</Text>
+        </TouchableOpacity>
       </View>
+    </View>
+  );
+
+  const renderAvailableOrders = () => (
+    <View style={styles.availableOrdersContainer}>
+      <View style={styles.availableOrdersHeader}>
+        <Text style={styles.sectionTitle}>Available Orders</Text>
+        <TouchableOpacity onPress={handleRefresh} style={styles.refreshButton}>
+          <Ionicons name="refresh" size={20} color="#3B82F6" />
+        </TouchableOpacity>
+      </View>
+      
+      {activeOrders && activeOrders.length > 0 ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.availableOrdersScroll}>
+          {activeOrders.slice(0, 5).map((order) => {
+            const canAccept = canAcceptOrder(order);
+            return (
+              <View key={order.id} style={[
+                styles.availableOrderCard,
+                !canAccept && styles.disabledOrderCard
+              ]}>
+                <View style={styles.orderCardHeader}>
+                  <Text style={styles.orderNumber}>#{order.order_number || order.id}</Text>
+                  <View style={[styles.orderTypeBadge, 
+                    order.delivery_type === 'food' && styles.foodBadge,
+                    order.delivery_type === 'fast' && styles.fastBadge,
+                  ]}>
+                    <Text style={styles.orderTypeText}>{(order.delivery_type || 'regular').toUpperCase()}</Text>
+                  </View>
+                </View>
+                
+                <View style={styles.orderDetails}>
+                  <Text style={styles.customerName} numberOfLines={1}>
+                    {order.customer_details?.name || 'Customer'}
+                  </Text>
+                  <Text style={styles.deliveryAddress} numberOfLines={2}>
+                    {order.delivery_address || 'Delivery location'}
+                  </Text>
+                </View>
+                
+                <View style={styles.orderMetrics}>
+                  <View style={styles.orderMetric}>
+                    <Ionicons name="cash-outline" size={14} color="#666" />
+                    <Text style={styles.metricValue}>${order.total || '0.00'}</Text>
+                  </View>
+                  <View style={styles.orderMetric}>
+                    <Ionicons name="location-outline" size={14} color="#666" />
+                    <Text style={styles.metricValue}>2.5 km</Text>
+                  </View>
+                </View>
+                
+                {!canAccept && (
+                  <View style={styles.capacityWarning}>
+                    <Ionicons name="information-circle" size={14} color="#F59E0B" />
+                    <Text style={styles.capacityWarningText}>
+                      {order.delivery_type === 'food' || order.delivery_type === 'fast' 
+                        ? 'Complete current orders first' 
+                        : 'At capacity (5 orders max)'}
+                    </Text>
+                  </View>
+                )}
+                
+                <View style={styles.orderActions}>
+                  <TouchableOpacity 
+                    style={styles.miniDeclineButton}
+                    onPress={() => handleDeclineOrder(order.id)}
+                  >
+                    <Ionicons name="close" size={16} color="#FF4757" />
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={[
+                      styles.miniAcceptButton,
+                      !canAccept && styles.disabledAcceptButton
+                    ]}
+                    onPress={() => canAccept && handleAcceptOrder(order.id)}
+                    disabled={!canAccept}
+                  >
+                    <Ionicons name="checkmark" size={16} color={canAccept ? "#fff" : "#999"} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            );
+          })}
+          
+          {activeOrders.length > 5 && (
+            <TouchableOpacity 
+              style={styles.viewAllButton}
+              onPress={() => navigation.navigate('AcceptedOrders')}
+            >
+              <Text style={styles.viewAllText}>View All</Text>
+              <Text style={styles.viewAllCount}>+{activeOrders.length - 5}</Text>
+            </TouchableOpacity>
+          )}
+        </ScrollView>
+      ) : (
+        <View style={styles.noOrdersContainer}>
+          <Ionicons name="cube-outline" size={48} color="#9CA3AF" />
+          <Text style={styles.noOrdersText}>No available orders</Text>
+          <Text style={styles.noOrdersSubtext}>
+            {driver?.isOnline ? 'New orders will appear here' : 'Go online to see available orders'}
+          </Text>
+        </View>
+      )}
     </View>
   );
 
   const renderStatusCard = () => (
     <View style={[
       styles.statusCard,
-      { backgroundColor: driver?.isOnline ? '#10B981' : '#6B7280' }
+      driver?.isOnline ? styles.statusCardOnline : styles.statusCardOffline
     ]}>
       <View style={styles.statusContent}>
         <View style={styles.statusHeader}>
@@ -291,6 +439,7 @@ const DashboardScreen: React.FC = () => {
         >
           {renderStats()}
           {renderStatusCard()}
+          {renderAvailableOrders()}
           {renderQuickActions()}
         </ScrollView>
       </SafeAreaView>
@@ -310,62 +459,71 @@ const DashboardScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: Design.colors.backgroundSecondary,
   },
   safeArea: {
     flex: 1,
   },
   header: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 20,
-    paddingVertical: 20,
+    backgroundColor: Design.colors.background,
+    paddingHorizontal: Design.spacing[5],
+    paddingVertical: Design.spacing[5],
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: Design.colors.border,
   },
   headerContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  headerLogo: {
+    marginRight: Design.spacing[3],
+  },
+  greetingContainer: {
+    flex: 1,
+  },
   greeting: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginBottom: 4,
+    ...Design.typography.label,
+    color: Design.colors.textSecondary,
+    marginBottom: Design.spacing[1],
   },
   driverName: {
-    fontSize: 24,
-    color: '#111827',
-    fontWeight: '700',
+    ...Design.typography.h3,
+    color: Design.colors.text,
   },
   onlineToggle: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#F3F4F6',
+    paddingHorizontal: Design.spacing[4],
+    paddingVertical: Design.spacing[2],
+    borderRadius: Design.borderRadius.full,
+    backgroundColor: Design.colors.gray100,
   },
   onlineToggleActive: {
-    backgroundColor: '#DCFCE7',
+    backgroundColor: Design.colors.successBackground,
   },
   onlineToggleInactive: {
-    backgroundColor: '#F3F4F6',
+    backgroundColor: Design.colors.gray100,
   },
   onlineIndicator: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    marginRight: 8,
+    marginRight: Design.spacing[2],
   },
   onlineToggleText: {
-    fontSize: 14,
-    fontWeight: '600',
+    ...Design.typography.label,
   },
   onlineToggleTextActive: {
-    color: '#059669',
+    color: Design.colors.success,
   },
   onlineToggleTextInactive: {
-    color: '#6B7280',
+    color: Design.colors.textSecondary,
   },
   content: {
     flex: 1,
@@ -374,49 +532,39 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
   },
   statsContainer: {
-    marginTop: 20,
+    marginTop: Design.spacing[5],
   },
   statsScroll: {
-    paddingHorizontal: 20,
-    gap: 16,
+    paddingHorizontal: Design.spacing[5],
+    gap: Design.spacing[4],
   },
   statCard: {
     width: 120,
     height: 120,
-    borderRadius: 16,
+    borderRadius: Design.borderRadius.lg,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
+    padding: Design.spacing[4],
+    ...Design.shadows.medium,
   },
   statIcon: {
-    marginBottom: 8,
+    marginBottom: Design.spacing[2],
   },
   statValue: {
-    fontSize: 24,
-    color: '#ffffff',
-    fontWeight: '700',
-    marginBottom: 4,
+    ...Design.typography.h4,
+    color: Design.colors.textInverse,
+    marginBottom: Design.spacing[1],
   },
   statLabel: {
-    fontSize: 12,
+    ...Design.typography.caption,
     color: 'rgba(255, 255, 255, 0.9)',
     textAlign: 'center',
-    fontWeight: '500',
   },
   statusCard: {
-    margin: 20,
-    borderRadius: 16,
-    padding: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
+    margin: Design.spacing[5],
+    borderRadius: Design.borderRadius.lg,
+    padding: Design.spacing[6],
+    ...Design.shadows.medium,
   },
   statusContent: {
     alignItems: 'center',
@@ -424,63 +572,253 @@ const styles = StyleSheet.create({
   statusHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: Design.spacing[2],
   },
   statusTitle: {
-    fontSize: 20,
-    color: '#ffffff',
-    fontWeight: '700',
-    marginLeft: 12,
+    ...Design.typography.h4,
+    color: Design.colors.textInverse,
+    marginLeft: Design.spacing[3],
   },
   statusSubtitle: {
-    fontSize: 16,
+    ...Design.typography.body,
     color: 'rgba(255, 255, 255, 0.9)',
     textAlign: 'center',
-    marginBottom: 16,
+    marginBottom: Design.spacing[4],
   },
   goOnlineButton: {
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 20,
+    paddingHorizontal: Design.spacing[6],
+    paddingVertical: Design.spacing[3],
+    borderRadius: Design.borderRadius.xl,
   },
   goOnlineButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
+    ...Design.typography.button,
+    color: Design.colors.textInverse,
   },
   quickActionsContainer: {
-    paddingHorizontal: 20,
-    marginTop: 20,
+    paddingHorizontal: Design.spacing[5],
+    marginTop: Design.spacing[5],
   },
   sectionTitle: {
-    fontSize: 20,
-    color: '#1f2937',
-    fontWeight: '700',
-    marginBottom: 16,
+    ...Design.typography.h4,
+    color: Design.colors.text,
+    marginBottom: Design.spacing[4],
   },
   quickActions: {
     flexDirection: 'row',
-    gap: 16,
+    gap: Design.spacing[3],
+    flexWrap: 'wrap',
   },
   quickActionButton: {
     flex: 1,
+    minWidth: 100,
     height: 80,
-    borderRadius: 16,
+    borderRadius: Design.borderRadius.lg,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
+    ...Design.shadows.medium,
   },
   quickActionText: {
-    color: '#ffffff',
-    fontSize: 14,
-    fontWeight: '600',
-    marginTop: 8,
+    ...Design.typography.buttonSmall,
+    color: Design.colors.textInverse,
+    marginTop: Design.spacing[2],
     textAlign: 'center',
+  },
+  availableOrdersContainer: {
+    paddingHorizontal: Design.spacing[5],
+    marginTop: Design.spacing[5],
+  },
+  availableOrdersHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Design.spacing[4],
+  },
+  refreshButton: {
+    padding: Design.spacing[2],
+    borderRadius: Design.borderRadius.base,
+    backgroundColor: 'rgba(103, 126, 234, 0.1)',
+  },
+  availableOrdersScroll: {
+    marginBottom: Design.spacing[2],
+  },
+  availableOrderCard: {
+    ...getCardStyle(),
+    marginRight: Design.spacing[4],
+    width: 280,
+  },
+  orderCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Design.spacing[3],
+  },
+  orderNumber: {
+    ...Design.typography.body,
+    fontWeight: '700',
+    color: Design.colors.text,
+  },
+  orderTypeBadge: {
+    backgroundColor: Design.colors.primary,
+    paddingHorizontal: Design.spacing[2],
+    paddingVertical: Design.spacing[1],
+    borderRadius: Design.borderRadius.md,
+  },
+  foodBadge: {
+    backgroundColor: Design.colors.error,
+  },
+  fastBadge: {
+    backgroundColor: Design.colors.warning,
+  },
+  orderTypeText: {
+    ...Design.typography.overline,
+    color: Design.colors.textInverse,
+  },
+  orderDetails: {
+    marginBottom: Design.spacing[3],
+  },
+  customerName: {
+    ...Design.typography.label,
+    fontWeight: '600',
+    color: Design.colors.text,
+    marginBottom: Design.spacing[1],
+  },
+  deliveryAddress: {
+    ...Design.typography.caption,
+    color: Design.colors.textSecondary,
+    lineHeight: 16,
+  },
+  orderMetrics: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: Design.spacing[4],
+  },
+  orderMetric: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Design.spacing[1],
+  },
+  metricValue: {
+    ...Design.typography.caption,
+    color: Design.colors.textSecondary,
+    fontWeight: '500',
+  },
+  orderActions: {
+    flexDirection: 'row',
+    gap: Design.spacing[2],
+  },
+  miniDeclineButton: {
+    flex: 1,
+    backgroundColor: Design.colors.errorBackground,
+    borderRadius: Design.borderRadius.md,
+    paddingVertical: Design.spacing[3],
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: Design.colors.errorBorder,
+  },
+  miniAcceptButton: {
+    flex: 2,
+    backgroundColor: Design.colors.success,
+    borderRadius: Design.borderRadius.md,
+    paddingVertical: Design.spacing[3],
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  viewAllButton: {
+    backgroundColor: Design.colors.gray100,
+    borderRadius: Design.borderRadius.lg,
+    padding: Design.spacing[4],
+    width: 120,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderStyle: 'dashed',
+    borderWidth: 2,
+    borderColor: Design.colors.border,
+  },
+  viewAllText: {
+    ...Design.typography.label,
+    color: Design.colors.textSecondary,
+    marginBottom: Design.spacing[1],
+  },
+  viewAllCount: {
+    ...Design.typography.caption,
+    color: Design.colors.textTertiary,
+  },
+  noOrdersContainer: {
+    alignItems: 'center',
+    paddingVertical: Design.spacing[8],
+    backgroundColor: Design.colors.background,
+    borderRadius: Design.borderRadius.lg,
+    marginHorizontal: Design.spacing[1],
+  },
+  noOrdersText: {
+    ...Design.typography.body,
+    fontWeight: '600',
+    color: Design.colors.textSecondary,
+    marginTop: Design.spacing[3],
+    marginBottom: Design.spacing[1],
+  },
+  noOrdersSubtext: {
+    ...Design.typography.bodySmall,
+    color: Design.colors.textTertiary,
+    textAlign: 'center',
+  },
+  disabledOrderCard: {
+    opacity: 0.7,
+    borderColor: Design.colors.gray300,
+  },
+  disabledAcceptButton: {
+    backgroundColor: Design.colors.gray400,
+    opacity: 0.5,
+  },
+  capacityWarning: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Design.colors.warningBackground,
+    padding: Design.spacing[2],
+    borderRadius: Design.borderRadius.sm,
+    marginBottom: Design.spacing[2],
+    gap: Design.spacing[1],
+  },
+  capacityWarningText: {
+    ...Design.typography.caption,
+    color: Design.colors.warning,
+    flex: 1,
+    fontSize: 11,
+  },
+  statusCardOnline: {
+    backgroundColor: '#10B981',
+  },
+  statusCardOffline: {
+    backgroundColor: '#6B7280',
+  },
+  onlineIndicatorActive: {
+    backgroundColor: '#10B981',
+  },
+  onlineIndicatorInactive: {
+    backgroundColor: '#6B7280',
+  },
+  statCardBlue: {
+    backgroundColor: '#3B82F6',
+  },
+  statCardGreen: {
+    backgroundColor: '#10B981',
+  },
+  statCardYellow: {
+    backgroundColor: '#F59E0B',
+  },
+  statCardPurple: {
+    backgroundColor: '#8B5CF6',
+  },
+  quickActionButtonPurple: {
+    backgroundColor: '#8B5CF6',
+  },
+  quickActionButtonBlue: {
+    backgroundColor: '#3B82F6',
+  },
+  quickActionButtonYellow: {
+    backgroundColor: '#F59E0B',
   },
 });
 

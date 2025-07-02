@@ -14,6 +14,7 @@ import { Order } from '../types';
 import { COLORS, FONTS } from '../constants';
 import { haptics } from '../utils/haptics';
 import { soundService } from '../services/soundService';
+import { Design } from '../constants/designSystem';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -260,7 +261,7 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
             {/* Pickup Info */}
             <View style={styles.locationSection}>
               <View style={styles.locationIcon}>
-                <Ionicons name="bag-outline" size={20} color={COLORS.primary.default} />
+                <Ionicons name="bag-outline" size={20} color={Design.colors.primary} />
               </View>
               <View style={styles.locationInfo}>
                 <Text style={styles.locationLabel}>PICKUP</Text>
@@ -273,7 +274,7 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
             {/* Drop-off Info */}
             <View style={styles.locationSection}>
               <View style={styles.locationIcon}>
-                <Ionicons name="home-outline" size={20} color={COLORS.success.default} />
+                <Ionicons name="home-outline" size={20} color={Design.colors.success} />
               </View>
               <View style={styles.locationInfo}>
                 <Text style={styles.locationLabel}>DELIVERY</Text>
@@ -351,29 +352,25 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: Design.spacing[5],
   },
   container: {
-    backgroundColor: '#fff',
-    borderRadius: 24,
+    backgroundColor: Design.colors.background,
+    borderRadius: Design.borderRadius['2xl'],
     width: '100%',
     maxWidth: 380,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 8,
+    ...Design.shadows.large,
   },
   timerHeader: {
-    backgroundColor: '#667eea',
-    paddingVertical: 20,
-    paddingHorizontal: 24,
+    backgroundColor: Design.colors.primary,
+    paddingVertical: Design.spacing[5],
+    paddingHorizontal: Design.spacing[6],
   },
   timerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    gap: Design.spacing[4],
   },
   timerCircle: {
     width: 60,
@@ -385,90 +382,82 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
   },
   timerText: {
-    fontSize: 24,
+    ...Design.typography.h4,
     fontWeight: 'bold',
-    fontFamily: FONTS.bold,
   },
   timerInfo: {
     flex: 1,
   },
   timerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#fff',
-    fontFamily: FONTS.bold,
+    ...Design.typography.h4,
+    color: Design.colors.textInverse,
   },
   timerSubtitle: {
-    fontSize: 14,
+    ...Design.typography.label,
     color: 'rgba(255, 255, 255, 0.8)',
-    fontFamily: FONTS.regular,
   },
   orderTypeContainer: {
     flexDirection: 'row',
-    gap: 8,
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    backgroundColor: '#f8f9fa',
+    gap: Design.spacing[2],
+    paddingHorizontal: Design.spacing[6],
+    paddingVertical: Design.spacing[4],
+    backgroundColor: Design.colors.backgroundTertiary,
   },
   orderTypeBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#667eea',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    gap: 6,
+    backgroundColor: Design.colors.primary,
+    paddingHorizontal: Design.spacing[3],
+    paddingVertical: Design.spacing[2],
+    borderRadius: Design.borderRadius.lg,
+    gap: Design.spacing[2],
   },
   foodBadge: {
-    backgroundColor: '#ff6b6b',
+    backgroundColor: Design.colors.error,
   },
   fastBadge: {
-    backgroundColor: '#ffd93d',
+    backgroundColor: Design.colors.warning,
   },
   orderTypeText: {
-    fontSize: 12,
+    ...Design.typography.caption,
     fontWeight: 'bold',
-    color: '#fff',
-    fontFamily: FONTS.bold,
+    color: Design.colors.textInverse,
   },
   priorityBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: '#ffa94d',
+    paddingHorizontal: Design.spacing[3],
+    paddingVertical: Design.spacing[2],
+    borderRadius: Design.borderRadius.lg,
+    backgroundColor: Design.colors.warning,
   },
   urgentBadge: {
-    backgroundColor: '#ff4757',
+    backgroundColor: Design.colors.error,
   },
   priorityText: {
-    fontSize: 12,
+    ...Design.typography.caption,
     fontWeight: 'bold',
-    color: '#fff',
-    fontFamily: FONTS.bold,
+    color: Design.colors.textInverse,
   },
   orderSummary: {
-    paddingHorizontal: 24,
-    paddingVertical: 20,
+    paddingHorizontal: Design.spacing[6],
+    paddingVertical: Design.spacing[5],
   },
   orderNumber: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 20,
+    ...Design.typography.h5,
+    color: Design.colors.text,
+    marginBottom: Design.spacing[5],
     textAlign: 'center',
-    fontFamily: FONTS.bold,
   },
   locationSection: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: 16,
-    gap: 12,
+    marginBottom: Design.spacing[4],
+    gap: Design.spacing[3],
   },
   locationIcon: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#f1f3f4',
+    backgroundColor: Design.colors.backgroundTertiary,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -476,90 +465,80 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   locationLabel: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#666',
-    marginBottom: 4,
-    fontFamily: FONTS.bold,
+    ...Design.typography.overline,
+    color: Design.colors.textSecondary,
+    marginBottom: Design.spacing[1],
   },
   locationAddress: {
-    fontSize: 14,
-    color: '#333',
-    fontFamily: FONTS.regular,
+    ...Design.typography.body,
+    color: Design.colors.text,
     lineHeight: 20,
   },
   metricsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 20,
-    paddingTop: 16,
+    marginTop: Design.spacing[5],
+    paddingTop: Design.spacing[4],
     borderTopWidth: 1,
-    borderTopColor: '#f1f3f4',
+    borderTopColor: Design.colors.border,
   },
   metric: {
     alignItems: 'center',
-    gap: 4,
+    gap: Design.spacing[1],
   },
   metricText: {
-    fontSize: 12,
-    color: '#666',
-    fontFamily: FONTS.medium,
+    ...Design.typography.caption,
+    color: Design.colors.textSecondary,
   },
   actionButtons: {
     flexDirection: 'row',
-    gap: 12,
-    padding: 24,
-    backgroundColor: '#f8f9fa',
+    gap: Design.spacing[3],
+    padding: Design.spacing[6],
+    backgroundColor: Design.colors.backgroundTertiary,
   },
   declineButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    paddingVertical: 16,
-    gap: 8,
+    backgroundColor: Design.colors.background,
+    borderRadius: Design.borderRadius.lg,
+    paddingVertical: Design.spacing[4],
+    gap: Design.spacing[2],
     borderWidth: 2,
-    borderColor: '#FF4757',
+    borderColor: Design.colors.error,
   },
   declineButtonText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#FF4757',
-    fontFamily: FONTS.bold,
+    ...Design.typography.button,
+    color: Design.colors.error,
   },
   skipButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#f1f3f4',
-    borderRadius: 16,
-    paddingVertical: 16,
-    gap: 8,
+    backgroundColor: Design.colors.gray100,
+    borderRadius: Design.borderRadius.lg,
+    paddingVertical: Design.spacing[4],
+    gap: Design.spacing[2],
   },
   skipButtonText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#666',
-    fontFamily: FONTS.bold,
+    ...Design.typography.button,
+    color: Design.colors.textSecondary,
   },
   acceptButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#4CAF50',
-    borderRadius: 16,
-    paddingVertical: 16,
-    gap: 8,
+    backgroundColor: Design.colors.success,
+    borderRadius: Design.borderRadius.lg,
+    paddingVertical: Design.spacing[4],
+    gap: Design.spacing[2],
   },
   acceptButtonText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#fff',
-    fontFamily: FONTS.bold,
+    ...Design.typography.button,
+    color: Design.colors.textInverse,
   },
 });
 
