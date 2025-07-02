@@ -105,12 +105,8 @@ const DashboardScreen: React.FC = () => {
     try {
       const result = await acceptOrder(orderId);
       if (result) {
-        Alert.alert('Success', 'Order accepted successfully!', [
-          { 
-            text: 'View Accepted Orders', 
-            onPress: () => navigation.navigate('AcceptedOrders') 
-          }
-        ]);
+        // Navigate directly to route screen instead of showing popup
+        navigation.navigate('RouteNavigation');
       } else {
         Alert.alert('Error', 'Failed to accept order');
       }

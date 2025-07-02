@@ -99,23 +99,12 @@ export const DriverProvider: React.FC<DriverProviderProps> = ({ children }) => {
         await getDriverProfile();
         await getDriverBalance();
 
-        // Initialize location service with backend integration
+        // Initialize location service
         try {
           const { locationService } = await import('../services/locationService');
           
-          // Set location update callback to send to backend
-          locationService.setLocationUpdateCallback(async (location) => {
-            console.log('📍 Location update received:', location);
-            try {
-              // Update backend with current location for DistanceCalculationService
-              await updateDriverLocation(location.latitude, location.longitude);
-            } catch (error) {
-              console.warn('⚠️ Failed to send location update to backend:', error);
-            }
-          });
-          
           await locationService.initialize();
-          console.log('✅ Location service initialized with backend integration');
+          console.log('✅ Location service initialized');
         } catch (error) {
           console.error('❌ Error initializing location service:', error);
         }
@@ -185,6 +174,38 @@ export const DriverProvider: React.FC<DriverProviderProps> = ({ children }) => {
 
     initializeDriver();
   }, [isLoggedIn]);
+
+  // Auto-start/stop location tracking based on driver online status
+  useEffect(() => {
+    const handleLocationTracking = async () => {
+      if (!state.driver || !isLoggedIn) return;
+
+      try {
+        const { locationService } = await import('../services/locationService');
+        
+        if (state.driver.isOnline && !locationService.isLocationTracking()) {
+          console.log('🚀 Driver is online - auto-starting location tracking');
+          await locationService.startLocationTracking();
+          
+          // Force an immediate location update
+          try {
+            const currentLocation = await locationService.getCurrentLocation();
+            await updateDriverLocation(currentLocation.latitude, currentLocation.longitude);
+            console.log('✅ Auto-started location tracking and sent initial location');
+          } catch (error) {
+            console.warn('⚠️ Failed to send initial location update:', error);
+          }
+        } else if (!state.driver.isOnline && locationService.isLocationTracking()) {
+          console.log('🛑 Driver is offline - stopping location tracking');
+          locationService.stopLocationTracking();
+        }
+      } catch (error) {
+        console.error('❌ Error handling location tracking:', error);
+      }
+    };
+
+    handleLocationTracking();
+  }, [state.driver?.isOnline, isLoggedIn]);
 
   const getDriverProfile = async (): Promise<void> => {
     if (state.isLoading) return;

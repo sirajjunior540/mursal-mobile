@@ -3,7 +3,7 @@
  */
 import React, { createContext, useContext, useReducer, useCallback, useMemo, useEffect } from 'react';
 import { Platform } from 'react-native';
-import Keychain from 'react-native-keychain';
+import * as Keychain from 'react-native-keychain';
 import { 
   Driver, 
   AuthContextType, 
@@ -115,16 +115,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({
         timestamp: Date.now(),
       });
 
-      await Keychain.setInternetCredentials(
-        KEYCHAIN_SERVICE,
-        TOKEN_KEY,
-        tokenData,
-        {
-          accessControl: Keychain.ACCESS_CONTROL.BIOMETRY_CURRENT_SET_OR_DEVICE_PASSCODE,
-          accessGroup: Platform.OS === 'ios' ? 'group.mursal.driver' : undefined,
-          storage: Keychain.STORAGE_TYPE.AES_GCM_NO_AUTH,
-        }
-      );
+      await Keychain.setGenericPassword(TOKEN_KEY, tokenData, {
+        service: KEYCHAIN_SERVICE,
+        accessControl: Keychain.ACCESS_CONTROL.BIOMETRY_CURRENT_SET_OR_DEVICE_PASSCODE,
+        accessGroup: Platform.OS === 'ios' ? 'group.mursal.driver' : undefined,
+        storage: Keychain.STORAGE_TYPE.AES_GCM_NO_AUTH,
+      });
 
       logger.debug('Tokens stored securely');
     } catch (error) {
@@ -135,7 +131,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({
 
   const getStoredTokens = useCallback(async () => {
     try {
-      const credentials = await Keychain.getInternetCredentials(KEYCHAIN_SERVICE);
+      const credentials = await Keychain.getGenericPassword({ service: KEYCHAIN_SERVICE });
       
       if (credentials && credentials.password) {
         const tokenData = JSON.parse(credentials.password);
@@ -155,7 +151,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({
 
   const clearStoredTokens = useCallback(async () => {
     try {
-      await Keychain.resetInternetCredentials(KEYCHAIN_SERVICE);
+      await Keychain.resetGenericPassword({ service: KEYCHAIN_SERVICE });
       logger.debug('Tokens cleared from secure storage');
     } catch (error) {
       logger.error('Failed to clear stored tokens', error as Error);
@@ -201,6 +197,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({
     }
 
     return response;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiBaseUrl, getStoredTokens]);
 
   // Get current valid token
