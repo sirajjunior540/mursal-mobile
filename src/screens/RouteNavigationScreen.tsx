@@ -132,6 +132,44 @@ const RouteNavigationScreen: React.FC = () => {
     ]).start();
   }, []);
 
+  // Detect when route is complete and offer to clear it
+  useEffect(() => {
+    if (routeProgress && routeProgress.percentage === 100 && routeOrders && Array.isArray(routeOrders) && routeOrders.length > 0) {
+      const allDelivered = routeOrders.every(order => order && order.status === 'delivered');
+      
+      if (allDelivered) {
+        // Show a success message and option to clear route
+        Alert.alert(
+          'Route Complete! 🎉',
+          `Congratulations! You've completed all ${routeOrders.length} deliveries in this route.`,
+          [
+            {
+              text: 'Clear Route',
+              onPress: async () => {
+                // Clear completed orders by refreshing driver orders
+                // This will fetch fresh data from backend excluding completed orders
+                await getDriverOrders?.();
+                Alert.alert('Success', 'Route cleared! Ready for new deliveries.');
+              }
+            },
+            {
+              text: 'Keep Route',
+              style: 'cancel'
+            }
+          ]
+        );
+      }
+    }
+  }, [routeProgress, routeOrders, getDriverOrders]);
+
+  // Monitor driver location changes for dynamic route optimization
+  useEffect(() => {
+    if (driver?.current_latitude && driver?.current_longitude && routeOrders && Array.isArray(routeOrders) && routeOrders.length > 0) {
+      // Route automatically re-optimizes when driver location changes due to useMemo dependencies
+      // This ensures drivers always get the optimal next step based on their current position
+    }
+  }, [driver?.current_latitude, driver?.current_longitude, routeOrders]);
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     Haptics.trigger('impactLight');
@@ -151,23 +189,26 @@ const RouteNavigationScreen: React.FC = () => {
   const routeOrders = useMemo(() => {
     const driverArray = Array.isArray(driverOrders) ? driverOrders : [];
     
+    // Extra safety check for array items
+    const safeDriverArray = driverArray.filter(order => order && typeof order === 'object');
+    
     console.log('🗺️ RouteNavigationScreen - driverOrders received:', {
-      driverOrders: driverArray.length,
+      driverOrders: safeDriverArray.length,
       raw: driverOrders,
-      driverOrderIds: driverArray.map(o => `${o.id}(${o.status})`),
-      firstOrderFull: driverArray.length > 0 ? driverArray[0] : null
+      driverOrderIds: safeDriverArray.map(o => `${o.id}(${o.status})`),
+      firstOrderFull: safeDriverArray.length > 0 ? safeDriverArray[0] : null
     });
     
     // Filter for active orders that can be navigated to
-    const filtered = driverArray.filter(order => {
+    const filtered = safeDriverArray.filter(order => {
       const hasPickupLocation = !!(order.pickup_latitude && order.pickup_longitude);
       const hasDeliveryLocation = !!(order.delivery_latitude && order.delivery_longitude);
       const hasLocation = hasPickupLocation || hasDeliveryLocation;
       
-      // Include all statuses that need navigation: assigned, accepted, picked_up, in_transit
-      const activeStatuses = ['assigned', 'accepted', 'picked_up', 'in_transit'];
-      const isActive = activeStatuses.includes(order.status) || 
-                       (order.status !== 'delivered' && order.status !== 'cancelled');
+      // Include all statuses for route progress: assigned, accepted, picked_up, in_transit, delivered
+      // Only exclude cancelled orders from the route
+      const routeStatuses = ['assigned', 'accepted', 'picked_up', 'in_transit', 'delivered'];
+      const isActive = routeStatuses.includes(order.status);
       
       console.log(`📋 RouteNavigationScreen filtering - Order ${order.id}:`, {
         status: order.status,
@@ -190,10 +231,10 @@ const RouteNavigationScreen: React.FC = () => {
     });
     
     console.log(`✅ RouteNavigationScreen final result: ${filtered.length} orders will show on route screen`);
-    if (filtered.length === 0 && driverArray.length > 0) {
+    if (filtered.length === 0 && safeDriverArray.length > 0) {
       console.log('❌ RouteNavigationScreen: No orders passed filtering! Check filtering logic.');
     }
-    return filtered;
+    return filtered || [];
   }, [driverOrders]);
 
   // Available orders for acceptance (from Dashboard)
@@ -211,62 +252,180 @@ const RouteNavigationScreen: React.FC = () => {
   const optimizeRoute = useCallback((orders: Order[], driverLat?: number, driverLon?: number): OptimizedRoute => {
     const points: RoutePoint[] = [];
     
-    // Create points for pickup and delivery in simple sequential order
-    orders.forEach((order, orderIndex) => {
-      // Add pickup point if coordinates exist and order is not picked up
-      if (order.pickup_latitude && order.pickup_longitude && order.status !== 'in_transit') {
-        points.push({
-          id: `${order.id}-pickup`,
+    // Safety check for orders array
+    if (!orders || !Array.isArray(orders) || orders.length === 0) {
+      return {
+        points: [],
+        totalDistance: 0,
+        totalTime: 0,
+        estimatedCompletion: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      };
+    }
+    
+    // Separate orders by status for intelligent sequencing
+    const ordersToPickup = orders.filter(order => 
+      order && order.status && ['assigned', 'accepted'].includes(order.status) && 
+      order.pickup_latitude && order.pickup_longitude
+    );
+    const ordersToDeliver = orders.filter(order => 
+      order && order.status && ['picked_up', 'in_transit'].includes(order.status) && 
+      order.delivery_latitude && order.delivery_longitude
+    );
+    const deliveredOrders = orders.filter(order => 
+      order && order.status === 'delivered'
+    );
+    
+    // Build optimized route that interleaves pickups and deliveries based on proximity
+    const pendingPickups = [...ordersToPickup];
+    const pendingDeliveries = [...ordersToDeliver];
+    
+    // Helper function to calculate simple distance (for basic optimization)
+    const calculateDistance = (lat1: number, lng1: number, lat2: number, lng2: number) => {
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLng = (lng2 - lng1) * Math.PI / 180;
+      const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLng/2) * Math.sin(dLng/2);
+      return 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)) * 6371; // Distance in km
+    };
+    
+    // Start from driver's current location or first pickup
+    let currentLat = driverLat || (pendingPickups[0]?.pickup_latitude || pendingDeliveries[0]?.delivery_latitude || 0);
+    let currentLng = driverLon || (pendingPickups[0]?.pickup_longitude || pendingDeliveries[0]?.delivery_longitude || 0);
+    
+    // Keep track of completed points to add them in the right sequence later
+    const completedPoints: RoutePoint[] = [];
+    
+    deliveredOrders.forEach((order) => {
+      if (order.pickup_latitude && order.pickup_longitude) {
+        completedPoints.push({
+          id: `${order.id}-pickup-completed`,
           order,
           latitude: order.pickup_latitude,
           longitude: order.pickup_longitude,
           address: order.pickup_address || 'Pickup Location',
           type: 'pickup',
-          sequenceNumber: points.length + 1,
-          estimatedArrival: new Date(Date.now() + (points.length * 15 * 60000)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          distanceFromPrevious: orderIndex === 0 ? 0 : 2.5, // Placeholder distance
-          timeFromPrevious: 15, // 15 minutes between stops
+          sequenceNumber: 0, // Will be set later
+          estimatedArrival: 'Completed',
+          distanceFromPrevious: 0,
+          timeFromPrevious: 0,
         });
       }
       
-      // Add delivery point if coordinates exist
       if (order.delivery_latitude && order.delivery_longitude) {
-        points.push({
-          id: `${order.id}-delivery`,
+        completedPoints.push({
+          id: `${order.id}-delivery-completed`,
           order,
           latitude: order.delivery_latitude,
           longitude: order.delivery_longitude,
           address: order.delivery_address || 'Delivery Location',
           type: 'delivery',
-          sequenceNumber: points.length + 1,
-          estimatedArrival: new Date(Date.now() + (points.length * 15 * 60000)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          distanceFromPrevious: 1.5, // Placeholder distance
-          timeFromPrevious: 10, // 10 minutes for delivery
+          sequenceNumber: 0, // Will be set later
+          estimatedArrival: 'Completed',
+          distanceFromPrevious: 0,
+          timeFromPrevious: 0,
         });
       }
     });
+    
+    // Build optimized sequence for remaining points
+    while (pendingPickups.length > 0 || pendingDeliveries.length > 0) {
+      let nextPoint = null;
+      let minDistance = Infinity;
+      let pointType: 'pickup' | 'delivery' = 'pickup';
+      let orderIndex = -1;
+      
+      // Check all pending pickups for closest one
+      pendingPickups.forEach((order, index) => {
+        const distance = calculateDistance(currentLat, currentLng, order.pickup_latitude!, order.pickup_longitude!);
+        if (distance < minDistance) {
+          minDistance = distance;
+          nextPoint = order;
+          pointType = 'pickup';
+          orderIndex = index;
+        }
+      });
+      
+      // Check all pending deliveries for closest one
+      pendingDeliveries.forEach((order, index) => {
+        const distance = calculateDistance(currentLat, currentLng, order.delivery_latitude!, order.delivery_longitude!);
+        if (distance < minDistance) {
+          minDistance = distance;
+          nextPoint = order;
+          pointType = 'delivery';
+          orderIndex = index;
+        }
+      });
+      
+      // Add the closest point to route
+      if (nextPoint) {
+        if (pointType === 'pickup') {
+          points.push({
+            id: `${nextPoint.id}-pickup`,
+            order: nextPoint,
+            latitude: nextPoint.pickup_latitude!,
+            longitude: nextPoint.pickup_longitude!,
+            address: nextPoint.pickup_address || 'Pickup Location',
+            type: 'pickup',
+            sequenceNumber: points.length + 1,
+            estimatedArrival: new Date(Date.now() + (points.length * 15 * 60000)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            distanceFromPrevious: minDistance,
+            timeFromPrevious: Math.max(minDistance * 2, 10), // Estimate 2 min per km, min 10 min
+          });
+          currentLat = nextPoint.pickup_latitude!;
+          currentLng = nextPoint.pickup_longitude!;
+          pendingPickups.splice(orderIndex, 1);
+        } else {
+          points.push({
+            id: `${nextPoint.id}-delivery`,
+            order: nextPoint,
+            latitude: nextPoint.delivery_latitude!,
+            longitude: nextPoint.delivery_longitude!,
+            address: nextPoint.delivery_address || 'Delivery Location',
+            type: 'delivery',
+            sequenceNumber: points.length + 1,
+            estimatedArrival: new Date(Date.now() + (points.length * 15 * 60000)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            distanceFromPrevious: minDistance,
+            timeFromPrevious: Math.max(minDistance * 2, 10), // Estimate 2 min per km, min 10 min
+          });
+          currentLat = nextPoint.delivery_latitude!;
+          currentLng = nextPoint.delivery_longitude!;
+          pendingDeliveries.splice(orderIndex, 1);
+        }
+      } else {
+        break; // Safety break
+      }
+    }
+    
+    // Add completed points at the beginning for progress tracking
+    const allPoints = [...completedPoints, ...points];
+    
+    // Fix sequence numbers
+    allPoints.forEach((point, index) => {
+      point.sequenceNumber = index + 1;
+    });
 
     return {
-      points,
-      totalDistance: points.reduce((sum, point) => sum + (point.distanceFromPrevious || 0), 0),
-      totalTime: points.reduce((sum, point) => sum + (point.timeFromPrevious || 0), 0),
-      estimatedCompletion: points.length > 0 ? 
-        new Date(Date.now() + (points.length * 15 * 60000)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) :
+      points: allPoints,
+      totalDistance: allPoints.reduce((sum, point) => sum + (point.distanceFromPrevious || 0), 0),
+      totalTime: allPoints.reduce((sum, point) => sum + (point.timeFromPrevious || 0), 0),
+      estimatedCompletion: allPoints.length > 0 ? 
+        new Date(Date.now() + (allPoints.length * 15 * 60000)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) :
         new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
   }, []);
 
   // Get optimized route - prefer backend route if available
   const optimizedRoute = useMemo(() => {
-    if (backendRoute && backendRoute.route_steps && backendRoute.route_steps.length > 0) {
+    if (backendRoute && backendRoute.route_steps && Array.isArray(backendRoute.route_steps) && backendRoute.route_steps.length > 0) {
       console.log('✅ Using backend route optimization');
       return transformBackendRoute(backendRoute);
     }
     
-    if (!routeOrders.length) return null;
+    if (!routeOrders || !Array.isArray(routeOrders) || !routeOrders.length) return null;
     console.log('🔄 Using fallback local route optimization');
     return optimizeRoute(routeOrders, driver?.current_latitude, driver?.current_longitude);
-  }, [routeOrders, optimizeRoute, driver?.current_latitude, driver?.current_longitude, backendRoute]);
+  }, [routeOrders, optimizeRoute, driver?.current_latitude, driver?.current_longitude, backendRoute, transformBackendRoute]);
 
   // Transform backend route data to match mobile format
   const transformBackendRoute = useCallback((backendRouteData: any): OptimizedRoute => {
@@ -274,7 +433,7 @@ const RouteNavigationScreen: React.FC = () => {
     
     const points: RoutePoint[] = routeSteps.map((step: any, index: number) => ({
       id: `${step.delivery_id || index}-${step.action || 'unknown'}`,
-      order: routeOrders.find(o => o.id === step.delivery_id) || {} as Order,
+      order: (routeOrders || []).find(o => o.id === step.delivery_id) || {} as Order,
       latitude: step.latitude || 0,
       longitude: step.longitude || 0,
       address: step.address || '',
@@ -295,27 +454,35 @@ const RouteNavigationScreen: React.FC = () => {
 
   // Find current step in route
   const currentStepIndex = useMemo(() => {
-    if (!optimizedRoute?.points) return 0;
+    if (!optimizedRoute?.points || !Array.isArray(optimizedRoute.points)) return 0;
     
-    // Find first incomplete step
+    let completedSteps = 0;
+    
+    // Count completed steps for accurate progress tracking
     for (let i = 0; i < optimizedRoute.points.length; i++) {
       const point = optimizedRoute.points[i];
-      const order = point.order;
+      const order = point?.order;
       
-      // If it's a pickup and order is not picked up yet (assigned, accepted statuses)
+      // Skip if point or order is invalid
+      if (!point || !order || !order.status) continue;
+      
+      // A pickup step is complete if order is picked up or delivered
       if (point.type === 'pickup' && 
-          ['assigned', 'accepted'].includes(order.status)) {
-        return i;
+          ['picked_up', 'in_transit', 'delivered'].includes(order.status)) {
+        completedSteps++;
+        continue;
       }
       
-      // If it's a delivery and order is picked up but not delivered (picked_up, in_transit statuses)
-      if (point.type === 'delivery' && 
-          ['picked_up', 'in_transit'].includes(order.status)) {
-        return i;
+      // A delivery step is complete if order is delivered
+      if (point.type === 'delivery' && order.status === 'delivered') {
+        completedSteps++;
+        continue;
       }
+      
+      // If we reach an incomplete step, this is where we are
+      break;
     }
-    
-    return 0;
+    return completedSteps;
   }, [optimizedRoute]);
 
   // Current point
@@ -323,7 +490,7 @@ const RouteNavigationScreen: React.FC = () => {
   
   // Route progress
   const routeProgress = useMemo(() => {
-    if (!optimizedRoute?.points.length) return { completed: 0, total: 0, percentage: 0 };
+    if (!optimizedRoute?.points?.length) return { completed: 0, total: 0, percentage: 0 };
     
     const completed = currentStepIndex;
     const total = optimizedRoute.points.length;
@@ -334,7 +501,7 @@ const RouteNavigationScreen: React.FC = () => {
 
   // Get upcoming steps (excluding current step)
   const upcomingSteps = useMemo(() => {
-    if (!optimizedRoute?.points) return [];
+    if (!optimizedRoute?.points || !Array.isArray(optimizedRoute.points)) return [];
     return optimizedRoute.points.slice(currentStepIndex + 1).slice(0, 3);
   }, [optimizedRoute, currentStepIndex]);
 

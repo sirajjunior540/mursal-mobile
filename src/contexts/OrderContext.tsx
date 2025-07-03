@@ -535,14 +535,28 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({ children, apiBaseU
       if (response.success) {
         console.log(`✅ Order ${orderId} status updated to: ${status}`);
 
-        // If delivered, remove from active orders as it's completed
-        if (status === 'delivered') {
-          const updatedOrders = state.orders.filter(order => order.id !== orderId);
-          dispatch({ type: 'SET_ORDERS', payload: updatedOrders });
-          await Storage.setItem(STORAGE_KEYS.ACTIVE_ORDERS, updatedOrders);
+        // Update the order status in the active orders list
+        const updatedOrders = state.orders.map(order => 
+          order.id === orderId ? { ...order, status } : order
+        );
+        dispatch({ type: 'SET_ORDERS', payload: updatedOrders });
+        await Storage.setItem(STORAGE_KEYS.ACTIVE_ORDERS, updatedOrders);
 
-          // Refresh order history to include the completed order
+        // If delivered, refresh order history to include the completed order
+        if (status === 'delivered') {
           getOrderHistory();
+          
+          // Check if all orders in current route are delivered
+          const allDelivered = updatedOrders.every(order => 
+            order.status === 'delivered' || order.status === 'cancelled'
+          );
+          
+          // Only clear the route when all orders are complete
+          if (allDelivered) {
+            console.log('🏁 All orders in route completed - route will be cleared on next load');
+            // Note: We don't clear here immediately to allow route progress to show 100%
+            // The route will be cleared when driver navigates away or on next app load
+          }
         }
 
         return true;
