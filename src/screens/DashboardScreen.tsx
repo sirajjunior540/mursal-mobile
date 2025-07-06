@@ -23,6 +23,8 @@ import { useOrders } from '../contexts/OrderContext';
 import { useDriver } from '../contexts/DriverContext';
 import { Order } from '@/types';
 import { Design, getCardStyle } from '../constants/designSystem';
+import { orderActionService } from '../services/orderActionService';
+import { notificationService } from '../services/notificationService';
 
 interface DashboardStackParamList extends Record<string, object | undefined> {
   AcceptedOrders: undefined;
@@ -74,6 +76,11 @@ const DashboardScreen: React.FC = () => {
     
     setOrderNotificationCallback(handleNewOrder);
 
+    // Also set up push notification callback for background wake-up
+    notificationService.setNotificationCallbacks({
+      onNewOrder: handleNewOrder
+    });
+
     return () => {
       setOrderNotificationCallback(null);
     };
@@ -116,6 +123,32 @@ const DashboardScreen: React.FC = () => {
     }
   }, [acceptOrder, navigation]);
 
+  const handleAcceptRoute = useCallback(async (routeId: string) => {
+    
+    Haptics.trigger('notificationSuccess');
+    setShowIncomingModal(false);
+    
+    try {
+      const result = await orderActionService.acceptRoute(routeId, {}, {
+        showConfirmation: false,
+        onSuccess: () => {
+          // Navigate directly to route screen
+          navigation.navigate('RouteNavigation');
+        },
+        onError: (error) => {
+          Alert.alert('Error', `Failed to accept route: ${error}`);
+        }
+      });
+      
+      if (!result.success) {
+        Alert.alert('Error', result.error || 'Failed to accept route');
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to accept route';
+      Alert.alert('Error', errorMessage);
+    }
+  }, [orderActionService, navigation]);
+
   const handleDeclineOrder = useCallback(async (orderId: string) => {
     Haptics.trigger('impactLight');
     setShowIncomingModal(false);
@@ -128,22 +161,35 @@ const DashboardScreen: React.FC = () => {
     }
   }, [declineOrder]);
 
-  const handleSkipOrder = useCallback((orderId: string) => {
+  const handleSkipOrder = useCallback(async (orderId: string) => {
     Haptics.trigger('selection');
     setShowIncomingModal(false);
     
-    // If we have the incoming order, add it back to available orders
-    if (incomingOrder && incomingOrder.id === orderId) {
-      // Trigger a refresh to ensure the order appears in the list
-      setTimeout(() => {
-        refreshOrders().catch(() => {
-          // Handle refresh error silently
-        });
-      }, 500);
+    try {
+      console.log('⏭️ Skipping order:', orderId);
+      const result = await orderActionService.skipOrder(orderId, {
+        showConfirmation: false,
+        onSuccess: () => {
+          console.log('✅ Order skipped successfully');
+          // Refresh orders to update the available list
+          refreshOrders().catch(() => {
+            console.warn('Failed to refresh orders after skip');
+          });
+        },
+        onError: (error) => {
+          console.error('❌ Failed to skip order:', error);
+          Alert.alert('Error', 'Failed to skip order');
+        }
+      });
+      
+      if (result.success) {
+        console.log('🎉 Order skipped and marked as viewed - won\'t appear again');
+      }
+    } catch (error) {
+      console.error('❌ Error in handleSkipOrder:', error);
+      Alert.alert('Error', 'Failed to skip order');
     }
-    
-    Alert.alert('Order Skipped', 'The order has been skipped and moved to available orders');
-  }, [incomingOrder, refreshOrders]);
+  }, [refreshOrders]);
 
   // Test function to trigger popup manually
   const testIncomingOrder = useCallback(() => {
@@ -447,6 +493,7 @@ const DashboardScreen: React.FC = () => {
         onDecline={handleDeclineOrder}
         onSkip={handleSkipOrder}
         onClose={() => setShowIncomingModal(false)}
+        onAcceptRoute={handleAcceptRoute}
       />
     </View>
   );

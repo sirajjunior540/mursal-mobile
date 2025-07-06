@@ -117,6 +117,60 @@ class OrderActionService {
   }
 
   /**
+   * Skip an order (mark as viewed) - prevents future notifications
+   */
+  async skipOrder(
+    orderId: string,
+    options: {
+      showConfirmation?: boolean;
+      onSuccess?: () => void;
+      onError?: (error: string) => void;
+    } = {}
+  ): Promise<OrderActionResult> {
+    const { showConfirmation = false, onSuccess, onError } = options;
+
+    try {
+      console.log(`⏭️ Skipping order ${orderId} (marking as viewed)...`);
+      
+      const response = await deliveryApi.markDeliveryViewed(orderId);
+
+      if (response.success) {
+        const successMessage = 'Order skipped - won\'t appear again';
+        
+        if (showConfirmation) {
+          Alert.alert('Order Skipped', successMessage, [
+            { text: 'OK', onPress: onSuccess }
+          ]);
+        } else {
+          onSuccess?.();
+        }
+
+        return {
+          success: true,
+          message: successMessage,
+        };
+      } else {
+        throw new Error(response.error || 'Failed to skip order');
+      }
+    } catch (error: any) {
+      console.error('❌ Error skipping order:', error);
+      
+      const errorMessage = error.response?.data?.detail || error.message || 'Failed to skip order';
+      
+      if (showConfirmation) {
+        Alert.alert('Error', errorMessage);
+      }
+      
+      onError?.(errorMessage);
+      
+      return {
+        success: false,
+        error: errorMessage,
+      };
+    }
+  }
+
+  /**
    * Decline an order with reason
    */
   async declineOrder(
@@ -342,7 +396,7 @@ class OrderActionService {
   async batchProcessOrders(
     actions: Array<{
       orderId: string;
-      action: 'accept' | 'decline' | 'updateStatus';
+      action: 'accept' | 'decline' | 'skip' | 'updateStatus';
       data?: any;
     }>
   ): Promise<OrderActionResult[]> {
@@ -358,6 +412,9 @@ class OrderActionService {
         case 'decline':
           result = await this.declineOrder(action.orderId, action.data, { showConfirmation: false });
           break;
+        case 'skip':
+          result = await this.skipOrder(action.orderId, { showConfirmation: false });
+          break;
         case 'updateStatus':
           result = await this.updateOrderStatus(action.orderId, action.data, { showConfirmation: false });
           break;
@@ -369,6 +426,126 @@ class OrderActionService {
     }
 
     return results;
+  }
+
+  /**
+   * Accept a batch order or route
+   */
+  async acceptBatchOrder(
+    batchId: string,
+    data: AcceptOrderData = {},
+    options: {
+      showConfirmation?: boolean;
+      onSuccess?: () => void;
+      onError?: (error: string) => void;
+    } = {}
+  ): Promise<OrderActionResult> {
+    const { showConfirmation = true, onSuccess, onError } = options;
+
+    try {
+      console.log(`🎯 Accepting batch order ${batchId}...`);
+      
+      // Import API service
+      const { apiService } = await import('./api');
+      const response = await apiService.acceptBatchOrder(batchId);
+
+      if (response.success) {
+        // Play success sound
+        soundService.playSuccessSound();
+        
+        const successMessage = 'Batch order accepted successfully!';
+        
+        if (showConfirmation) {
+          Alert.alert('Batch Accepted', successMessage, [
+            { text: 'OK', onPress: onSuccess }
+          ]);
+        } else {
+          onSuccess?.();
+        }
+
+        return {
+          success: true,
+          message: successMessage,
+        };
+      } else {
+        throw new Error(response.error || 'Failed to accept batch order');
+      }
+    } catch (error: any) {
+      console.error('❌ Error accepting batch order:', error);
+      
+      const errorMessage = error.response?.data?.detail || error.message || 'Failed to accept batch order';
+      
+      if (showConfirmation) {
+        Alert.alert('Error', errorMessage);
+      }
+      
+      onError?.(errorMessage);
+      
+      return {
+        success: false,
+        error: errorMessage,
+      };
+    }
+  }
+
+  /**
+   * Accept a route
+   */
+  async acceptRoute(
+    routeId: string,
+    data: AcceptOrderData = {},
+    options: {
+      showConfirmation?: boolean;
+      onSuccess?: () => void;
+      onError?: (error: string) => void;
+    } = {}
+  ): Promise<OrderActionResult> {
+    const { showConfirmation = true, onSuccess, onError } = options;
+
+    try {
+      console.log(`🗺️ Accepting route ${routeId}...`);
+      
+      // Import API service
+      const { apiService } = await import('./api');
+      const response = await apiService.acceptRoute(routeId);
+
+      if (response.success) {
+        // Play success sound
+        soundService.playSuccessSound();
+        
+        const successMessage = 'Route accepted successfully!';
+        
+        if (showConfirmation) {
+          Alert.alert('Route Accepted', successMessage, [
+            { text: 'OK', onPress: onSuccess }
+          ]);
+        } else {
+          onSuccess?.();
+        }
+
+        return {
+          success: true,
+          message: successMessage,
+        };
+      } else {
+        throw new Error(response.error || 'Failed to accept route');
+      }
+    } catch (error: any) {
+      console.error('❌ Error accepting route:', error);
+      
+      const errorMessage = error.response?.data?.detail || error.message || 'Failed to accept route';
+      
+      if (showConfirmation) {
+        Alert.alert('Error', errorMessage);
+      }
+      
+      onError?.(errorMessage);
+      
+      return {
+        success: false,
+        error: errorMessage,
+      };
+    }
   }
 }
 

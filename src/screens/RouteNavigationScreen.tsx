@@ -28,6 +28,7 @@ import { useOrders } from '../contexts/OrderContext';
 import { useDriver } from '../contexts/DriverContext';
 import { useAuth } from '../contexts/AuthContext';
 import { Order } from '../types';
+import { locationService } from '../services/locationService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -79,10 +80,32 @@ const RouteNavigationScreen: React.FC = () => {
     try {
       setOptimizingRoute(true);
       console.log('🗺️ Loading backend route optimization...');
-      const routeData = await getRouteOptimization();
-      if (routeData) {
-        setBackendRoute(routeData);
-        console.log('✅ Backend route loaded:', routeData);
+      
+      // Get current driver location for route optimization
+      try {
+        const location = await locationService.getCurrentLocation();
+        if (location) {
+          console.log(`📍 Using current location for route optimization: ${location.latitude}, ${location.longitude}`);
+          const routeData = await getRouteOptimization(location.latitude, location.longitude);
+          if (routeData) {
+            setBackendRoute(routeData);
+            console.log('✅ Backend route loaded with location:', routeData);
+          }
+        } else {
+          console.warn('⚠️ No location available, trying route optimization without coordinates...');
+          const routeData = await getRouteOptimization();
+          if (routeData) {
+            setBackendRoute(routeData);
+            console.log('✅ Backend route loaded without location:', routeData);
+          }
+        }
+      } catch (locationError) {
+        console.warn('⚠️ Failed to get location, trying route optimization without coordinates:', locationError);
+        const routeData = await getRouteOptimization();
+        if (routeData) {
+          setBackendRoute(routeData);
+          console.log('✅ Backend route loaded without location:', routeData);
+        }
       }
     } catch (error) {
       console.error('❌ Error loading backend route:', error);
@@ -299,7 +322,7 @@ const RouteNavigationScreen: React.FC = () => {
     deliveredOrders.forEach((order) => {
       if (order.pickup_latitude && order.pickup_longitude) {
         completedPoints.push({
-          id: `${order.id}-pickup-completed`,
+          id: `completed-${order.id}-pickup-${Date.now()}`,
           order,
           latitude: order.pickup_latitude,
           longitude: order.pickup_longitude,
@@ -314,7 +337,7 @@ const RouteNavigationScreen: React.FC = () => {
       
       if (order.delivery_latitude && order.delivery_longitude) {
         completedPoints.push({
-          id: `${order.id}-delivery-completed`,
+          id: `completed-${order.id}-delivery-${Date.now()}`,
           order,
           latitude: order.delivery_latitude,
           longitude: order.delivery_longitude,
@@ -361,7 +384,7 @@ const RouteNavigationScreen: React.FC = () => {
       if (nextPoint) {
         if (pointType === 'pickup') {
           points.push({
-            id: `${nextPoint.id}-pickup`,
+            id: `pending-${nextPoint.id}-pickup-${points.length}`,
             order: nextPoint,
             latitude: nextPoint.pickup_latitude!,
             longitude: nextPoint.pickup_longitude!,
@@ -377,7 +400,7 @@ const RouteNavigationScreen: React.FC = () => {
           pendingPickups.splice(orderIndex, 1);
         } else {
           points.push({
-            id: `${nextPoint.id}-delivery`,
+            id: `pending-${nextPoint.id}-delivery-${points.length}`,
             order: nextPoint,
             latitude: nextPoint.delivery_latitude!,
             longitude: nextPoint.delivery_longitude!,

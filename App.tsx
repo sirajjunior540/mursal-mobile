@@ -184,6 +184,25 @@ const IncomingOrderManager = () => {
         setIncomingOrder(null);
       }
     } catch (error) {
+      console.error('Error accepting order:', error);
+    }
+  };
+  
+  const handleAcceptRoute = async (routeId: string) => {
+    try {
+      // For route acceptance, we accept the entire batch as one unit
+      const success = await acceptOrder(routeId);
+      
+      if (success) {
+        setShowModal(false);
+        setIncomingOrder(null);
+        Alert.alert('Success', 'Route accepted successfully!');
+      } else {
+        Alert.alert('Error', 'Failed to accept route. Please try again.');
+      }
+    } catch (error) {
+      logger.error('Error accepting route:', error as Error);
+      Alert.alert('Error', 'Failed to accept route. Please try again.');
     }
   };
 
@@ -193,10 +212,11 @@ const IncomingOrderManager = () => {
       setShowModal(false);
       setIncomingOrder(null);
     } catch (error) {
+      console.error('Error declining order:', error);
     }
   };
 
-  const handleSkip = (orderId: string) => {
+  const handleSkip = (_orderId: string) => {
     setShowModal(false);
     setIncomingOrder(null);
   };
@@ -214,6 +234,7 @@ const IncomingOrderManager = () => {
       onDecline={handleDecline}
       onSkip={handleSkip}
       onClose={handleClose}
+      onAcceptRoute={handleAcceptRoute}
       timerDuration={30}
     />
   );

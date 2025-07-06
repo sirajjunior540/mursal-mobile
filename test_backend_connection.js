@@ -4,8 +4,8 @@ const https = require('https');
 const http = require('http');
 
 // Configuration from .env
-const API_BASE_URL = 'http://192.168.1.52:8000';
-const TENANT_HOST = 'sirajjunior.192.168.1.52';
+const API_BASE_URL = 'http://192.168.1.149:8000';
+const TENANT_HOST = 'sirajjunior.192.168.1.149';
 
 console.log('🔧 Testing backend connection...');
 console.log(`API Base URL: ${API_BASE_URL}`);
@@ -117,7 +117,7 @@ async function runTests() {
 
   console.log('\n🎯 Connection tests completed!');
   console.log('\n📋 Next steps:');
-  console.log('   1. Make sure Django server is running with: python manage.py runserver 192.168.1.52:8000');
+  console.log('   1. Make sure Django server is running with: python manage.py runserver 192.168.1.149:8000');
   console.log('   2. Ensure the sirajjunior tenant exists in the database');
   console.log('   3. Test the mobile app connection');
 }

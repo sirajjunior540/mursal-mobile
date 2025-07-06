@@ -82,8 +82,9 @@ export const createOrderCardStyles = (theme: Theme) => StyleSheet.create({
   
   metricsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    justifyContent: 'space-between',
     paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.sm,
     backgroundColor: theme.colors.gray50,
     borderRadius: theme.borderRadius.md,
     marginBottom: theme.spacing.md,
@@ -93,6 +94,8 @@ export const createOrderCardStyles = (theme: Theme) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    flex: 1,
+    minWidth: 0,
   },
   
   metricText: {

@@ -16,6 +16,7 @@ export interface SoundConfig {
 
 class SoundService {
   private orderSound: any = null;
+  private ringingInterval: NodeJS.Timeout | null = null;
   private config: SoundConfig = {
     enabled: true,
     volume: 1.0,
@@ -81,10 +82,7 @@ class SoundService {
       } else {
         console.log('No sound loaded, using fallback');
         // Fallback to system sound if custom sound is not available
-        if (Platform.OS === 'ios') {
-          // On iOS, we can use the system sound
-          Vibration.vibrate();
-        }
+        this.playSystemBeep();
       }
 
       // Trigger vibration if enabled
@@ -96,6 +94,54 @@ class SoundService {
 
     } catch (error) {
       console.error('Error playing notification sound:', error);
+    }
+  }
+  
+  /**
+   * Start persistent ringing for incoming orders
+   */
+  startRinging = (): void => {
+    this.stopRinging(); // Stop any existing ringing
+    
+    // Play immediate sound
+    this.playOrderNotification();
+    
+    // Set up repeating sound every 3 seconds
+    this.ringingInterval = setInterval(() => {
+      this.playOrderNotification();
+    }, 3000);
+    
+    console.log('📞 Started ringing for incoming order');
+  }
+  
+  /**
+   * Stop persistent ringing
+   */
+  stopRinging = (): void => {
+    if (this.ringingInterval) {
+      clearInterval(this.ringingInterval);
+      this.ringingInterval = null;
+      console.log('🔇 Stopped ringing');
+    }
+  }
+  
+  /**
+   * Play system beep as fallback
+   */
+  private playSystemBeep = (): void => {
+    try {
+      // Create multiple short vibrations to simulate a beep
+      if (Platform.OS === 'android') {
+        // Android: Use vibration pattern that sounds like beeping
+        Vibration.vibrate([0, 100, 50, 100, 50, 100]);
+      } else {
+        // iOS: Multiple quick vibrations
+        Vibration.vibrate();
+        setTimeout(() => Vibration.vibrate(), 100);
+        setTimeout(() => Vibration.vibrate(), 200);
+      }
+    } catch (error) {
+      console.error('Error playing system beep:', error);
     }
   }
 
@@ -197,6 +243,7 @@ class SoundService {
    */
   dispose(): void {
     try {
+      this.stopRinging();
       if (this.orderSound) {
         this.orderSound.release();
         this.orderSound = null;

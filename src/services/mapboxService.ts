@@ -23,6 +23,35 @@ export interface MapboxRouteOptions {
   steps?: boolean;
 }
 
+export interface MapboxGeocodeResponse {
+  features: Array<{
+    id: string;
+    type: string;
+    place_name: string;
+    text: string;
+    geometry: {
+      type: string;
+      coordinates: [number, number];
+    };
+    properties?: Record<string, any>;
+    context?: Array<{
+      id: string;
+      text: string;
+    }>;
+  }>;
+}
+
+export interface ParsedAddress {
+  street_address: string;
+  city: string;
+  state: string;
+  postal_code: string;
+  country: string;
+  latitude: number;
+  longitude: number;
+  full_address: string;
+}
+
 class MapboxService {
   private accessToken: string;
   private baseUrl = 'https://api.mapbox.com';
@@ -250,6 +279,126 @@ class MapboxService {
       return `${(meters / 1000).toFixed(1)} km`;
     }
     return `${Math.round(meters)} m`;
+  }
+
+  /**
+   * Reverse geocode coordinates to get address information
+   */
+  public async reverseGeocode(coordinates: Coordinates): Promise<MapboxGeocodeResponse | null> {
+    if (!this.isConfigured()) {
+      console.error('❌ Mapbox not configured - cannot perform reverse geocoding');
+      return null;
+    }
+
+    try {
+      const url = `${this.baseUrl}/geocoding/v5/mapbox.places/${coordinates.longitude},${coordinates.latitude}.json`;
+      const params = new URLSearchParams({
+        access_token: this.accessToken,
+        types: 'address,poi',
+        limit: '1'
+      });
+
+      const response = await fetch(`${url}?${params}`);
+      
+      if (!response.ok) {
+        throw new Error(`Mapbox Geocoding API error: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      
+      if (data.features && data.features.length > 0) {
+        console.log('✅ Mapbox reverse geocoding successful');
+        return data;
+      } else {
+        console.warn('⚠️ No geocoding results found');
+        return null;
+      }
+    } catch (error) {
+      console.error('❌ Failed to reverse geocode with Mapbox:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Parse Mapbox geocoding response to address components for backend API
+   */
+  public parseAddressFromGeocoding(geocodeResponse: MapboxGeocodeResponse): ParsedAddress | null {
+    try {
+      const feature = geocodeResponse.features[0];
+      if (!feature) return null;
+
+      const context = feature.context || [];
+      const properties = feature.properties || {};
+      
+      // Initialize address components
+      let streetNumber = '';
+      let streetName = '';
+      let city = '';
+      let state = '';
+      let postalCode = '';
+      let country = '';
+
+      // Extract address number and street name from main feature
+      if (feature.place_name) {
+        const addressParts = feature.place_name.split(',')[0].trim();
+        streetName = addressParts;
+        
+        // Try to extract street number if it's in the address
+        if (properties.address) {
+          streetNumber = properties.address;
+          streetName = feature.text || '';
+        }
+      }
+
+      // Parse context for other components
+      context.forEach((item: any) => {
+        const id = item.id || '';
+        
+        if (id.startsWith('postcode')) {
+          postalCode = item.text;
+        } else if (id.startsWith('place')) {
+          city = item.text;
+        } else if (id.startsWith('region')) {
+          state = item.text;
+        } else if (id.startsWith('country')) {
+          country = item.text;
+        }
+      });
+
+      // Construct full street address
+      const street_address = streetNumber ? `${streetNumber} ${streetName}`.trim() : streetName;
+
+      // Limit coordinate precision to 7 decimal places (backend requirement)
+      const coordinates = feature.geometry.coordinates;
+      const longitude = parseFloat(coordinates[0].toFixed(7));
+      const latitude = parseFloat(coordinates[1].toFixed(7));
+
+      return {
+        street_address: street_address || feature.place_name || '',
+        city: city || '',
+        state: state || '',
+        postal_code: postalCode || '00000',
+        country: country || '',
+        latitude,
+        longitude,
+        full_address: feature.place_name || ''
+      };
+    } catch (error) {
+      console.error('❌ Failed to parse address from Mapbox response:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get address from current location coordinates
+   */
+  public async getAddressFromCoordinates(coordinates: Coordinates): Promise<ParsedAddress | null> {
+    const geocodeResponse = await this.reverseGeocode(coordinates);
+    if (!geocodeResponse) {
+      return null;
+    }
+
+    return this.parseAddressFromGeocoding(geocodeResponse);
   }
 
   /**

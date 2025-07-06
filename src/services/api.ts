@@ -862,9 +862,37 @@ class ApiService {
     }
   }
 
-  async getRouteOptimization(): Promise<ApiResponse<RouteOptimizationResponse>> {
+  async getRouteOptimization(latitude?: number, longitude?: number): Promise<ApiResponse<RouteOptimizationResponse>> {
     console.log('🗺️ Fetching route optimization from backend...');
-    return this.client.get<RouteOptimizationResponse>('/api/v1/delivery/deliveries/route-optimization/');
+    
+    // If no coordinates provided, try to get from cached driver data
+    if (!latitude || !longitude) {
+      try {
+        const cachedDriver = await Storage.getItem<Driver>(STORAGE_KEYS.DRIVER_DATA);
+        if (cachedDriver && cachedDriver.currentLatitude && cachedDriver.currentLongitude) {
+          latitude = cachedDriver.currentLatitude;
+          longitude = cachedDriver.currentLongitude;
+          console.log('📍 Using cached driver location for route optimization');
+        }
+      } catch (error) {
+        console.warn('⚠️ Could not get cached driver location:', error);
+      }
+    }
+    
+    // Build URL with required query parameters
+    let url = '/api/v1/delivery/deliveries/route-optimization/';
+    if (latitude && longitude) {
+      const params = new URLSearchParams({
+        latitude: latitude.toString(),
+        longitude: longitude.toString()
+      });
+      url += `?${params.toString()}`;
+      console.log(`📍 Route optimization with location: ${latitude}, ${longitude}`);
+    } else {
+      console.warn('⚠️ No driver location available for route optimization - this may cause a 400 error');
+    }
+    
+    return this.client.get<RouteOptimizationResponse>(url);
   }
 
   async getOngoingDeliveries(): Promise<ApiResponse<Order[]>> {
@@ -1049,7 +1077,20 @@ class ApiService {
       isFromAvailableOrders: !delivery && (backendData as Record<string, unknown>).id && (backendData as Record<string, unknown>).order
     });
 
-    return {
+    // Detect if this is a batch order by checking for batch-related fields
+    const isBatchOrder = !!(order.consolidation_batch_id || order.use_franchise_network || 
+                           (order as any).isBatch || (order as any).batchId ||
+                           (backendData as any).batch_id || (backendData as any).batch ||
+                           (order as any).batch_id || (order as any).batch);
+    
+    console.log('🔍 Batch order detection:', {
+      isBatchOrder,
+      consolidation_batch_id: order.consolidation_batch_id,
+      use_franchise_network: order.use_franchise_network,
+      consolidation_warehouse_id: order.consolidation_warehouse_id
+    });
+
+    const baseOrder = {
       id: primaryId,  // This must be the delivery ID for API calls
       deliveryId: delivery?.id || String((backendData as Record<string, unknown>).id || ''), // Store delivery ID separately
       orderNumber: order.order_number || order.orderNumber || `#${order.id}`,
@@ -1089,8 +1130,34 @@ class ApiService {
       orderTime: order.created_at ? new Date(order.created_at) : new Date(),
       // Add delivery-specific fields if this is a delivery object
       driverId: delivery?.driver || undefined,
-      driverName: delivery?.driver_name || undefined
+      driverName: delivery?.driver_name || undefined,
+      
+      // Batch order support
+      isBatch: isBatchOrder,
+      batchId: order.consolidation_batch_id || (order as any).batchId || (backendData as any).batch_id || (order as any).batch_id,
+      consolidationWarehouseId: order.consolidation_warehouse_id,
+      finalDeliveryAddress: order.final_delivery_address,
+      finalDeliveryLatitude: order.final_delivery_latitude ? parseFloat(String(order.final_delivery_latitude)) : undefined,
+      finalDeliveryLongitude: order.final_delivery_longitude ? parseFloat(String(order.final_delivery_longitude)) : undefined,
+      // Add batch orders if this is a batch
+      orders: isBatchOrder && (backendData as any).orders ? (backendData as any).orders : undefined,
     };
+
+    // If this is a batch order, try to determine batch size from available data
+    if (isBatchOrder && order.consolidation_batch_id) {
+      // For now, we'll estimate batch size from other indicators
+      // In a real implementation, this would come from the backend
+      const estimatedBatchSize = (order as any).batchSize || 
+                                (order as any).orders?.length || 
+                                2; // Default estimate
+      
+      return {
+        ...baseOrder,
+        batchSize: estimatedBatchSize,
+      };
+    }
+
+    return baseOrder;
   }
 
   async acceptOrder(orderId: string): Promise<ApiResponse<void>> {
@@ -1115,6 +1182,46 @@ class ApiService {
     }
     
     return this.client.post<void>(`/api/v1/delivery/deliveries/${orderId}/accept/`);
+  }
+
+  async acceptBatchOrder(batchId: string): Promise<ApiResponse<void>> {
+    console.log(`🎯 Attempting to accept batch order: ${batchId}`);
+    
+    // Try batch order endpoint first
+    try {
+      const result = await this.client.post<void>(`/api/v1/delivery/batch-orders/${batchId}/assign_driver/`, {
+        action: 'accept'
+      });
+      
+      if (result.success) {
+        console.log(`✅ Successfully accepted batch order: ${batchId}`);
+        return result;
+      }
+    } catch (error) {
+      console.warn(`⚠️ Batch order accept failed, trying delivery endpoint: ${error}`);
+    }
+    
+    // Fallback to delivery endpoint
+    return this.client.post<void>(`/api/v1/delivery/deliveries/${batchId}/accept/`);
+  }
+
+  async acceptRoute(routeId: string): Promise<ApiResponse<void>> {
+    console.log(`🎯 Attempting to accept route: ${routeId}`);
+    
+    // Try route-specific endpoint first
+    try {
+      const result = await this.client.post<void>(`/api/v1/delivery/routes/${routeId}/accept/`);
+      
+      if (result.success) {
+        console.log(`✅ Successfully accepted route: ${routeId}`);
+        return result;
+      }
+    } catch (error) {
+      console.warn(`⚠️ Route accept failed, trying batch order endpoint: ${error}`);
+    }
+    
+    // Fallback to batch order endpoint
+    return this.acceptBatchOrder(routeId);
   }
 
   async declineOrder(orderId: string): Promise<ApiResponse<void>> {
@@ -1192,6 +1299,11 @@ class ApiService {
 
   async declineDelivery(deliveryId: string, data: DeclineDeliveryData): Promise<ApiResponse<void>> {
     return this.client.post<void>(`/api/v1/delivery/deliveries/${deliveryId}/decline/`, data);
+  }
+
+  async markDeliveryViewed(deliveryId: string): Promise<ApiResponse<void>> {
+    console.log(`👁️ API: Marking delivery ${deliveryId} as viewed`);
+    return this.client.post<void>(`/api/v1/delivery/deliveries/${deliveryId}/mark_viewed/`, {});
   }
 
   /**
@@ -1482,4 +1594,5 @@ export const deliveryApi = {
   smartAcceptDelivery: (deliveryId: string, data: SmartDeliveryData) => apiService.smartAcceptDelivery(deliveryId, data),
   smartUpdateStatus: (deliveryId: string, data: SmartStatusUpdateData) => apiService.smartUpdateStatus(deliveryId, data),
   declineDelivery: (deliveryId: string, data: DeclineDeliveryData) => apiService.declineDelivery(deliveryId, data),
+  markDeliveryViewed: (deliveryId: string) => apiService.markDeliveryViewed(deliveryId),
 };

@@ -94,7 +94,7 @@ const OrderCard: React.FC<OrderCardProps> = memo(({
 
   const estimatedDeliveryTime = order.estimated_delivery_time || '30 min';
   const customerName = order.customer?.name || 'Unknown Customer';
-  const deliveryAddress = order.delivery_location?.address || 'No address provided';
+  const deliveryAddress = order.delivery_address || order.delivery_location?.address || 'No address provided';
 
   return (
     <Animated.View
@@ -165,6 +165,7 @@ const OrderCard: React.FC<OrderCardProps> = memo(({
               style={styles.customerAddress}
               numberOfLines={2}
               accessibilityLabel={`Delivery address: ${deliveryAddress}`}
+              ellipsizeMode="tail"
             >
               {deliveryAddress}
             </Text>

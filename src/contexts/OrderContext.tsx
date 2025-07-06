@@ -656,10 +656,10 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({ children, apiBaseU
     }
   }, []); // Empty dependency array since this function doesn't depend on any state
 
-  const getRouteOptimization = useCallback(async (): Promise<any> => {
+  const getRouteOptimization = useCallback(async (latitude?: number, longitude?: number): Promise<any> => {
     try {
       console.log('🗺️ Getting route optimization from backend...');
-      const response = await apiService.getRouteOptimization();
+      const response = await apiService.getRouteOptimization(latitude, longitude);
 
       if (response.success && response.data) {
         console.log('✅ Route optimization received:', response.data);

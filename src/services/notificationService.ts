@@ -1,13 +1,16 @@
-import { Platform, Alert, Vibration } from 'react-native';
+import { Platform, Alert, Vibration, AppState } from 'react-native';
 import Sound from 'react-native-sound';
 import { Order } from '../types';
+import { PushNotificationClient } from '../sdk/pushNotificationClient';
 
 class NotificationService {
   private isInitialized = false;
   private orderSound: Sound | null = null;
+  private pushClient: PushNotificationClient | null = null;
   private notificationCallbacks: {
     onOrderReceived?: (orderId: string, action: 'accept' | 'decline') => void;
     onNavigateToOrder?: (orderId: string) => void;
+    onNewOrder?: (order: Order) => void;
   } = {};
 
   constructor() {
@@ -23,7 +26,10 @@ class NotificationService {
     // Initialize the order notification sound
     this.initializeOrderSound();
 
-    console.log('📱 NotificationService initialized with custom sound support');
+    // Initialize push notifications for background wake-up
+    this.initializePushNotifications();
+
+    console.log('📱 NotificationService initialized with custom sound support and push notifications');
     this.isInitialized = true;
   }
 
@@ -53,6 +59,74 @@ class NotificationService {
     } catch (error) {
       console.error('❌ Failed to initialize order sound:', error);
       this.orderSound = null;
+    }
+  }
+
+  private initializePushNotifications() {
+    try {
+      // Initialize push notification client
+      this.pushClient = new PushNotificationClient({});
+      
+      // Set up callbacks
+      this.pushClient.setCallbacks({
+        onNotification: (data) => {
+          console.log('📱 Push notification received:', data);
+          this.handlePushNotification(data);
+        },
+        onRegistration: (token) => {
+          console.log('📱 FCM token received:', token);
+          // TODO: Send token to backend for this driver
+          this.sendTokenToBackend(token);
+        },
+        onRegistrationError: (error) => {
+          console.error('❌ Push notification registration error:', error);
+        }
+      });
+
+      // Start push notifications
+      this.pushClient.start();
+      
+      console.log('🔔 Push notifications initialized for background wake-up');
+    } catch (error) {
+      console.error('❌ Failed to initialize push notifications:', error);
+    }
+  }
+
+  private handlePushNotification(data: any) {
+    try {
+      console.log('🔔 Processing push notification:', data);
+      
+      // Check if this is a new order notification
+      if (data.type === 'new_order' && data.order) {
+        // Only trigger popup/sound if app is in foreground or this is a high-priority notification
+        const appState = AppState.currentState;
+        
+        if (appState === 'active') {
+          // App is in foreground - show popup immediately
+          this.notificationCallbacks.onNewOrder?.(data.order);
+        } else {
+          // App is in background - the push notification will wake up the phone
+          // When user opens the app, we'll handle it through normal channels
+          console.log('📱 App in background - push notification will wake device');
+        }
+        
+        // Always play sound and vibrate for new orders (this will wake the phone)
+        this.playOrderSound();
+        this.vibrateForOrder();
+      }
+    } catch (error) {
+      console.error('❌ Error handling push notification:', error);
+    }
+  }
+
+  private async sendTokenToBackend(token: string) {
+    try {
+      // Import API service to send FCM token to backend
+      const { apiService } = await import('./api');
+      await apiService.updateFcmToken(token);
+      console.log('✅ FCM token sent to backend');
+    } catch (error) {
+      console.error('❌ Failed to send FCM token to backend:', error);
     }
   }
 
@@ -191,26 +265,37 @@ class NotificationService {
   public setNotificationCallbacks(callbacks: {
     onOrderReceived?: (orderId: string, action: 'accept' | 'decline') => void;
     onNavigateToOrder?: (orderId: string) => void;
+    onNewOrder?: (order: Order) => void;
   }) {
     this.notificationCallbacks = { ...this.notificationCallbacks, ...callbacks };
     console.log('📱 Notification callbacks updated');
   }
 
   /**
-   * Get FCM token (placeholder for future implementation)
+   * Get FCM token
    */
   public getFcmToken(): string | null {
-    console.log('📱 FCM token not available (push notification library not installed)');
+    if (this.pushClient) {
+      return this.pushClient.getToken() || null;
+    }
+    console.log('📱 FCM token not available (push notifications not initialized)');
     return null;
   }
 
   /**
-   * Enable background notifications (placeholder)
+   * Enable background notifications
    */
   public async enableBackgroundNotifications(): Promise<boolean> {
     try {
-      console.log('📱 Background notifications enabled (using built-in APIs)');
-      return true;
+      if (this.pushClient) {
+        // Subscribe to driver-specific topic for targeted notifications
+        await this.pushClient.subscribeToTopic('new-orders');
+        console.log('📱 Background notifications enabled with push notification support');
+        return true;
+      } else {
+        console.log('📱 Background notifications enabled (using built-in APIs only)');
+        return true;
+      }
     } catch (error) {
       console.error('❌ Failed to enable background notifications:', error);
       return false;

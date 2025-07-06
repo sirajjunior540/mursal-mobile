@@ -47,6 +47,9 @@ export interface Driver {
     licensePlate: string;
   };
   distance?: number; // Distance in kilometers for nearby drivers
+  currentLatitude?: number; // Driver's current latitude
+  currentLongitude?: number; // Driver's current longitude
+  lastLocationUpdate?: Date; // When location was last updated
 }
 
 export interface DriverBalance {
@@ -154,6 +157,18 @@ export interface Order {
   
   // Additional constraints
   requires_signature?: boolean;
+  
+  // Batch order support
+  isBatch?: boolean;
+  batchId?: string;
+  batchSize?: number;
+  consolidationWarehouseId?: string;
+  finalDeliveryAddress?: string;
+  finalDeliveryLatitude?: number;
+  finalDeliveryLongitude?: number;
+  
+  // Distance tracking
+  distance?: number;
   requires_id_verification?: boolean;
   cash_on_delivery?: boolean;
   cod_amount?: number;
@@ -182,6 +197,36 @@ export interface Order {
   deliveryId?: string;
   driverId?: string;
   driverName?: string;
+  
+  // Batch order fields
+  isBatch?: boolean;
+  batchId?: string;
+  batchSize?: number;
+  orders?: Order[];
+  consolidationWarehouseId?: string;
+  finalDeliveryAddress?: string;
+  finalDeliveryLatitude?: number;
+  finalDeliveryLongitude?: number;
+}
+
+// Extended interface for batch orders
+export interface BatchOrder extends Order {
+  isBatch: true;
+  orders?: Order[]; // Individual orders in the batch
+  warehouseInfo?: {
+    id: string;
+    name: string;
+    address: string;
+    latitude?: number;
+    longitude?: number;
+  };
+  routingStrategy?: 'customer_to_warehouse' | 'warehouse_to_customers';
+  batchMetadata?: {
+    totalItems: number;
+    totalWeight: number;
+    estimatedDuration: number;
+    consolidationRequired: boolean;
+  };
 }
 
 export interface BalanceTransaction {
