@@ -28,6 +28,10 @@ export interface AuthUser {
   lastName: string;
   phone: string;
   token: string;
+  role: string;
+  is_active: boolean;
+  is_staff: boolean;
+  is_superuser: boolean;
   tenantId?: string;
 }
 
@@ -256,6 +260,24 @@ export interface AuthContextType {
   logout: () => Promise<void>;
   setTenant: (tenantId: string) => Promise<void>;
   error: string | null;
+  hasPermission: {
+    isPlatformSuperuser: () => boolean;
+    isPlatformAdmin: () => boolean;
+    isTenantAdmin: () => boolean;
+    isTenantStaff: () => boolean;
+    isDriver: () => boolean;
+    isCustomer: () => boolean;
+    isAdmin: () => boolean;
+    isManager: () => boolean;
+    isStaff: () => boolean;
+    canManageUsers: () => boolean;
+    canManageSettings: () => boolean;
+    canViewAnalytics: () => boolean;
+    canManageOrders: () => boolean;
+    canAssignDeliveries: () => boolean;
+    hasTenantAdminAccess: () => boolean;
+    hasTenantStaffAccess: () => boolean;
+  };
 }
 
 export interface OrderContextType {

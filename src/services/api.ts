@@ -175,6 +175,12 @@ export interface TokenResponse {
   access?: string;
   token?: string;
   refresh?: string;
+  user_id?: number;
+  username?: string;
+  email?: string;
+  role?: string;
+  is_staff?: boolean;
+  is_superuser?: boolean;
 }
 
 // User info response interface
@@ -551,6 +557,33 @@ class ApiService {
       await SecureStorage.setRefreshToken(tokenResponse.data.refresh);
     }
 
+    // Extract user information from JWT token
+    let userInfo = {
+      user_id: tokenResponse.data?.user_id,
+      username: tokenResponse.data?.username,
+      email: tokenResponse.data?.email,
+      role: tokenResponse.data?.role,
+      is_staff: tokenResponse.data?.is_staff,
+      is_superuser: tokenResponse.data?.is_superuser,
+    };
+
+    // If not in token response, decode from JWT
+    if (!userInfo.user_id && token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        userInfo = {
+          user_id: payload.user_id,
+          username: payload.username,
+          email: payload.email,
+          role: payload.role,
+          is_staff: payload.is_staff,
+          is_superuser: payload.is_superuser,
+        };
+      } catch (error) {
+        console.warn('Failed to decode JWT token:', error);
+      }
+    }
+
     // Now fetch driver profile using the token
     const driverResponse = await this.getDriverProfile();
 
@@ -564,12 +597,16 @@ class ApiService {
 
     // Construct the response in the expected format
     const user: AuthUser = {
-      id: driverResponse.data.id || '',
-      username: credentials.username,
-      email: driverResponse.data.email || '',
+      id: String(userInfo.user_id || driverResponse.data.id || ''),
+      username: userInfo.username || credentials.username,
+      email: userInfo.email || driverResponse.data.email || '',
       firstName: driverResponse.data.firstName || '',
       lastName: driverResponse.data.lastName || '',
       phone: driverResponse.data.phone || '',
+      role: userInfo.role || 'driver',
+      is_active: true,
+      is_staff: userInfo.is_staff || false,
+      is_superuser: userInfo.is_superuser || false,
       token: token || '',
       tenantId: tenantId || 'sirajjunior'
     };

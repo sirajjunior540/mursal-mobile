@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
 import { AuthContextType, AuthUser, Driver, Tenant } from '../types';
-import { STORAGE_KEYS, TENANT_CONFIG } from '../constants';
+import { STORAGE_KEYS, TENANT_CONFIG, USER_ROLES } from '../constants';
 import { Storage, SecureStorage } from '../utils';
 import { apiService } from '../services/api';
 
@@ -291,6 +291,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     login,
     logout,
     setTenant,
+    hasPermission: hasPermission(state.user),
   };
 
   return (
@@ -299,6 +300,65 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     </AuthContext.Provider>
   );
 };
+
+// Role permission helpers
+export const hasPermission = (user: AuthUser | null) => ({
+  // Platform level permissions
+  isPlatformSuperuser: () => 
+    user?.role === USER_ROLES.PLATFORM_SUPERUSER || user?.is_superuser,
+  
+  isPlatformAdmin: () => 
+    user?.role === USER_ROLES.PLATFORM_ADMIN || hasPermission(user).isPlatformSuperuser(),
+  
+  // Tenant level permissions
+  isTenantAdmin: () => 
+    user?.role === USER_ROLES.TENANT_ADMIN,
+  
+  isTenantStaff: () => 
+    user?.role === USER_ROLES.TENANT_STAFF,
+  
+  isDriver: () => 
+    user?.role === USER_ROLES.DRIVER,
+  
+  isCustomer: () => 
+    user?.role === USER_ROLES.CUSTOMER,
+  
+  // Legacy role checks (for backward compatibility)
+  isAdmin: () => 
+    user?.role === USER_ROLES.ADMIN || hasPermission(user).isTenantAdmin(),
+  
+  isManager: () => 
+    user?.role === USER_ROLES.MANAGER || hasPermission(user).isTenantAdmin(),
+  
+  isStaff: () => 
+    user?.role === USER_ROLES.STAFF || hasPermission(user).isTenantStaff(),
+  
+  // Permission helpers
+  canManageUsers: () => 
+    hasPermission(user).isTenantAdmin() || hasPermission(user).isPlatformAdmin(),
+  
+  canManageSettings: () => 
+    hasPermission(user).isTenantAdmin() || hasPermission(user).isPlatformAdmin(),
+  
+  canViewAnalytics: () => 
+    hasPermission(user).isTenantAdmin() || 
+    hasPermission(user).isTenantStaff() || 
+    hasPermission(user).isPlatformAdmin(),
+  
+  canManageOrders: () => 
+    hasPermission(user).isTenantAdmin() || 
+    hasPermission(user).isTenantStaff() || 
+    hasPermission(user).isCustomer(),
+  
+  canAssignDeliveries: () => 
+    hasPermission(user).isTenantAdmin() || hasPermission(user).isTenantStaff(),
+  
+  hasTenantAdminAccess: () => 
+    hasPermission(user).isTenantAdmin(),
+  
+  hasTenantStaffAccess: () => 
+    hasPermission(user).isTenantAdmin() || hasPermission(user).isTenantStaff(),
+});
 
 // Hook
 export const useAuth = (): AuthContextType => {

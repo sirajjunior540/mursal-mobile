@@ -94,3 +94,21 @@ export const HISTORY_FILTER_LABELS = {
   month: 'This Month',
   all: 'All Time',
 } as const;
+
+// User Role Constants
+export const USER_ROLES = {
+  // Platform level roles
+  PLATFORM_SUPERUSER: 'superuser',
+  PLATFORM_ADMIN: 'platform_admin',
+  
+  // Tenant level roles  
+  TENANT_ADMIN: 'tenant_admin',
+  TENANT_STAFF: 'tenant_staff',
+  CUSTOMER: 'customer',
+  DRIVER: 'driver',
+  
+  // Legacy roles (for backward compatibility)
+  ADMIN: 'admin',
+  MANAGER: 'manager',
+  STAFF: 'staff',
+} as const;
