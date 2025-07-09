@@ -14,7 +14,7 @@ This project follows industry best practices for environment configuration with 
 2. **Update your server IP:**
    ```bash
    # Edit .env file
-   SERVER_IP=192.168.1.149  # Replace with your actual IP
+   SERVER_IP=192.168.1.153  # Replace with your actual IP
    ```
 
 3. **Validate configuration:**
@@ -27,7 +27,7 @@ This project follows industry best practices for environment configuration with 
 ### Core Server Configuration
 ```env
 # REQUIRED - No fallback values
-SERVER_IP=192.168.1.149      # Your Django server IP
+SERVER_IP=192.168.1.153      # Your Django server IP
 SERVER_PORT=8000            # Server port  
 SERVER_PROTOCOL=http        # http or https
 ```
@@ -93,7 +93,7 @@ DEBUG_PERFORMANCE=true     # Performance metrics
 
 2. Update `.env`:
    ```env
-   SERVER_IP=192.168.1.149  # Your actual IP
+   SERVER_IP=192.168.1.153  # Your actual IP
    ```
 
 ### For Production
@@ -163,7 +163,7 @@ The mobile app automatically:
 ### Local Development
 ```env
 NODE_ENV=development
-SERVER_IP=192.168.1.149
+SERVER_IP=192.168.1.153
 SERVER_PORT=8000
 SERVER_PROTOCOL=http
 TENANT_ID=sirajjunior
@@ -196,7 +196,7 @@ DEBUG_API_CALLS=false
    - Copy `.env.example` to `.env`
    - Set `SERVER_IP` to your actual IP address
 
-2. **"Network error. Cannot reach http://192.168.1.149:8000"**
+2. **"Network error. Cannot reach http://192.168.1.153:8000"**
    - Verify Django is running: `python manage.py runserver 0.0.0.0:8000`
    - Check phone and computer are on same WiFi network
 

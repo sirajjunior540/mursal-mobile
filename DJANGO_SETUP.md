@@ -1,9 +1,9 @@
 # Django Multi-Tenant Setup for Physical Device Testing
 
 ## Current Configuration
-- **Local IP**: `192.168.1.149`
-- **Django Server**: `http://192.168.1.149:8000`
-- **Tenant Host**: `sirajjunior.192.168.1.149`
+- **Local IP**: `192.168.1.153`
+- **Django Server**: `http://192.168.1.153:8000`
+- **Tenant Host**: `sirajjunior.192.168.1.153`
 - **Mobile App**: Configured to connect to your physical device
 
 ## Django Configuration Required
@@ -15,8 +15,8 @@
 ALLOWED_HOSTS = [
     'localhost',
     '127.0.0.1',
-    '192.168.1.149',  # Your local IP
-    'sirajjunior.192.168.1.149',  # Tenant host
+    '192.168.1.153',  # Your local IP
+    'sirajjunior.192.168.1.153',  # Tenant host
     'sirajjunior.localhost',  # For local development
     # Add your production domains here
 ]
@@ -25,7 +25,7 @@ ALLOWED_HOSTS = [
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
-    "http://192.168.1.149:8000",
+    "http://192.168.1.153:8000",
 ]
 
 # Allow all origins for development (REMOVE IN PRODUCTION)
@@ -117,12 +117,12 @@ python manage.py runserver 0.0.0.0:8000
 ### 2. Test API Endpoints
 ```bash
 # Test basic connectivity
-curl -H "Host: sirajjunior.192.168.1.149" http://192.168.1.149:8000/api/v1/auth/
+curl -H "Host: sirajjunior.192.168.1.153" http://192.168.1.153:8000/api/v1/auth/
 
 # Test with tenant header
-curl -H "Host: sirajjunior.192.168.1.149" \
+curl -H "Host: sirajjunior.192.168.1.153" \
      -H "Content-Type: application/json" \
-     http://192.168.1.149:8000/api/v1/delivery/
+     http://192.168.1.153:8000/api/v1/delivery/
 ```
 
 ### 3. Run Mobile App
@@ -164,7 +164,7 @@ npm run ios
 ifconfig | grep "inet.*broadcast" | grep -v "127.0.0.1"
 
 # Test Django server
-curl -v -H "Host: sirajjunior.192.168.1.149" http://192.168.1.149:8000/
+curl -v -H "Host: sirajjunior.192.168.1.153" http://192.168.1.153:8000/
 
 # Reconfigure app for different IP
 npm run setup:ip -- 192.168.1.100  # Replace with your IP

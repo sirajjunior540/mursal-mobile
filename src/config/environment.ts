@@ -196,16 +196,16 @@ try {
     IS_DEVELOPMENT: true,
     IS_PRODUCTION: false,
     IS_STAGING: false,
-    SERVER_IP: '192.168.1.149', // Emergency fallback
+    SERVER_IP: '192.168.1.153', // Emergency fallback
     SERVER_PORT: 8000,
     SERVER_PROTOCOL: 'http',
-    API_BASE_URL: 'http://192.168.1.149:8000',
-    API_HOST: 'sirajjunior.192.168.1.149',
+    API_BASE_URL: 'http://192.168.1.153:8000',
+    API_HOST: 'sirajjunior.192.168.1.153',
     API_TIMEOUT: 30000,
     TENANT_ID: 'sirajjunior',
     TENANT_SUBDOMAIN: 'sirajjunior',
-    WS_BASE_URL: 'ws://192.168.1.149:8000',
-    WS_HOST: 'sirajjunior.192.168.1.149',
+    WS_BASE_URL: 'ws://192.168.1.153:8000',
+    WS_HOST: 'sirajjunior.192.168.1.153',
     WS_PROTOCOL: 'ws',
     FEATURES: {
       WEBSOCKET: true,
