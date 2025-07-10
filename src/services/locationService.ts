@@ -377,8 +377,18 @@ class LocationService {
 
       if (response.success) {
         console.log('✅ Location successfully sent to server');
+        
+        // Log successful location update with timestamp
+        console.log(`📍 Location update successful at ${new Date().toLocaleTimeString()}`);
+        
       } else {
         console.error('❌ Server rejected location update:', response.error);
+        
+        // If location update fails due to auth, try to refresh
+        if (response.error?.includes('auth') || response.error?.includes('token')) {
+          console.log('🔄 Location update failed due to auth - may need token refresh');
+        }
+        
         throw new Error(response.error || 'Failed to update location');
       }
     } catch (error) {

@@ -14,6 +14,11 @@ import { logger } from './infrastructure/logging/logger';
 import { AuthProvider } from './features/auth/context/AuthContext';
 import { OrderProvider } from './features/orders/context/OrderProvider';
 
+// Debug utilities (only in development)
+if (__DEV__) {
+  import('./utils/mobileDebug');
+}
+
 // Screens
 import { DashboardScreen } from './features';
 

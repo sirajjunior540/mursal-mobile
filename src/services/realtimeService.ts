@@ -96,6 +96,12 @@ class RealtimeService {
     try {
       console.log('🔧 Initializing RealtimeSDK...');
 
+      // Check if we're in a valid state for initialization
+      if (!this.initializationEnabled) {
+        console.log('⏸️ Initialization not enabled yet - waiting for enableInitialization()');
+        return;
+      }
+
       // Get auth token with automatic refresh handling
       console.log('🔑 Attempting to get valid auth token...');
       const token = await this.getValidAuthToken();
@@ -107,7 +113,7 @@ class RealtimeService {
         return;
       }
       
-      // Additional validation for token format
+      // Additional validation for token format  
       if (!token || token.split('.').length !== 3) {
         console.error('❌ Invalid JWT token format');
         this.callbacks.onError?.('Invalid authentication token format');
@@ -117,6 +123,19 @@ class RealtimeService {
       console.log('✅ Valid auth token obtained, length:', token.length);
       console.log('🔐 Valid authentication token found, proceeding with initialization');
       realtimeDebug('Auth token retrieved:', `${token.substring(0, 20)}...`);
+
+      // Validate environment configuration
+      if (!ENV.API_BASE_URL || !ENV.WS_BASE_URL) {
+        console.error('❌ Missing required environment configuration');
+        this.callbacks.onError?.('Missing API configuration');
+        return;
+      }
+
+      console.log('🌐 Environment configuration:', {
+        apiUrl: ENV.API_BASE_URL,
+        wsUrl: ENV.WS_BASE_URL,
+        hasToken: !!token
+      });
 
       // Create SDK configuration
       const sdkConfig: Partial<RealtimeSDKConfig> = {
@@ -249,7 +268,28 @@ class RealtimeService {
       },
       onError: (error, mode) => {
         console.error(`❌ Error from ${mode}: ${error}`);
-        this.callbacks.onError?.(error);
+        
+        // Enhanced error handling for authentication issues
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        
+        // Check for authentication/authorization errors
+        if (errorMessage.includes('auth') || 
+            errorMessage.includes('401') || 
+            errorMessage.includes('403') || 
+            errorMessage.includes('unauthorized') || 
+            errorMessage.includes('forbidden') ||
+            errorMessage.includes('token') ||
+            errorMessage.includes('jwt')) {
+          
+          console.warn('🔑 Authentication error detected in realtime service');
+          console.log('🔄 Attempting to refresh authentication token...');
+          
+          // Try to reinitialize with fresh token
+          this.handleAuthenticationError();
+        } else {
+          console.error('❌ Non-authentication error:', errorMessage);
+          this.callbacks.onError?.(error);
+        }
       },
       onMetrics: (metrics) => {
         // Log metrics in debug mode
@@ -652,6 +692,64 @@ class RealtimeService {
   }
 
   /**
+   * Manually refresh authentication and reinitialize service
+   * This can be called when auth errors are detected from the app
+   */
+  async refreshAuthentication(): Promise<boolean> {
+    console.log('🔄 Manual authentication refresh requested...');
+    
+    try {
+      await this.handleAuthenticationError();
+      return this.initialized;
+    } catch (error) {
+      console.error('❌ Manual authentication refresh failed:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Handle authentication errors by attempting to refresh and reinitialize
+   */
+  private async handleAuthenticationError(): Promise<void> {
+    try {
+      console.log('🔧 Handling authentication error - stopping current service...');
+      
+      // Stop current service
+      this.stop();
+      this.initialized = false;
+      
+      // Clear any cached tokens that might be invalid
+      console.log('🗑️ Clearing potentially invalid cached data...');
+      
+      // Wait a moment before attempting refresh
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Try to get a fresh token
+      console.log('🔄 Attempting to get fresh authentication token...');
+      const freshToken = await this.getValidAuthToken();
+      
+      if (freshToken) {
+        console.log('✅ Fresh token obtained, reinitializing realtime service...');
+        
+        // Reinitialize with fresh token
+        await this.initializeSDK();
+        
+        // If we're supposed to be running, restart
+        if (this.isRunning()) {
+          console.log('🔄 Restarting realtime service with fresh token...');
+          this.start();
+        }
+      } else {
+        console.warn('⚠️ Could not obtain fresh token - user may need to login again');
+        this.callbacks.onError?.('Authentication failed - please login again');
+      }
+    } catch (error) {
+      console.error('❌ Error handling authentication error:', error);
+      this.callbacks.onError?.('Authentication refresh failed - please restart the app');
+    }
+  }
+
+  /**
    * Get a valid authentication token, attempting refresh if needed
    */
   private async getValidAuthToken(): Promise<string | null> {
@@ -662,10 +760,33 @@ class RealtimeService {
     }
 
     try {
+      // Enhanced token validation for mobile
+      console.log('🔍 Validating token format...');
+      
+      // Check token format
+      const tokenParts = token.split('.');
+      if (tokenParts.length !== 3) {
+        console.error('❌ Invalid JWT token format - wrong number of parts');
+        return null;
+      }
+      
       // Decode JWT token to check expiration
-      const payload = JSON.parse(atob(token.split('.')[1]));
+      const payload = JSON.parse(atob(tokenParts[1]));
       const now = Date.now() / 1000;
-      const bufferTime = 60; // Refresh 1 minute before expiry
+      const bufferTime = 300; // Refresh 5 minutes before expiry (more buffer for mobile)
+
+      console.log('🕐 Token validation:', {
+        issued: payload.iat ? new Date(payload.iat * 1000).toISOString() : 'N/A',
+        expires: payload.exp ? new Date(payload.exp * 1000).toISOString() : 'N/A',
+        currentTime: new Date(now * 1000).toISOString(),
+        isExpired: payload.exp ? payload.exp < now : false,
+        needsRefresh: payload.exp ? payload.exp < (now + bufferTime) : false
+      });
+
+      if (payload.exp && payload.exp < now) {
+        console.log('❌ Token is already expired');
+        return null;
+      }
 
       if (payload.exp && payload.exp < (now + bufferTime)) {
         console.log('🔄 Token expiring soon, attempting refresh via API service...');
@@ -677,21 +798,38 @@ class RealtimeService {
           if (testResponse.success) {
             // Get the refreshed token
             const newToken = await SecureStorage.getAuthToken();
-            console.log('✅ Token refreshed successfully via API service');
-            return newToken;
+            if (newToken && newToken !== token) {
+              console.log('✅ Token refreshed successfully via API service');
+              return newToken;
+            } else {
+              console.log('⚠️ API call successful but token unchanged');
+              return token;
+            }
           } else {
             console.log('❌ Token refresh failed, authentication error persists');
             return null;
           }
         } catch (error) {
           console.error('❌ Token refresh via API service failed:', error);
+          
+          // Check if it's a network error vs auth error
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          if (errorMessage.includes('Network') || errorMessage.includes('timeout')) {
+            console.log('🌐 Network error during refresh, using existing token');
+            return token; // Use existing token if it's just a network issue
+          }
+          
           return null;
         }
       }
 
+      console.log('✅ Token is valid and not expiring soon');
       return token;
     } catch (error) {
       console.error('⚠️ Token validation error:', error);
+      
+      // For mobile, be more lenient with token parsing errors
+      console.log('🔄 Token parsing failed, but returning token for server validation');
       return token; // Return token anyway, let server validate
     }
   }

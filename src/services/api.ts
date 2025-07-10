@@ -695,32 +695,54 @@ class ApiService {
   // Orders
   async getActiveOrders(): Promise<ApiResponse<Order[]>> {
     // Get available orders for the driver to accept (unassigned/broadcast orders)
-    const response = await this.client.get<BackendDelivery[]>('/api/v1/delivery/deliveries/available_orders/');
+    try {
+      const locationService = await import('./locationService');
+      const currentLocation = await locationService.locationService.getCurrentLocation();
+      
+      const url = `/api/v1/delivery/deliveries/available_orders/?latitude=${currentLocation.latitude}&longitude=${currentLocation.longitude}`;
+      const response = await this.client.get<BackendDelivery[]>(url);
 
-    // Transform backend response to match our Order type
-    if (response.success && response.data) {
-      console.log('🔍 DEBUG: available_orders raw response:');
-      response.data.forEach((item, index) => {
-        console.log(`Order ${index}:`, {
-          id: item.id,
-          order_id: item.order?.id,
-          order_number: item.order?.order_number,
-          has_order_object: !!item.order,
-          driver: item.driver,
-          status: item.status,
-          keys: Object.keys(item)
+      // Transform backend response to match our Order type
+      if (response.success && response.data) {
+        console.log('🔍 DEBUG: available_orders raw response:');
+        response.data.forEach((item, index) => {
+          console.log(`Order ${index}:`, {
+            id: item.id,
+            order_id: item.order?.id,
+            order_number: item.order?.order_number,
+            has_order_object: !!item.order,
+            driver: item.driver,
+            status: item.status,
+            keys: Object.keys(item)
+          });
         });
-      });
 
-      const orders: Order[] = (response.data || []).map(this.transformOrder);
-      return {
-        success: true,
-        data: orders,
-        message: response.message
-      };
+        const orders: Order[] = (response.data || []).map(this.transformOrder);
+        return {
+          success: true,
+          data: orders,
+          message: response.message
+        };
+      }
+
+      return response as ApiResponse<Order[]>;
+    } catch (locationError) {
+      console.warn('⚠️ Failed to get location for active orders:', locationError);
+      
+      // Fallback without location
+      const response = await this.client.get<BackendDelivery[]>('/api/v1/delivery/deliveries/available_orders/');
+      
+      if (response.success && response.data) {
+        const orders: Order[] = (response.data || []).map(this.transformOrder);
+        return {
+          success: true,
+          data: orders,
+          message: response.message
+        };
+      }
+
+      return response as ApiResponse<Order[]>;
     }
-
-    return response as ApiResponse<Order[]>;
   }
 
   async getOrderHistory(filter?: string): Promise<ApiResponse<Order[]>> {
@@ -928,19 +950,50 @@ class ApiService {
 
   async getAvailableOrdersWithDistance(): Promise<ApiResponse<Order[]>> {
     console.log('📍 Fetching available orders with distance filtering...');
-    const response = await this.client.get<BackendDelivery[]>('/api/v1/delivery/deliveries/available_orders/');
+    
+    // Get current location to send with request
+    try {
+      const locationService = await import('./locationService');
+      const currentLocation = await locationService.locationService.getCurrentLocation();
+      
+      console.log('📍 Sending location with request:', {
+        latitude: currentLocation.latitude,
+        longitude: currentLocation.longitude
+      });
+      
+      // Send location as query parameters
+      const url = `/api/v1/delivery/deliveries/available_orders/?latitude=${currentLocation.latitude}&longitude=${currentLocation.longitude}`;
+      const response = await this.client.get<BackendDelivery[]>(url);
 
-    // Transform backend response to match our Order type
-    if (response.success && response.data) {
-      const orders: Order[] = (response.data || []).map(this.transformOrder);
-      return {
-        success: true,
-        data: orders,
-        message: response.message
-      };
+      // Transform backend response to match our Order type
+      if (response.success && response.data) {
+        const orders: Order[] = (response.data || []).map(this.transformOrder);
+        return {
+          success: true,
+          data: orders,
+          message: response.message
+        };
+      }
+
+      return response as ApiResponse<Order[]>;
+    } catch (locationError) {
+      console.warn('⚠️ Failed to get location, fetching orders without location filter:', locationError);
+      
+      // Fallback to request without location
+      const response = await this.client.get<BackendDelivery[]>('/api/v1/delivery/deliveries/available_orders/');
+
+      // Transform backend response to match our Order type
+      if (response.success && response.data) {
+        const orders: Order[] = (response.data || []).map(this.transformOrder);
+        return {
+          success: true,
+          data: orders,
+          message: response.message
+        };
+      }
+
+      return response as ApiResponse<Order[]>;
     }
-
-    return response as ApiResponse<Order[]>;
   }
 
   // Helper function to determine correct order status
@@ -1409,15 +1462,44 @@ class ApiService {
     const endpoint = `/api/v1/auth/drivers/${driverId}/update_location/`;
     console.log(`🎯 Calling location endpoint: ${endpoint}`);
 
-    const result = await this.client.post<void>(endpoint, {
+    // Add timestamp and additional data for better tracking
+    const locationData = {
       latitude,
-      longitude
-    });
+      longitude,
+      timestamp: new Date().toISOString(),
+      accuracy: 10, // meters
+      heading: 0, // degrees
+      speed: 0, // m/s
+      provider: 'mobile_app'
+    };
+
+    console.log('📍 Sending location data:', locationData);
+
+    const result = await this.client.post<void>(endpoint, locationData);
 
     if (result.success) {
       console.log('✅ Location update API call successful');
+      
+      // Also update the cached driver data with new location
+      if (cachedDriver) {
+        const updatedDriver = {
+          ...cachedDriver,
+          latitude,
+          longitude,
+          lastLocationUpdate: new Date().toISOString()
+        };
+        await Storage.setItem(STORAGE_KEYS.DRIVER_DATA, updatedDriver);
+      }
     } else {
       console.error('❌ Location update API call failed:', result.error);
+      
+      // Log additional debugging info
+      console.log('🔍 Location update debug info:', {
+        driverId,
+        endpoint,
+        coordinates: { latitude, longitude },
+        error: result.error
+      });
     }
 
     return result;
@@ -1427,29 +1509,56 @@ class ApiService {
   async pollNewOrders(): Promise<ApiResponse<Order[]>> {
     console.log('🔄 Polling for new available orders...');
 
-    // Get available broadcast orders that drivers can accept
-    const response = await this.client.get<BackendDelivery[]>('/api/v1/delivery/deliveries/available_orders/');
+    try {
+      const locationService = await import('./locationService');
+      const currentLocation = await locationService.locationService.getCurrentLocation();
+      
+      const url = `/api/v1/delivery/deliveries/available_orders/?latitude=${currentLocation.latitude}&longitude=${currentLocation.longitude}`;
+      console.log(`📍 Polling with location: ${currentLocation.latitude}, ${currentLocation.longitude}`);
+      
+      // Get available broadcast orders that drivers can accept
+      const response = await this.client.get<BackendDelivery[]>(url);
 
-    if (response.success && response.data) {
-      console.log(`📦 Raw response data:`, response.data);
-      const dataArray = Array.isArray(response.data) ? response.data : [response.data];
-      const orders: Order[] = dataArray.map(this.transformOrder);
-      console.log(`📎 Found ${orders?.length || 0} available orders`);
+      if (response.success && response.data) {
+        console.log(`📦 Raw response data:`, response.data);
+        const dataArray = Array.isArray(response.data) ? response.data : [response.data];
+        const orders: Order[] = dataArray.map(this.transformOrder);
+        console.log(`📎 Found ${orders?.length || 0} available orders`);
 
-      orders.forEach((order, index) => {
-        console.log(`  📄 Order ${index + 1}: ${order.id} - ${order.customer?.name || 'Unknown Customer'} - $${order.total}`);
-      });
+        orders.forEach((order, index) => {
+          console.log(`  📄 Order ${index + 1}: ${order.id} - ${order.customer?.name || 'Unknown Customer'} - $${order.total}`);
+        });
 
-      return {
-        success: true,
-        data: orders,
-        message: response.message
-      };
-    } else {
-      console.log('⚠️ No orders available or polling failed:', response.error);
+        return {
+          success: true,
+          data: orders,
+          message: response.message
+        };
+      } else {
+        console.log('⚠️ No orders available or polling failed:', response.error);
+      }
+
+      return response as ApiResponse<Order[]>;
+    } catch (locationError) {
+      console.warn('⚠️ Failed to get location for polling:', locationError);
+      
+      // Fallback without location
+      const response = await this.client.get<BackendDelivery[]>('/api/v1/delivery/deliveries/available_orders/');
+      
+      if (response.success && response.data) {
+        const dataArray = Array.isArray(response.data) ? response.data : [response.data];
+        const orders: Order[] = dataArray.map(this.transformOrder);
+        console.log(`📎 Found ${orders?.length || 0} available orders (no location filter)`);
+
+        return {
+          success: true,
+          data: orders,
+          message: response.message
+        };
+      }
+
+      return response as ApiResponse<Order[]>;
     }
-
-    return response as ApiResponse<Order[]>;
   }
 
   async getNearbyDrivers(latitude: number, longitude: number, radius: number = 5): Promise<ApiResponse<Driver[]>> {
@@ -1580,6 +1689,125 @@ class ApiService {
       };
     }
   }
+
+  // Diagnostic method to check driver status and location
+  async diagnoseMobileOrderIssue(): Promise<void> {
+    console.log('🔍 === MOBILE ORDER DIAGNOSTIC ===');
+    
+    try {
+      // 1. Check driver authentication
+      const token = await SecureStorage.getAuthToken();
+      if (!token) {
+        console.error('❌ No auth token found');
+        return;
+      }
+      
+      // 2. Check driver profile
+      console.log('📋 Checking driver profile...');
+      const driverResponse = await this.getDriverProfile();
+      if (driverResponse.success && driverResponse.data) {
+        console.log('✅ Driver profile:', {
+          id: driverResponse.data.id,
+          name: driverResponse.data.name,
+          isOnline: driverResponse.data.isOnline,
+          isAvailable: driverResponse.data.isAvailable,
+          status: driverResponse.data.status
+        });
+      } else {
+        console.error('❌ Failed to get driver profile:', driverResponse.error);
+      }
+      
+      // 3. Check location service status
+      console.log('📍 Checking location service...');
+      const { locationService } = await import('./locationService');
+      console.log('Location service status:', {
+        isTracking: locationService.isLocationTracking(),
+      });
+      
+      // 4. Get current location
+      try {
+        const currentLocation = await locationService.getCurrentLocation();
+        console.log('✅ Current location:', {
+          latitude: currentLocation.latitude,
+          longitude: currentLocation.longitude,
+          accuracy: currentLocation.accuracy
+        });
+        
+        // 5. Test location update
+        const locationUpdateResult = await this.updateLocation(
+          currentLocation.latitude,
+          currentLocation.longitude
+        );
+        console.log('Location update result:', locationUpdateResult);
+        
+      } catch (locationError) {
+        console.error('❌ Location error:', locationError);
+      }
+      
+      // 6. Check available orders
+      console.log('📦 Checking available orders...');
+      const ordersResponse = await this.getAvailableOrdersWithDistance();
+      if (ordersResponse.success) {
+        console.log('✅ Available orders:', {
+          count: ordersResponse.data.length,
+          orders: ordersResponse.data.map(o => ({
+            id: o.id,
+            customer: o.customer?.name,
+            total: o.total,
+            status: o.status
+          }))
+        });
+      } else {
+        console.error('❌ Failed to get available orders:', ordersResponse.error);
+      }
+      
+      // 7. Test direct API endpoint
+      console.log('🔗 Testing direct API endpoint...');
+      const directResponse = await this.client.get<any>('/api/v1/delivery/deliveries/available_orders/');
+      console.log('Direct API response:', {
+        success: directResponse.success,
+        dataLength: directResponse.data?.length || 0,
+        error: directResponse.error
+      });
+      
+      // 8. Check driver online status in backend
+      console.log('🟢 Checking driver online status...');
+      const cachedDriver = await Storage.getItem(STORAGE_KEYS.DRIVER_DATA);
+      const driverId = cachedDriver?.id || this.extractDriverIdFromToken(token);
+      
+      if (driverId) {
+        const statusResponse = await this.client.get<any>(`/api/v1/auth/drivers/${driverId}/`);
+        if (statusResponse.success) {
+          console.log('✅ Driver status from backend:', {
+            id: statusResponse.data.id,
+            is_online: statusResponse.data.is_online,
+            is_available: statusResponse.data.is_available,
+            is_on_duty: statusResponse.data.is_on_duty,
+            last_location_update: statusResponse.data.last_location_update,
+            latitude: statusResponse.data.latitude,
+            longitude: statusResponse.data.longitude
+          });
+        } else {
+          console.error('❌ Failed to get driver status:', statusResponse.error);
+        }
+      }
+      
+    } catch (error) {
+      console.error('💥 Diagnostic error:', error);
+    }
+    
+    console.log('🔍 === END DIAGNOSTIC ===');
+  }
+
+  // Helper method to extract driver ID from token
+  private extractDriverIdFromToken(token: string): string | null {
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      return payload.user_id || payload.id || payload.driver_id || null;
+    } catch {
+      return null;
+    }
+  }
 }
 
 // Production API Service
@@ -1595,4 +1823,5 @@ export const deliveryApi = {
   smartUpdateStatus: (deliveryId: string, data: SmartStatusUpdateData) => apiService.smartUpdateStatus(deliveryId, data),
   declineDelivery: (deliveryId: string, data: DeclineDeliveryData) => apiService.declineDelivery(deliveryId, data),
   markDeliveryViewed: (deliveryId: string) => apiService.markDeliveryViewed(deliveryId),
+  diagnoseMobileOrderIssue: () => apiService.diagnoseMobileOrderIssue(),
 };
