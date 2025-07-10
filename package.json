@@ -20,7 +20,8 @@
     "release:android": "npm run prepare:release && npm run build:android",
     "release:ios": "npm run prepare:release && npm run build:ios",
     "setup:env": "node scripts/setup-env.js",
-    "setup:ip": "node scripts/setup-env.js --ip"
+    "setup:ip": "node scripts/setup-env.js --ip",
+    "setup:cloudflare": "node scripts/setup-cloudflare.js"
   },
   "dependencies": {
     "@expo/vector-icons": "^13.0.0",
