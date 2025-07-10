@@ -19,7 +19,7 @@ import Haptics from 'react-native-haptic-feedback';
 import IncomingOrderModal from '../components/IncomingOrderModal';
 import AppLogo from '../components/AppLogo';
 
-import { useOrders } from '../contexts/OrderContext';
+import { useOrders } from '../features/orders/context/OrderProvider';
 import { useDriver } from '../contexts/DriverContext';
 import { Order } from '@/types';
 import { Design, getCardStyle } from '../constants/designSystem';

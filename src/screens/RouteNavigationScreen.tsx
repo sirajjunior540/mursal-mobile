@@ -24,11 +24,12 @@ import Haptics from 'react-native-haptic-feedback';
 import Card from '../components/ui/Card';
 import OrderDetailsModal from '../components/OrderDetailsModal';
 
-import { useOrders } from '../contexts/OrderContext';
+import { useOrders } from '../features/orders/context/OrderProvider';
 import { useDriver } from '../contexts/DriverContext';
 import { useAuth } from '../contexts/AuthContext';
 import { Order } from '../types';
 import { locationService } from '../services/locationService';
+import { apiService } from '../services/api';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -56,11 +57,8 @@ const RouteNavigationScreen: React.FC = () => {
   const { user } = useAuth();
   const { 
     orders: availableOrders, 
-    driverOrders,
     refreshOrders, 
     isLoading, 
-    getDriverOrders, 
-    getRouteOptimization,
     updateOrderStatus
   } = useOrders();
   const { driver } = useDriver();
@@ -71,11 +69,25 @@ const RouteNavigationScreen: React.FC = () => {
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [showOrderDetails, setShowOrderDetails] = useState(false);
+  const [driverOrders, setDriverOrders] = useState<Order[]>([]);
   
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
 
   // Load backend route optimization
+  const loadDriverOrders = useCallback(async () => {
+    try {
+      console.log('🔄 Loading driver orders...');
+      const response = await apiService.getDriverOrders();
+      if (response.success) {
+        setDriverOrders(response.data);
+        console.log(`✅ Loaded ${response.data.length} driver orders`);
+      }
+    } catch (error) {
+      console.error('❌ Error loading driver orders:', error);
+    }
+  }, []);
+
   const loadBackendRoute = useCallback(async () => {
     try {
       setOptimizingRoute(true);
@@ -86,14 +98,16 @@ const RouteNavigationScreen: React.FC = () => {
         const location = await locationService.getCurrentLocation();
         if (location) {
           console.log(`📍 Using current location for route optimization: ${location.latitude}, ${location.longitude}`);
-          const routeData = await getRouteOptimization(location.latitude, location.longitude);
+          const response = await apiService.getRouteOptimization(location.latitude, location.longitude);
+          const routeData = response.success ? response.data : null;
           if (routeData) {
             setBackendRoute(routeData);
             console.log('✅ Backend route loaded with location:', routeData);
           }
         } else {
           console.warn('⚠️ No location available, trying route optimization without coordinates...');
-          const routeData = await getRouteOptimization();
+          const response = await apiService.getRouteOptimization();
+          const routeData = response.success ? response.data : null;
           if (routeData) {
             setBackendRoute(routeData);
             console.log('✅ Backend route loaded without location:', routeData);
@@ -112,7 +126,7 @@ const RouteNavigationScreen: React.FC = () => {
     } finally {
       setOptimizingRoute(false);
     }
-  }, [getRouteOptimization]);
+  }, []);
 
   // Load route data when screen is focused
   useFocusEffect(
@@ -125,7 +139,7 @@ const RouteNavigationScreen: React.FC = () => {
           try {
             await Promise.all([
               loadBackendRoute(),
-              getDriverOrders?.()
+              loadDriverOrders()
             ]);
             console.log('✅ Route data loaded successfully');
           } catch (error) {
@@ -135,7 +149,7 @@ const RouteNavigationScreen: React.FC = () => {
       };
       
       loadRouteData();
-    }, [driver?.id, getDriverOrders, loadBackendRoute])
+    }, [driver?.id, loadDriverOrders, loadBackendRoute])
   );
 
   // Initialize animations
@@ -171,7 +185,7 @@ const RouteNavigationScreen: React.FC = () => {
               onPress: async () => {
                 // Clear completed orders by refreshing driver orders
                 // This will fetch fresh data from backend excluding completed orders
-                await getDriverOrders?.();
+                await loadDriverOrders();
                 Alert.alert('Success', 'Route cleared! Ready for new deliveries.');
               }
             },
@@ -183,7 +197,7 @@ const RouteNavigationScreen: React.FC = () => {
         );
       }
     }
-  }, [routeProgress, routeOrders, getDriverOrders]);
+  }, [routeProgress, routeOrders, loadDriverOrders]);
 
   // Monitor driver location changes for dynamic route optimization
   useEffect(() => {
@@ -198,7 +212,7 @@ const RouteNavigationScreen: React.FC = () => {
     Haptics.trigger('impactLight');
     try {
       await Promise.all([
-        getDriverOrders?.(),
+        loadDriverOrders(),
         loadBackendRoute()
       ]);
     } catch (error) {
@@ -206,7 +220,7 @@ const RouteNavigationScreen: React.FC = () => {
     } finally {
       setRefreshing(false);
     }
-  }, [getDriverOrders, loadBackendRoute]);
+  }, [loadDriverOrders, loadBackendRoute]);
 
   // Use driver orders for route display (includes ongoing deliveries as fallback)
   const routeOrders = useMemo(() => {
@@ -585,10 +599,14 @@ const RouteNavigationScreen: React.FC = () => {
     Haptics.trigger('impactMedium');
     
     try {
-      const success = await updateOrderStatus(order.id, newStatus as any);
+      // Use delivery ID for status updates (order.id contains the delivery ID)
+      const deliveryId = order.id;
+      console.log(`🔄 Updating status for delivery ID: ${deliveryId} to ${newStatus}`);
+      
+      const success = await updateOrderStatus(deliveryId, newStatus as any);
       if (success) {
         // Refresh driver orders to show updated status
-        await getDriverOrders?.();
+        await loadDriverOrders();
         Alert.alert('Success', `Order status updated to ${newStatus} successfully`);
       } else {
         Alert.alert('Error', 'Failed to update order status');
@@ -599,7 +617,7 @@ const RouteNavigationScreen: React.FC = () => {
     } finally {
       setUpdatingStatus(false);
     }
-  }, [updateOrderStatus, getDriverOrders]);
+  }, [updateOrderStatus, loadDriverOrders]);
 
   const getNextStatus = (currentStatus: string, pointType: 'pickup' | 'delivery') => {
     if (pointType === 'pickup') {

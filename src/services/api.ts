@@ -934,14 +934,6 @@ class ApiService {
     return response as ApiResponse<Order[]>;
   }
 
-  async updateDriverLocation(latitude: number, longitude: number): Promise<ApiResponse<void>> {
-    console.log(`📍 Updating driver location: ${latitude}, ${longitude}`);
-    return this.client.post<void>('/api/v1/auth/drivers/update-location/', {
-      latitude,
-      longitude,
-      timestamp: new Date().toISOString()
-    });
-  }
 
   async smartAcceptOrder(orderId: string): Promise<ApiResponse<SmartAcceptResponse>> {
     console.log(`🎯 Smart accepting order: ${orderId}`);
@@ -1144,9 +1136,16 @@ class ApiService {
     });
 
     const baseOrder = {
-      id: primaryId,  // This must be the delivery ID for API calls
-      deliveryId: delivery?.id || String((backendData as Record<string, unknown>).id || ''), // Store delivery ID separately
-      orderNumber: order.order_number || order.orderNumber || `#${order.id}`,
+      // ⚠️ CRITICAL: The 'id' field contains the DELIVERY ID for API operations
+      id: primaryId,  // This is the delivery ID that must be used for accept/decline/status API calls
+      
+      // Explicit delivery ID field for clarity (same as id above)
+      deliveryId: primaryId, // Same as 'id' - the delivery ID for API calls
+      
+      // The actual order ID from the order table (if different)
+      orderId: order.id, // The order table's primary key
+      
+      orderNumber: order.order_number || `#${order.id}`,
       customer,
       items: (order?.items || order?.order_items || []).map((item: BackendOrderItem) => ({
         id: item.id || '',
@@ -1213,8 +1212,8 @@ class ApiService {
     return baseOrder;
   }
 
-  async acceptOrder(orderId: string): Promise<ApiResponse<void>> {
-    console.log(`🎯 Attempting to accept order: ${orderId}`);
+  async acceptOrder(deliveryId: string): Promise<ApiResponse<void>> {
+    console.log(`🎯 Attempting to accept order using delivery ID: ${deliveryId}`);
     
     // Debug: Check current user info before making the request
     try {
@@ -1234,7 +1233,9 @@ class ApiService {
       console.warn('⚠️ Could not get user info:', error);
     }
     
-    return this.client.post<void>(`/api/v1/delivery/deliveries/${orderId}/accept/`);
+    // ⚠️ CRITICAL: This endpoint expects a DELIVERY ID, not an order ID
+    console.log(`🔗 Making API call to: /api/v1/delivery/deliveries/${deliveryId}/accept/`);
+    return this.client.post<void>(`/api/v1/delivery/deliveries/${deliveryId}/accept/`);
   }
 
   async acceptBatchOrder(batchId: string): Promise<ApiResponse<void>> {
@@ -1277,61 +1278,64 @@ class ApiService {
     return this.acceptBatchOrder(routeId);
   }
 
-  async declineOrder(orderId: string): Promise<ApiResponse<void>> {
-    console.log(`🚫 API: Attempting to decline order/delivery: ${orderId}`);
+  async declineOrder(deliveryId: string): Promise<ApiResponse<void>> {
+    console.log(`🚫 API: Attempting to decline order using delivery ID: ${deliveryId}`);
 
-    // Direct decline attempt
-    const result = await this.client.post<void>(`/api/v1/delivery/deliveries/${orderId}/decline/`);
+    // ⚠️ CRITICAL: This endpoint expects a DELIVERY ID, not an order ID
+    console.log(`🔗 Making API call to: /api/v1/delivery/deliveries/${deliveryId}/decline/`);
+    const result = await this.client.post<void>(`/api/v1/delivery/deliveries/${deliveryId}/decline/`);
 
     if (!result.success) {
-      console.error(`❌ Decline failed for ID ${orderId}:`, result.error);
+      console.error(`❌ Decline failed for delivery ID ${deliveryId}:`, result.error);
 
       // If error mentions "you can only decline", it means backend needs fixing
       if (result.error?.toLowerCase().includes('you can only decline')) {
         console.error('⚠️ Backend decline logic needs update - see quick_backend_fix.py');
       }
     } else {
-      console.log(`✅ Successfully declined order/delivery: ${orderId}`);
+      console.log(`✅ Successfully declined order using delivery ID: ${deliveryId}`);
     }
 
     return result;
   }
 
-  async updateOrderStatus(orderId: string, status: OrderStatus): Promise<ApiResponse<void>> {
-    console.log(`🔄 Updating order ${orderId} status to: ${status}`);
+  async updateOrderStatus(deliveryId: string, status: OrderStatus): Promise<ApiResponse<void>> {
+    console.log(`🔄 Updating order status to ${status} using delivery ID: ${deliveryId}`);
     
     // Try the standard update_status endpoint first
     try {
-      const result = await this.client.post<void>(`/api/v1/delivery/deliveries/${orderId}/update_status/`, { status });
+      console.log(`🔗 Making API call to: /api/v1/delivery/deliveries/${deliveryId}/update_status/`);
+      const result = await this.client.post<void>(`/api/v1/delivery/deliveries/${deliveryId}/update_status/`, { status });
       if (result.success) {
-        console.log(`✅ Successfully updated order ${orderId} status to ${status}`);
+        console.log(`✅ Successfully updated order status to ${status} using delivery ID: ${deliveryId}`);
         return result;
       }
     } catch (error) {
-      console.warn(`⚠️ Standard update_status failed for ${orderId}:`, error);
+      console.warn(`⚠️ Standard update_status failed for delivery ID ${deliveryId}:`, error);
     }
 
     // Try smart_update_status as fallback
     try {
-      console.log(`🔄 Trying smart_update_status for order ${orderId}`);
-      const result = await this.client.post<void>(`/api/v1/delivery/deliveries/${orderId}/smart_update_status/`, { 
+      console.log(`🔄 Trying smart_update_status for delivery ID ${deliveryId}`);
+      console.log(`🔗 Making API call to: /api/v1/delivery/deliveries/${deliveryId}/smart_update_status/`);
+      const result = await this.client.post<void>(`/api/v1/delivery/deliveries/${deliveryId}/smart_update_status/`, { 
         status,
         location: 'Driver App',
         notes: `Status updated to ${status} via mobile app`
       });
       if (result.success) {
-        console.log(`✅ Successfully updated order ${orderId} status to ${status} via smart_update`);
+        console.log(`✅ Successfully updated order status to ${status} using delivery ID: ${deliveryId} via smart_update`);
         return result;
       }
     } catch (error) {
-      console.warn(`⚠️ Smart update_status also failed for ${orderId}:`, error);
+      console.warn(`⚠️ Smart update_status also failed for delivery ID ${deliveryId}:`, error);
     }
 
     // If both fail, return error
     return {
       success: false,
       data: undefined,
-      error: `Failed to update order ${orderId} status to ${status}. Both update_status and smart_update_status endpoints failed.`
+      error: `Failed to update order status to ${status} using delivery ID ${deliveryId}. Both update_status and smart_update_status endpoints failed.`
     };
   }
 
@@ -1417,11 +1421,11 @@ class ApiService {
   }
 
   async recordCashCollection(orderId: string, amount: number): Promise<ApiResponse<void>> {
-    return this.client.post<void>('/api/v1/driver/cash/collect/', { orderId, amount });
+    return this.client.post<void>('/api/v1/auth/drivers/record_cash_collection/', { orderId, amount });
   }
 
   async getTransactionHistory(): Promise<ApiResponse<BalanceTransaction[]>> {
-    return this.client.get<BalanceTransaction[]>('/api/v1/driver/balance/transactions/');
+    return this.client.get<BalanceTransaction[]>('/api/v1/auth/drivers/transaction_history/');
   }
 
   // Location tracking

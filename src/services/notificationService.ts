@@ -211,7 +211,7 @@ class NotificationService {
    */
   public showOrderNotification(order: Order) {
     const title = 'New Order Available!';
-    const message = `Order ${order.orderNumber || order.id} from ${order.customer?.name || 'Customer'} - $${(Number(order.total) || 0).toFixed(2)}`;
+    const message = `Order ${order.order_number || order.id} from ${order.customer_details?.name || 'Customer'} - $${(Number(order.total) || 0).toFixed(2)}`;
 
     // Play sound and vibrate
     this.playOrderSound();
@@ -238,7 +238,7 @@ class NotificationService {
   public showInAppNotification(order: Order, onAccept: () => void, onDecline: () => void) {
     Alert.alert(
       '🚚 New Order Available!',
-      `Order ${order.orderNumber || order.id}\nCustomer: ${order.customer?.name || 'Unknown'}\nTotal: $${(Number(order.total) || 0).toFixed(2)}\nAddress: ${order.deliveryAddress?.street || 'Unknown address'}`,
+      `Order ${order.order_number || order.id}\nCustomer: ${order.customer_details?.name || 'Unknown'}\nTotal: $${(Number(order.total) || 0).toFixed(2)}\nAddress: ${order.delivery_address || 'Unknown address'}`,
       [
         {
           text: 'Decline',

@@ -102,12 +102,12 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
     // Add delivery stops
     if (batchOrder.orders && batchOrder.orders.length > 0) {
       batchOrder.orders.forEach(order => {
-        if (order.delivery_address || order.deliveryAddress?.street) {
+        if (order.delivery_address) {
           stops.push({
             id: `delivery-${order.id}`,
             type: 'delivery' as const,
-            address: order.delivery_address || order.deliveryAddress?.street || '',
-            orderNumber: order.orderNumber,
+            address: order.delivery_address || '',
+            orderNumber: order.order_number,
             customerName: order.customer?.name
           });
         }
@@ -137,8 +137,10 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
       setTimeRemaining(prev => {
         if (prev <= 1) {
           // Auto-skip when timer reaches 0
-          console.log('⏰ Timer expired, auto-skipping order:', order.id);
-          onSkip(order.id);
+          const apiIds = extractOrderApiIds(order);
+          console.log('⏰ Timer expired, auto-skipping order:', getOrderDisplayId(order));
+          console.log('🔍 Using delivery ID for API call:', apiIds.deliveryId);
+          onSkip(apiIds.deliveryId);
           return 0;
         }
         return prev - 1;
@@ -448,7 +450,7 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
           {/* Order Summary */}
           <ScrollView style={styles.orderSummary} showsVerticalScrollIndicator={false}>
             <Text style={styles.orderNumber}>
-              {isBatchOrder ? `Route #${batchOrder.batchId || order.id}` : `Order #${order.order_number || order.id}`}
+              {isBatchOrder ? `Route #${batchOrder.batchId || getOrderDisplayId(order)}` : getOrderDisplayId(order)}
             </Text>
             
             {!isBatchOrder ? (
@@ -474,7 +476,7 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
                   <View style={styles.locationInfo}>
                     <Text style={styles.locationLabel}>DELIVERY</Text>
                     <Text style={styles.locationAddress} numberOfLines={2}>
-                      {order.delivery_address || order.deliveryAddress?.street || 'Delivery location'}
+                      {order.delivery_address || 'Delivery location'}
                     </Text>
                   </View>
                 </View>

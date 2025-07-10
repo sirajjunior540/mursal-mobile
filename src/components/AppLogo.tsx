@@ -1,68 +1,95 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import Ionicons from 'react-native-vector-icons/Ionicons';
+import { View, Image, Text, StyleSheet, ImageStyle, ViewStyle, TextStyle } from 'react-native';
 import { Design } from '../constants/designSystem';
 
 interface AppLogoProps {
   size?: 'small' | 'medium' | 'large' | 'xlarge';
   color?: string;
   showText?: boolean;
-  style?: any;
+  style?: ViewStyle;
+  variant?: 'default' | 'minimal' | 'text-only';
+}
+
+interface SizeConfig {
+  containerSize: number;
+  logoSize: number;
+  fontSize: number;
+  spacing: number;
 }
 
 const AppLogo: React.FC<AppLogoProps> = ({ 
   size = 'medium', 
   color, 
   showText = true,
-  style 
+  style,
+  variant = 'default'
 }) => {
-  const sizeConfig = {
+  const sizeConfig: Record<string, SizeConfig> = {
     small: {
       containerSize: 40,
-      iconSize: 24,
-      fontSize: Design.typography.bodySmall.fontSize,
-      padding: Design.spacing[2]
+      logoSize: 32,
+      fontSize: 14,
+      spacing: Design.spacing[1]
     },
     medium: {
       containerSize: 60,
-      iconSize: 36,
-      fontSize: Design.typography.body.fontSize,
-      padding: Design.spacing[3]
+      logoSize: 48,
+      fontSize: 16,
+      spacing: Design.spacing[2]
     },
     large: {
       containerSize: 80,
-      iconSize: 48,
-      fontSize: Design.typography.h5.fontSize,
-      padding: Design.spacing[4]
+      logoSize: 64,
+      fontSize: 18,
+      spacing: Design.spacing[3]
     },
     xlarge: {
       containerSize: 120,
-      iconSize: 72,
-      fontSize: Design.typography.h3.fontSize,
-      padding: Design.spacing[6]
+      logoSize: 96,
+      fontSize: 24,
+      spacing: Design.spacing[4]
     }
   };
 
   const config = sizeConfig[size];
-  const logoColor = color || Design.colors.primary;
+  const textColor = color || Design.colors.text;
+
+  if (variant === 'text-only') {
+    return (
+      <View style={[styles.container, style]}>
+        <Text style={[
+          styles.logoText,
+          {
+            fontSize: config.fontSize,
+            color: textColor,
+          }
+        ]}>
+          MURSAL
+        </Text>
+      </View>
+    );
+  }
+
+  const logoContainerStyle: ViewStyle = {
+    width: config.containerSize,
+    height: config.containerSize,
+    borderRadius: variant === 'minimal' ? 0 : config.containerSize / 2,
+    backgroundColor: variant === 'minimal' ? 'transparent' : 'rgba(255, 255, 255, 0.1)',
+  };
+
+  const logoImageStyle: ImageStyle = {
+    width: config.logoSize,
+    height: config.logoSize,
+    borderRadius: variant === 'minimal' ? 0 : config.logoSize / 2,
+  };
 
   return (
     <View style={[styles.container, style]}>
-      <View style={[
-        styles.logoContainer,
-        {
-          width: config.containerSize,
-          height: config.containerSize,
-          borderRadius: config.containerSize / 2,
-          padding: config.padding,
-          backgroundColor: `${logoColor}15`,
-          borderColor: `${logoColor}30`,
-        }
-      ]}>
-        <Ionicons 
-          name="car-sport" 
-          size={config.iconSize} 
-          color={logoColor} 
+      <View style={[styles.logoContainer, logoContainerStyle]}>
+        <Image
+          source={require('../../logos/android/mipmap-xxxhdpi/ic_launcher.png')}
+          style={logoImageStyle}
+          resizeMode="contain"
         />
       </View>
       
@@ -71,8 +98,8 @@ const AppLogo: React.FC<AppLogoProps> = ({
           styles.logoText,
           {
             fontSize: config.fontSize,
-            color: logoColor,
-            marginTop: size === 'small' ? Design.spacing[1] : Design.spacing[2]
+            color: textColor,
+            marginTop: config.spacing
           }
         ]}>
           MURSAL
@@ -86,18 +113,18 @@ const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
     justifyContent: 'center',
-  },
+  } as ViewStyle,
   logoContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
     ...Design.shadows.small,
-  },
+  } as ViewStyle,
   logoText: {
     fontWeight: 'bold',
-    letterSpacing: 1,
+    letterSpacing: 2,
     textAlign: 'center',
-  },
+    fontFamily: 'System',
+  } as TextStyle,
 });
 
 export default AppLogo;

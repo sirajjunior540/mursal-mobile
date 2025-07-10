@@ -15,7 +15,6 @@ import {
 } from './types';
 import { WebSocketClient } from './websocketClient';
 import { PollingClient } from './pollingClient';
-import { SimplePollingClient } from './simplePollingClient';
 import { PushNotificationClient } from './pushNotificationClient';
 
 // Default configuration
@@ -42,7 +41,7 @@ export class RealtimeSDK {
   private config: RealtimeSDKConfig;
   private callbacks: RealtimeSDKCallbacks = {};
   private websocketClient: WebSocketClient | null = null;
-  private pollingClient: PollingClient | SimplePollingClient | null = null;
+  private pollingClient: PollingClient | null = null;
   private pushClient: PushNotificationClient | null = null;
   private isRunning: boolean = false;
   private seenOrderIds: Map<string, number> = new Map(); // Order ID -> timestamp
@@ -205,40 +204,20 @@ export class RealtimeSDK {
         hasAuthToken: !!this.config.authToken
       });
       
-      // Try the original PollingClient first
-      try {
-        this.pollingClient = new PollingClient({
-          baseUrl: this.config.baseUrl,
-          endpoint: this.config.pollingEndpoint,
-          interval: this.config.pollingInterval,
-          authToken: this.config.authToken
-        });
-        
-        // Verify it works
-        if (this.pollingClient && typeof this.pollingClient.isConnected === 'function') {
-          console.log('✅ Original PollingClient created successfully');
-        } else {
-          throw new Error('Original PollingClient validation failed');
-        }
-        
-      } catch (originalError) {
-        console.warn('⚠️ Original PollingClient failed, using SimplePollingClient:', originalError);
-        
-        // Fallback to SimplePollingClient
-        this.pollingClient = new SimplePollingClient({
-          baseUrl: this.config.baseUrl,
-          endpoint: this.config.pollingEndpoint,
-          interval: this.config.pollingInterval,
-          authToken: this.config.authToken
-        });
-        
-        console.log('✅ SimplePollingClient created as fallback');
+      // Create PollingClient
+      this.pollingClient = new PollingClient({
+        baseUrl: this.config.baseUrl,
+        endpoint: this.config.pollingEndpoint,
+        interval: this.config.pollingInterval,
+        authToken: this.config.authToken
+      });
+      
+      // Verify it works
+      if (!this.pollingClient || typeof this.pollingClient.getConnectionStatus !== 'function') {
+        throw new Error('PollingClient validation failed');
       }
       
-      // Final verification
-      if (!this.pollingClient || typeof this.pollingClient.isConnected !== 'function') {
-        throw new Error('All polling client implementations failed');
-      }
+      console.log('✅ PollingClient created successfully');
       
       // Set up callbacks
       this.pollingClient.setCallbacks({
@@ -408,8 +387,8 @@ export class RealtimeSDK {
       ? this.websocketClient.isConnected() 
       : false;
     
-    const pollingConnected = (this.pollingClient && typeof this.pollingClient.isConnected === 'function') 
-      ? this.pollingClient.isConnected() 
+    const pollingConnected = (this.pollingClient && typeof this.pollingClient.getConnectionStatus === 'function') 
+      ? this.pollingClient.getConnectionStatus() 
       : false;
     
     const pushConnected = (this.pushClient && typeof this.pushClient.isConnected === 'function') 

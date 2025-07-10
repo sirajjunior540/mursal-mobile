@@ -7,6 +7,7 @@
 import { Alert } from 'react-native';
 import { deliveryApi } from './api';
 import { soundService } from './soundService';
+import { getDeliveryIdForApi, extractOrderApiIds, getOrderDisplayId } from '../types';
 
 export interface OrderActionResult {
   success: boolean;
@@ -39,7 +40,7 @@ class OrderActionService {
    * Accept an order with enhanced feedback
    */
   async acceptOrder(
-    orderId: string, 
+    deliveryId: string, // ⚠️ This should be the delivery ID, not order ID
     data: AcceptOrderData = {},
     options: {
       showConfirmation?: boolean;
@@ -50,9 +51,11 @@ class OrderActionService {
     const { showConfirmation = true, onSuccess, onError } = options;
 
     try {
-      console.log(`📋 Accepting order ${orderId}...`);
+      console.log(`📋 Accepting order (delivery ID: ${deliveryId})...`);
       
-      const response = await deliveryApi.smartAcceptDelivery(orderId, {
+      // ⚠️ CRITICAL: deliveryApi.smartAcceptDelivery expects a DELIVERY ID, not order ID
+      // This deliveryId parameter should come from order.id (which contains the delivery ID)
+      const response = await deliveryApi.smartAcceptDelivery(deliveryId, {
         location: data.location || 'Driver location',
         latitude: data.latitude,
         longitude: data.longitude,
@@ -120,7 +123,7 @@ class OrderActionService {
    * Skip an order (mark as viewed) - prevents future notifications
    */
   async skipOrder(
-    orderId: string,
+    deliveryId: string, // ⚠️ This should be the delivery ID, not order ID
     options: {
       showConfirmation?: boolean;
       onSuccess?: () => void;
@@ -130,9 +133,10 @@ class OrderActionService {
     const { showConfirmation = false, onSuccess, onError } = options;
 
     try {
-      console.log(`⏭️ Skipping order ${orderId} (marking as viewed)...`);
+      console.log(`⏭️ Skipping order (delivery ID: ${deliveryId}) (marking as viewed)...`);
       
-      const response = await deliveryApi.markDeliveryViewed(orderId);
+      // ⚠️ CRITICAL: markDeliveryViewed expects a DELIVERY ID
+      const response = await deliveryApi.markDeliveryViewed(deliveryId);
 
       if (response.success) {
         const successMessage = 'Order skipped - won\'t appear again';
@@ -174,7 +178,7 @@ class OrderActionService {
    * Decline an order with reason
    */
   async declineOrder(
-    orderId: string,
+    deliveryId: string, // ⚠️ This should be the delivery ID, not order ID
     data: DeclineOrderData = {},
     options: {
       showConfirmation?: boolean;
@@ -185,9 +189,10 @@ class OrderActionService {
     const { showConfirmation = true, onSuccess, onError } = options;
 
     try {
-      console.log(`❌ Declining order ${orderId}...`);
+      console.log(`❌ Declining order (delivery ID: ${deliveryId})...`);
       
-      const response = await deliveryApi.declineDelivery(orderId, {
+      // ⚠️ CRITICAL: declineDelivery expects a DELIVERY ID
+      const response = await deliveryApi.declineDelivery(deliveryId, {
         location: data.location || 'Driver location',
         reason: data.reason || 'Driver declined via mobile app',
       });
@@ -232,7 +237,7 @@ class OrderActionService {
    * Update order status with workflow validation
    */
   async updateOrderStatus(
-    orderId: string,
+    deliveryId: string, // ⚠️ This should be the delivery ID, not order ID
     data: StatusUpdateData,
     options: {
       showConfirmation?: boolean;
@@ -244,7 +249,7 @@ class OrderActionService {
     const { showConfirmation = true, validateWorkflow = true, onSuccess, onError } = options;
 
     try {
-      console.log(`🔄 Updating order ${orderId} status to ${data.status}...`);
+      console.log(`🔄 Updating order (delivery ID: ${deliveryId}) status to ${data.status}...`);
       
       // Validate workflow if requested
       if (validateWorkflow) {
@@ -254,7 +259,8 @@ class OrderActionService {
         }
       }
 
-      const response = await deliveryApi.smartUpdateStatus(orderId, {
+      // ⚠️ CRITICAL: smartUpdateStatus expects a DELIVERY ID
+      const response = await deliveryApi.smartUpdateStatus(deliveryId, {
         status: data.status,
         location: data.location || 'Driver location',
         latitude: data.latitude,
@@ -395,7 +401,7 @@ class OrderActionService {
    */
   async batchProcessOrders(
     actions: Array<{
-      orderId: string;
+      deliveryId: string; // ⚠️ Changed from orderId to deliveryId for clarity
       action: 'accept' | 'decline' | 'skip' | 'updateStatus';
       data?: any;
     }>
@@ -404,19 +410,21 @@ class OrderActionService {
 
     for (const action of actions) {
       let result: OrderActionResult;
+      
+      console.log(`🔄 Batch processing ${action.action} for delivery ID: ${action.deliveryId}`);
 
       switch (action.action) {
         case 'accept':
-          result = await this.acceptOrder(action.orderId, action.data, { showConfirmation: false });
+          result = await this.acceptOrder(action.deliveryId, action.data, { showConfirmation: false });
           break;
         case 'decline':
-          result = await this.declineOrder(action.orderId, action.data, { showConfirmation: false });
+          result = await this.declineOrder(action.deliveryId, action.data, { showConfirmation: false });
           break;
         case 'skip':
-          result = await this.skipOrder(action.orderId, { showConfirmation: false });
+          result = await this.skipOrder(action.deliveryId, { showConfirmation: false });
           break;
         case 'updateStatus':
-          result = await this.updateOrderStatus(action.orderId, action.data, { showConfirmation: false });
+          result = await this.updateOrderStatus(action.deliveryId, action.data, { showConfirmation: false });
           break;
         default:
           result = { success: false, error: 'Unknown action' };

@@ -360,7 +360,7 @@ export const DriverProvider: React.FC<DriverProviderProps> = ({ children }) => {
   const updateDriverLocation = async (latitude: number, longitude: number): Promise<void> => {
     try {
       console.log(`📍 Updating driver location to backend: ${latitude}, ${longitude}`);
-      const response = await apiService.updateDriverLocation(latitude, longitude);
+      const response = await apiService.updateLocation(latitude, longitude);
 
       if (response.success) {
         console.log('✅ Driver location updated successfully');

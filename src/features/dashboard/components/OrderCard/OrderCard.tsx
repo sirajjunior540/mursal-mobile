@@ -5,7 +5,7 @@ import React, { memo, useCallback, useRef } from 'react';
 import { View, Text, Animated, TouchableOpacity, GestureResponderEvent } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import Haptics from 'react-native-haptic-feedback';
-import { Order, OrderStatus } from '../../../../shared/types';
+import { Order, OrderStatus, getDeliveryIdForApi } from '../../../../shared/types';
 import { theme } from '../../../../shared/styles/theme';
 import Card from '../../../../shared/components/Card/Card';
 import StatusBadge from '../../../../shared/components/StatusBadge/StatusBadge';
@@ -15,9 +15,9 @@ import { createOrderCardStyles } from './OrderCard.styles';
 interface OrderCardProps {
   order: Order;
   index: number;
-  onAccept: (orderId: string) => void;
-  onDecline: (orderId: string) => void;
-  onPress?: (orderId: string) => void;
+  onAccept: (deliveryId: string) => void; // ⚠️ This receives delivery ID
+  onDecline: (deliveryId: string) => void; // ⚠️ This receives delivery ID
+  onPress?: (deliveryId: string) => void; // ⚠️ This receives delivery ID
   isLoading?: boolean;
 }
 
@@ -57,25 +57,28 @@ const OrderCard: React.FC<OrderCardProps> = memo(({
   const handleCardPress = useCallback(() => {
     if (onPress && !isLoading) {
       Haptics.trigger('impactLight');
-      onPress(order.id);
+      // ⚠️ order.id contains the delivery ID needed for API calls
+      onPress(getDeliveryIdForApi(order));
     }
-  }, [onPress, order.id, isLoading]);
+  }, [onPress, order, isLoading]);
 
   const handleAccept = useCallback((event: GestureResponderEvent) => {
     event.stopPropagation();
     if (!isLoading) {
       Haptics.trigger('impactMedium');
-      onAccept(order.id);
+      // ⚠️ order.id contains the delivery ID needed for API calls
+      onAccept(getDeliveryIdForApi(order));
     }
-  }, [onAccept, order.id, isLoading]);
+  }, [onAccept, order, isLoading]);
 
   const handleDecline = useCallback((event: GestureResponderEvent) => {
     event.stopPropagation();
     if (!isLoading) {
       Haptics.trigger('impactLight');
-      onDecline(order.id);
+      // ⚠️ order.id contains the delivery ID needed for API calls
+      onDecline(getDeliveryIdForApi(order));
     }
-  }, [onDecline, order.id, isLoading]);
+  }, [onDecline, order, isLoading]);
 
   const formatTime = useCallback((dateString: string) => {
     try {

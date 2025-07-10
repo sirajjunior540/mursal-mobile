@@ -27,7 +27,7 @@ import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 
 // Services
-import { useOrders } from '../contexts/OrderContext';
+import { useOrders } from '../features/orders/context/OrderProvider';
 import { orderActionService } from '../services/orderActionService';
 import { navigationService } from '../services/navigationService';
 

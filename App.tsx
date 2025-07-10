@@ -31,7 +31,7 @@ import RouteNavigationScreen from './src/screens/RouteNavigationScreen';
 
 // Context providers
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
-import { OrderProvider, useOrders } from './src/contexts/OrderContext';
+import { OrderProvider, useOrders } from './src/features/orders/context/OrderProvider';
 import { DriverProvider } from './src/contexts/DriverContext';
 import { TenantProvider } from './src/contexts/TenantContext';
 import { Order } from './src/types';

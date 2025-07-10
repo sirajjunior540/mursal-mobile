@@ -112,7 +112,10 @@ export type SpecialHandling = 'none' | 'fragile' | 'perishable' | 'temperature_c
 export type DeliveryType = 'regular' | 'food' | 'fast';
 
 export interface Order {
-  id: string;
+  // ⚠️ CRITICAL: This 'id' field contains the DELIVERY ID for API operations!
+  // Use this ID for all accept/decline/status update API calls to /api/v1/delivery/deliveries/{id}/
+  id: string; // This is actually the DELIVERY ID - confusing but necessary for compatibility
+  
   order_number?: string; // Match backend snake_case
   customer_details?: Customer; // Match backend field name
   items?: OrderItem[];
@@ -173,40 +176,15 @@ export interface Order {
   cash_on_delivery?: boolean;
   cod_amount?: number;
   
-  // Deprecated camelCase fields for backward compatibility (remove after full migration)
-  /** @deprecated Use order_number */
-  orderNumber?: string;
-  /** @deprecated Use customer_details */
-  customer?: Customer;
-  /** @deprecated Use delivery_address */
-  deliveryAddress?: Address | string;
-  /** @deprecated Use payment_method */
-  paymentMethod?: PaymentMethod;
-  /** @deprecated Use delivery_fee */
-  deliveryFee?: number;
-  /** @deprecated Use estimated_delivery_time */
-  estimatedDeliveryTime?: string;
-  /** @deprecated Use delivery_notes */
-  specialInstructions?: string;
-  /** @deprecated Use created_at */
-  orderTime?: Date;
   
   // Additional fields
   tenantId?: string;
   tenant?: Tenant;
-  deliveryId?: string;
+  // ⚠️ deliveryId contains the same value as 'id' above for clarity
+  deliveryId?: string; // Same as 'id' field - use either one for API calls
+  orderId?: string; // The actual order ID from the order table (if different from delivery ID)
   driverId?: string;
   driverName?: string;
-  
-  // Batch order fields
-  isBatch?: boolean;
-  batchId?: string;
-  batchSize?: number;
-  orders?: Order[];
-  consolidationWarehouseId?: string;
-  finalDeliveryAddress?: string;
-  finalDeliveryLatitude?: number;
-  finalDeliveryLongitude?: number;
 }
 
 // Extended interface for batch orders
@@ -321,6 +299,46 @@ export type TabParamList = {
 
 // Filter Types
 export type HistoryFilter = 'today' | 'week' | 'month' | 'all';
+
+// Helper type to make API usage crystal clear
+export interface OrderApiIds {
+  deliveryId: string; // Use this for all delivery API calls (accept, decline, status update)
+  orderId?: string;   // The actual order ID (for reference only)
+  orderNumber?: string; // Human-readable identifier
+}
+
+/**
+ * Extract API IDs from an order for safe API usage
+ * 
+ * IMPORTANT: For all delivery-related API calls, use the deliveryId!
+ * - order.accept(deliveryId)
+ * - order.decline(deliveryId) 
+ * - order.updateStatus(deliveryId, status)
+ * 
+ * @param order The order object
+ * @returns Object with clearly labeled IDs
+ */
+export const extractOrderApiIds = (order: Order): OrderApiIds => ({
+  deliveryId: order.id, // The main ID field contains the delivery ID (confusing but true)
+  orderId: order.orderId,
+  orderNumber: order.order_number
+});
+
+/**
+ * Get the delivery ID for API calls - this is what you need for accept/decline/status updates
+ * @param order The order object
+ * @returns The delivery ID to use in API calls
+ */
+export const getDeliveryIdForApi = (order: Order): string => order.id;
+
+/**
+ * Get a human-readable order identifier for display purposes
+ * @param order The order object
+ * @returns Human-readable order identifier
+ */
+export const getOrderDisplayId = (order: Order): string => {
+  return order.order_number || `#${order.id}`;
+};
 
 // Theme Types
 export interface ThemeColors {

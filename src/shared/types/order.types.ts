@@ -166,6 +166,8 @@ export interface OrderActions {
   updateOrderStatus: (orderId: string, status: OrderStatus) => Promise<void>;
   getOrderHistory: (filters?: OrderFilters) => Promise<void>;
   clearOrders: () => void;
+  setOrderNotificationCallback: (callback: ((order: Order) => void) | null) => void;
+  canAcceptOrder: (order: Order) => boolean;
 }
 
 export interface OrderContextType extends OrderState, OrderActions {}
