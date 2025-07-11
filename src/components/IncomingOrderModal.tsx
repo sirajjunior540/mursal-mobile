@@ -12,7 +12,7 @@ import {
   ScrollView,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { Order } from '../types';
+import { Order, extractOrderApiIds, getOrderDisplayId } from '../types';
 import { /* COLORS, FONTS */ } from '../constants';
 import { haptics } from '../utils/haptics';
 import { soundService } from '../services/soundService';
@@ -94,8 +94,8 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
         id: `pickup-${batchOrder.id}`,
         type: 'pickup' as const,
         address: batchOrder.pickup_address,
-        orderNumber: batchOrder.orderNumber,
-        customerName: batchOrder.customer?.name
+        orderNumber: batchOrder.order_number,
+        customerName: batchOrder.customer_details?.name
       });
     }
     
@@ -108,7 +108,7 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
             type: 'delivery' as const,
             address: batchOrderItem.delivery_address || '',
             orderNumber: batchOrderItem.order_number,
-            customerName: batchOrderItem.customer?.name
+            customerName: batchOrderItem.customer_details?.name
           });
         }
       });
@@ -118,8 +118,8 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
         id: `delivery-${batchOrder.id}`,
         type: 'delivery' as const,
         address: batchOrder.delivery_address || batchOrder.deliveryAddress?.street || '',
-        orderNumber: batchOrder.orderNumber,
-        customerName: batchOrder.customer?.name
+        orderNumber: batchOrder.order_number,
+        customerName: batchOrder.customer_details?.name
       });
     }
     

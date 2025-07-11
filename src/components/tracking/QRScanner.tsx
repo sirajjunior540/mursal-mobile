@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,8 +9,9 @@ import {
   Modal,
   Dimensions,
   SafeAreaView,
+  Platform,
 } from 'react-native';
-import { Camera, useCameraDevice, useCodeScanner } from 'react-native-vision-camera';
+import { Camera, CameraType, CameraKitCamera } from 'react-native-camera-kit';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import HapticFeedback from 'react-native-haptic-feedback';
 
@@ -34,55 +35,32 @@ const QRScanner: React.FC<QRScannerProps> = ({
   allowManualEntry = true,
   placeholder = 'Enter tracking number',
 }) => {
-  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [showManualEntry, setShowManualEntry] = useState(false);
   const [manualInput, setManualInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [flashEnabled, setFlashEnabled] = useState(false);
+  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [isRequestingPermission, setIsRequestingPermission] = useState(false);
 
-  const device = useCameraDevice('back');
-
-  const codeScanner = useCodeScanner({
-    codeTypes: ['qr', 'ean-13', 'code-128', 'code-39'],
-    onCodeScanned: (codes) => {
-      if (isProcessing) return;
-      
-      const code = codes[0];
-      if (code?.value) {
-        setIsProcessing(true);
-        HapticFeedback.trigger('notificationSuccess');
-        
-        const result: QRScanResult = {
-          success: true,
-          data: code.value,
-          message: 'QR code scanned successfully',
-        };
-        
-        onScanResult(result);
-        
-        // Reset processing state after a delay
-        setTimeout(() => {
-          setIsProcessing(false);
-        }, 2000);
-      }
-    }
-  });
-
-  React.useEffect(() => {
-    const checkPermissions = async () => {
-      try {
-        const permission = await Camera.requestCameraPermission();
-        setHasPermission(permission === 'granted');
-      } catch (error) {
-        console.error('Camera permission error:', error);
-        setHasPermission(false);
-      }
+  const onReadCode = (event: any) => {
+    if (isProcessing) return;
+    
+    setIsProcessing(true);
+    HapticFeedback.trigger('notificationSuccess');
+    
+    const result: QRScanResult = {
+      success: true,
+      data: event.nativeEvent.codeStringValue,
+      message: 'QR code scanned successfully',
     };
-
-    if (isVisible) {
-      checkPermissions();
-    }
-  }, [isVisible]);
+    
+    onScanResult(result);
+    
+    // Reset processing state after a delay
+    setTimeout(() => {
+      setIsProcessing(false);
+    }, 2000);
+  };
 
   const handleManualSubmit = () => {
     if (!manualInput.trim()) {
@@ -115,52 +93,99 @@ const QRScanner: React.FC<QRScannerProps> = ({
     onClose();
   };
 
+  // Check camera permission
+  const checkCameraPermission = async () => {
+    try {
+      const permission = Platform.OS === 'ios' ? PERMISSIONS.IOS.CAMERA : PERMISSIONS.ANDROID.CAMERA;
+      const result = await check(permission);
+      
+      console.log('Camera permission check result:', result);
+      
+      switch (result) {
+        case RESULTS.GRANTED:
+          console.log('Camera permission granted');
+          setHasPermission(true);
+          break;
+        case RESULTS.DENIED:
+          console.log('Camera permission denied');
+          setHasPermission(false);
+          break;
+        case RESULTS.BLOCKED:
+          console.log('Camera permission blocked');
+          setHasPermission(false);
+          break;
+        case RESULTS.UNAVAILABLE:
+          console.log('Camera unavailable');
+          setHasPermission(false);
+          Alert.alert('Error', 'Camera is not available on this device');
+          break;
+        default:
+          console.log('Camera permission unknown state:', result);
+          setHasPermission(false);
+          break;
+      }
+    } catch (error) {
+      console.error('Permission check error:', error);
+      setHasPermission(false);
+    }
+  };
+
+  // Request camera permission
+  const requestCameraPermission = async () => {
+    if (isRequestingPermission) return;
+    
+    setIsRequestingPermission(true);
+    try {
+      const permission = Platform.OS === 'ios' ? PERMISSIONS.IOS.CAMERA : PERMISSIONS.ANDROID.CAMERA;
+      console.log('Requesting camera permission:', permission);
+      
+      const result = await request(permission);
+      console.log('Camera permission request result:', result);
+      
+      switch (result) {
+        case RESULTS.GRANTED:
+          console.log('Camera permission granted after request');
+          setHasPermission(true);
+          break;
+        case RESULTS.DENIED:
+          console.log('Camera permission denied after request');
+          setHasPermission(false);
+          Alert.alert('Permission Denied', 'Camera permission is required to scan QR codes');
+          break;
+        case RESULTS.BLOCKED:
+          console.log('Camera permission blocked after request');
+          setHasPermission(false);
+          Alert.alert(
+            'Permission Blocked',
+            'Camera permission is blocked. Please enable it in Settings.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Settings', onPress: () => {/* Open settings if needed */} }
+            ]
+          );
+          break;
+        default:
+          console.log('Camera permission unknown result after request:', result);
+          setHasPermission(false);
+          break;
+      }
+    } catch (error) {
+      console.error('Permission request error:', error);
+      setHasPermission(false);
+      Alert.alert('Error', 'Failed to request camera permission');
+    } finally {
+      setIsRequestingPermission(false);
+    }
+  };
+
+  // Check permission when component becomes visible
+  useEffect(() => {
+    if (isVisible && !showManualEntry) {
+      checkCameraPermission();
+    }
+  }, [isVisible, showManualEntry]);
+
   if (!isVisible) return null;
-
-  if (hasPermission === null) {
-    return (
-      <Modal visible={isVisible} animationType="slide">
-        <SafeAreaView style={styles.container}>
-          <View style={styles.centerContent}>
-            <Text style={styles.permissionText}>Requesting camera permission...</Text>
-          </View>
-        </SafeAreaView>
-      </Modal>
-    );
-  }
-
-  if (hasPermission === false) {
-    return (
-      <Modal visible={isVisible} animationType="slide">
-        <SafeAreaView style={styles.container}>
-          <View style={styles.header}>
-            <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
-              <Icon name="close" size={24} color={Design.colors.text} />
-            </TouchableOpacity>
-            <Text style={styles.headerTitle}>Camera Access</Text>
-            <View style={styles.headerSpacer} />
-          </View>
-          
-          <View style={styles.centerContent}>
-            <Icon name="camera-alt" size={64} color={Design.colors.textSecondary} />
-            <Text style={styles.permissionTitle}>Camera Permission Required</Text>
-            <Text style={styles.permissionText}>
-              Please grant camera access to scan QR codes and barcodes.
-            </Text>
-            
-            {allowManualEntry && (
-              <TouchableOpacity
-                style={styles.manualEntryButton}
-                onPress={() => setShowManualEntry(true)}
-              >
-                <Text style={styles.manualEntryButtonText}>Manual Entry</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        </SafeAreaView>
-      </Modal>
-    );
-  }
 
   if (showManualEntry) {
     return (
@@ -207,6 +232,51 @@ const QRScanner: React.FC<QRScannerProps> = ({
     );
   }
 
+  // Show permission request UI if permission is not granted
+  if (hasPermission === false) {
+    return (
+      <Modal visible={isVisible} animationType="slide">
+        <SafeAreaView style={styles.container}>
+          <View style={styles.header}>
+            <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
+              <Icon name="close" size={24} color={Design.colors.text} />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Camera Permission</Text>
+            <View style={styles.headerSpacer} />
+          </View>
+          
+          <View style={styles.centerContent}>
+            <Icon name="camera-alt" size={80} color={Design.colors.textSecondary} />
+            <Text style={styles.permissionTitle}>Camera Permission Required</Text>
+            <Text style={styles.permissionText}>
+              To scan QR codes, we need access to your camera. This allows you to quickly scan tracking numbers and other codes.
+            </Text>
+            
+            <TouchableOpacity
+              style={styles.submitButton}
+              onPress={requestCameraPermission}
+              disabled={isRequestingPermission}
+            >
+              <Text style={styles.submitButtonText}>
+                {isRequestingPermission ? 'Requesting...' : 'Grant Permission'}
+              </Text>
+            </TouchableOpacity>
+            
+            {allowManualEntry && (
+              <TouchableOpacity
+                style={styles.manualEntryButton}
+                onPress={() => setShowManualEntry(true)}
+              >
+                <Icon name="keyboard" size={20} color={Design.colors.primary} />
+                <Text style={styles.manualEntryButtonText}>Enter Manually</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </SafeAreaView>
+      </Modal>
+    );
+  }
+
   return (
     <Modal visible={isVisible} animationType="slide">
       <SafeAreaView style={styles.container}>
@@ -224,15 +294,22 @@ const QRScanner: React.FC<QRScannerProps> = ({
           </TouchableOpacity>
         </View>
 
-        {device && (
+        {hasPermission === true ? (
           <Camera
             style={styles.camera}
-            device={device}
-            isActive={isVisible && !isProcessing}
-            codeScanner={codeScanner}
-            torch={flashEnabled ? 'on' : 'off'}
+            cameraType={CameraType.Back}
+            scanBarcode={true}
+            onReadCode={onReadCode}
+            showFrame={false}
+            laserColor='transparent'
+            frameColor='transparent'
+            torchMode={flashEnabled ? 'on' : 'off'}
           />
-        )}
+        ) : hasPermission === null ? (
+          <View style={styles.centerContent}>
+            <Text style={styles.permissionText}>Checking camera permission...</Text>
+          </View>
+        ) : null}
 
         <View style={styles.scanOverlay}>
           <View style={styles.scanFrame}>
