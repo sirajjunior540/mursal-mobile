@@ -12,6 +12,10 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 
+// i18n imports
+import './src/i18n'; // Initialize i18n
+import { LanguageProvider } from './src/contexts/LanguageContext';
+
 // Infrastructure
 import { logger } from './src/infrastructure/logging/logger';
 import ErrorBoundary from './src/components/ErrorBoundary';
@@ -419,35 +423,37 @@ function App() {
   return (
     <GestureHandlerRootView style={styles.container}>
       <ErrorBoundary>
-        <SafeAreaProvider>
-          <StatusBar 
-            barStyle={isDarkMode ? 'light-content' : 'dark-content'}
-            backgroundColor={theme.colors.primary}
-            translucent={false}
-          />
-          <ContextErrorBoundary contextName="AuthProvider">
-            <AuthProvider>
-              <ContextErrorBoundary contextName="TenantProvider">
-                <TenantProvider>
-                  <ContextErrorBoundary contextName="DriverProvider">
-                    <DriverProvider>
-                      <ContextErrorBoundary contextName="OrderProvider">
-                        <OrderProvider 
-                          apiBaseUrl={API_BASE_URL}
-                          websocketUrl={WEBSOCKET_URL}
-                        >
-                          <AppNavigator />
-                          <IncomingOrderManager />
-                          <NetworkStatus />
-                        </OrderProvider>
-                      </ContextErrorBoundary>
-                    </DriverProvider>
-                  </ContextErrorBoundary>
-                </TenantProvider>
-              </ContextErrorBoundary>
-            </AuthProvider>
-          </ContextErrorBoundary>
-        </SafeAreaProvider>
+        <LanguageProvider>
+          <SafeAreaProvider>
+            <StatusBar 
+              barStyle={isDarkMode ? 'light-content' : 'dark-content'}
+              backgroundColor={theme.colors.primary}
+              translucent={false}
+            />
+            <ContextErrorBoundary contextName="AuthProvider">
+              <AuthProvider>
+                <ContextErrorBoundary contextName="TenantProvider">
+                  <TenantProvider>
+                    <ContextErrorBoundary contextName="DriverProvider">
+                      <DriverProvider>
+                        <ContextErrorBoundary contextName="OrderProvider">
+                          <OrderProvider 
+                            apiBaseUrl={API_BASE_URL}
+                            websocketUrl={WEBSOCKET_URL}
+                          >
+                            <AppNavigator />
+                            <IncomingOrderManager />
+                            <NetworkStatus />
+                          </OrderProvider>
+                        </ContextErrorBoundary>
+                      </DriverProvider>
+                    </ContextErrorBoundary>
+                  </TenantProvider>
+                </ContextErrorBoundary>
+              </AuthProvider>
+            </ContextErrorBoundary>
+          </SafeAreaProvider>
+        </LanguageProvider>
       </ErrorBoundary>
     </GestureHandlerRootView>
   );
