@@ -254,11 +254,22 @@ const AppNavigator = () => {
 
   // Handle splash screen completion
   const handleSplashComplete = () => {
-    logger.info('Splash screen animation completed');
-    setAppInitState({
-      showSplash: false,
-      isInitialized: true,
-    });
+    try {
+      logger.info('Splash screen animation completed');
+      console.log('🎬 Splash animation complete, transitioning to main app');
+      
+      setAppInitState({
+        showSplash: false,
+        isInitialized: true,
+      });
+    } catch (error) {
+      console.error('❌ Error during splash completion:', error);
+      // Force completion anyway to prevent freeze
+      setAppInitState({
+        showSplash: false,
+        isInitialized: true,
+      });
+    }
   };
 
   // Debug authentication state
@@ -266,6 +277,7 @@ const AppNavigator = () => {
 
   // Show splash screen first
   if (appInitState.showSplash) {
+    console.log('🎬 Rendering splash screen...');
     return <SplashScreen onAnimationComplete={handleSplashComplete} />;
   }
 

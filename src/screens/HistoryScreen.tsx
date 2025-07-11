@@ -8,19 +8,23 @@ import {
   TouchableOpacity,
   Dimensions,
   ActivityIndicator,
-  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, NavigationProp } from '@react-navigation/native';
 import LinearGradient from 'react-native-linear-gradient';
 
 import { useOrders } from '../features/orders/context/OrderProvider';
 import { useDriver } from '../contexts/DriverContext';
-import { Order, OrderStatus, DriverBalance } from '../types';
+import { Order, OrderStatus, DriverBalance, BalanceTransaction } from '../types';
 import { apiService } from '../services/api';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+type RootStackParamList = {
+  OrderDetails: { orderId: string };
+  EarningsDetails: { period: string; earnings: DriverBalance | null };
+};
 
 interface DateRange {
   id: string;
@@ -44,7 +48,7 @@ const dateRanges: DateRange[] = [
 ];
 
 const HistoryScreen: React.FC = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   const { 
     orderHistory, 
     getOrderHistory, 
@@ -58,6 +62,8 @@ const HistoryScreen: React.FC = () => {
   const [expandedCard, setExpandedCard] = useState<string | null>(null);
   const [realEarnings, setRealEarnings] = useState<DriverBalance | null>(null);
   const [earningsLoading, setEarningsLoading] = useState(false);
+  const [transactions, setTransactions] = useState<BalanceTransaction[]>([]);
+  const [transactionsLoading, setTransactionsLoading] = useState(false);
 
   // Filter orders based on selected date range
   const filteredOrders = useMemo(() => {
@@ -68,8 +74,8 @@ const HistoryScreen: React.FC = () => {
     
     if (!selectedRangeObj || selectedRangeObj.days === 0) {
       return orderHistory.sort((a, b) => {
-        const dateA = a.orderTime ? new Date(a.orderTime).getTime() : 0;
-        const dateB = b.orderTime ? new Date(b.orderTime).getTime() : 0;
+        const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
         return dateB - dateA;
       });
     }
@@ -78,13 +84,13 @@ const HistoryScreen: React.FC = () => {
     
     return orderHistory
       .filter(order => {
-        if (!order.orderTime) return false;
-        const orderDate = new Date(order.orderTime);
+        if (!order.created_at) return false;
+        const orderDate = new Date(order.created_at);
         return !isNaN(orderDate.getTime()) && orderDate >= startDate;
       })
       .sort((a, b) => {
-        const dateA = a.orderTime ? new Date(a.orderTime).getTime() : 0;
-        const dateB = b.orderTime ? new Date(b.orderTime).getTime() : 0;
+        const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
         return dateB - dateA;
       });
   }, [orderHistory, selectedRange]);
@@ -117,12 +123,30 @@ const HistoryScreen: React.FC = () => {
       } else {
         console.error('❌ Failed to load earnings:', response.error);
       }
-    } catch (error) {
-      console.error('❌ Error loading earnings:', error);
+    } catch (err) {
+      console.error('❌ Error loading earnings:', err);
     } finally {
       setEarningsLoading(false);
     }
   }, [selectedRange]);
+
+  // Load transaction history
+  const loadTransactionHistory = useCallback(async () => {
+    setTransactionsLoading(true);
+    try {
+      const response = await apiService.getTransactionHistory();
+      if (response.success) {
+        setTransactions(response.data);
+        console.log('✅ Loaded transaction history:', response.data);
+      } else {
+        console.error('❌ Failed to load transactions:', response.error);
+      }
+    } catch (err) {
+      console.error('❌ Error loading transactions:', err);
+    } finally {
+      setTransactionsLoading(false);
+    }
+  }, []);
 
   // Calculate earnings data
   const earningsData = useMemo((): EarningsData => {
@@ -181,19 +205,27 @@ const HistoryScreen: React.FC = () => {
     }
   }, [driver?.id, selectedRange, loadEarningsData]);
 
+  useEffect(() => {
+    // Load transaction history on mount
+    if (driver?.id) {
+      loadTransactionHistory();
+    }
+  }, [driver?.id, loadTransactionHistory]);
+
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
       await Promise.all([
         getOrderHistory?.(),
-        loadEarningsData()
+        loadEarningsData(),
+        loadTransactionHistory()
       ]);
-    } catch (error) {
-      console.error('Error refreshing history:', error);
+    } catch (err) {
+      console.error('Error refreshing history:', err);
     } finally {
       setRefreshing(false);
     }
-  }, [getOrderHistory, loadEarningsData]);
+  }, [getOrderHistory, loadEarningsData, loadTransactionHistory]);
 
   const handleOrderPress = useCallback((order: Order) => {
     navigation.navigate('OrderDetails', { orderId: order.id });
@@ -248,8 +280,8 @@ const HistoryScreen: React.FC = () => {
     const orderCount = item.days === 0 
       ? orderHistory?.length || 0
       : orderHistory?.filter(order => {
-          if (!order.orderTime) return false;
-          const orderDate = new Date(order.orderTime);
+          if (!order.created_at) return false;
+          const orderDate = new Date(order.created_at);
           if (isNaN(orderDate.getTime())) return false;
           const cutoffDate = new Date(Date.now() - (item.days * 24 * 60 * 60 * 1000));
           return orderDate >= cutoffDate;
@@ -284,7 +316,14 @@ const HistoryScreen: React.FC = () => {
   };
 
   const renderEarningsCard = () => (
-    <View style={styles.earningsCard}>
+    <TouchableOpacity 
+      style={styles.earningsCard}
+      onPress={() => navigation.navigate('EarningsDetails', { 
+        period: selectedRange, 
+        earnings: realEarnings 
+      })}
+      activeOpacity={0.8}
+    >
       <LinearGradient
         colors={['#3B82F6', '#1D4ED8']}
         style={styles.earningsGradient}
@@ -339,12 +378,72 @@ const HistoryScreen: React.FC = () => {
           </View>
         </View>
       </LinearGradient>
-    </View>
+      
+      {/* Transaction History */}
+      <View style={styles.transactionSection}>
+        <View style={styles.transactionHeader}>
+          <Text style={styles.transactionTitle}>Recent Transactions</Text>
+          {transactionsLoading && <ActivityIndicator size="small" color="#3B82F6" />}
+        </View>
+        
+        {transactions.length > 0 ? (
+          <View style={styles.transactionList}>
+            {transactions.slice(0, 5).map((transaction) => (
+              <View key={transaction.id} style={styles.transactionItem}>
+                <View style={styles.transactionLeft}>
+                  <Ionicons 
+                    name={transaction.type === 'earning' ? 'add-circle' : 
+                          transaction.type === 'withdrawal' ? 'remove-circle' : 
+                          'swap-horizontal'} 
+                    size={20} 
+                    color={transaction.type === 'earning' ? '#10B981' : 
+                           transaction.type === 'withdrawal' ? '#EF4444' : '#6B7280'} 
+                  />
+                  <View style={styles.transactionDetails}>
+                    <Text style={styles.transactionDescription}>
+                      {transaction.description || 'Transaction'}
+                    </Text>
+                    <Text style={styles.transactionDate}>
+                      {transaction.date ? new Date(transaction.date).toLocaleDateString() : 'Unknown date'}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={[
+                  styles.transactionAmount,
+                  transaction.type === 'earning' ? styles.transactionAmountPositive : 
+                  transaction.type === 'withdrawal' ? styles.transactionAmountNegative : styles.transactionAmountNeutral
+                ]}>
+                  {transaction.type === 'earning' ? '+' : '-'}${Math.abs(transaction.amount).toFixed(2)}
+                </Text>
+              </View>
+            ))}
+            
+            {transactions.length > 5 && (
+              <TouchableOpacity 
+                style={styles.viewAllTransactions}
+                onPress={() => navigation.navigate('EarningsDetails', { 
+                  period: selectedRange, 
+                  earnings: realEarnings 
+                })}
+              >
+                <Text style={styles.viewAllText}>View All {transactions.length} Transactions</Text>
+                <Ionicons name="chevron-forward" size={16} color="#3B82F6" />
+              </TouchableOpacity>
+            )}
+          </View>
+        ) : !transactionsLoading ? (
+          <View style={styles.noTransactions}>
+            <Ionicons name="receipt-outline" size={32} color="#9CA3AF" />
+            <Text style={styles.noTransactionsText}>No transactions found</Text>
+          </View>
+        ) : null}
+      </View>
+    </TouchableOpacity>
   );
 
   const renderOrderCard = ({ item: order }: { item: Order }) => {
-    const statusColor = getStatusColor(order.status);
-    const statusIcon = getStatusIcon(order.status);
+    const statusColor = getStatusColor(order.status || 'pending');
+    const statusIcon = getStatusIcon(order.status || 'pending');
     const isExpanded = expandedCard === order.id;
 
     return (
@@ -360,8 +459,8 @@ const HistoryScreen: React.FC = () => {
           {/* Header */}
           <View style={styles.historyHeader}>
             <View style={styles.historyHeaderLeft}>
-              <Text style={styles.historyOrderNumber}>#{order.orderNumber || 'Unknown'}</Text>
-              <View style={[styles.historyStatusBadge, { backgroundColor: statusColor + '20' }]}>
+              <Text style={styles.historyOrderNumber}>#{order.order_number || 'Unknown'}</Text>
+              <View style={[styles.historyStatusBadge, { backgroundColor: `${statusColor}20` }]}>
                 <Ionicons name={statusIcon} size={12} color={statusColor} />
                 <Text style={[styles.historyStatusText, { color: statusColor }]}>
                   {order.status?.replace('_', ' ').toUpperCase() || 'UNKNOWN'}
@@ -373,7 +472,7 @@ const HistoryScreen: React.FC = () => {
                 ${(order.total || 0).toFixed(2)}
               </Text>
               <Text style={styles.historyDate}>
-                {formatDate(order.orderTime)}
+                {formatDate(order.created_at)}
               </Text>
             </View>
           </View>
@@ -381,7 +480,7 @@ const HistoryScreen: React.FC = () => {
           {/* Customer Info */}
           <View style={styles.historyCustomer}>
             <Ionicons name="person-circle-outline" size={16} color="#6B7280" />
-            <Text style={styles.historyCustomerName}>{order.customer?.name || 'Unknown Customer'}</Text>
+            <Text style={styles.historyCustomerName}>{order.customer_details?.name || 'Unknown Customer'}</Text>
           </View>
 
           {/* Expanded Details */}
@@ -390,21 +489,21 @@ const HistoryScreen: React.FC = () => {
               <View style={styles.detailRow}>
                 <Ionicons name="location-outline" size={16} color="#6B7280" />
                 <Text style={styles.detailText}>
-                  {order.deliveryAddress?.street || 'Address not available'}
+                  {order.delivery_address || 'Address not available'}
                 </Text>
               </View>
               
-              {order.customer?.phone && (
+              {order.customer_details?.phone && (
                 <View style={styles.detailRow}>
                   <Ionicons name="call-outline" size={16} color="#6B7280" />
-                  <Text style={styles.detailText}>{order.customer.phone}</Text>
+                  <Text style={styles.detailText}>{order.customer_details.phone}</Text>
                 </View>
               )}
               
-              {order.specialInstructions && (
+              {order.delivery_notes && (
                 <View style={styles.detailRow}>
                   <Ionicons name="document-text-outline" size={16} color="#6B7280" />
-                  <Text style={styles.detailText}>{order.specialInstructions}</Text>
+                  <Text style={styles.detailText}>{order.delivery_notes}</Text>
                 </View>
               )}
               
@@ -852,6 +951,93 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.1)',
+  },
+  // Transaction styles
+  transactionSection: {
+    backgroundColor: '#FFFFFF',
+    marginTop: 16,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  transactionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  transactionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  transactionList: {
+    padding: 16,
+  },
+  transactionItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F9FAFB',
+  },
+  transactionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  transactionDetails: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  transactionDescription: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#1F2937',
+    marginBottom: 2,
+  },
+  transactionDate: {
+    fontSize: 12,
+    color: '#6B7280',
+  },
+  transactionAmount: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  transactionAmountPositive: {
+    color: '#10B981',
+  },
+  transactionAmountNegative: {
+    color: '#EF4444',
+  },
+  transactionAmountNeutral: {
+    color: '#6B7280',
+  },
+  viewAllTransactions: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 12,
+    marginTop: 8,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+  },
+  viewAllText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#3B82F6',
+    marginRight: 4,
+  },
+  noTransactions: {
+    alignItems: 'center',
+    padding: 32,
+  },
+  noTransactionsText: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginTop: 8,
   },
 });
 

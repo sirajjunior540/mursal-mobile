@@ -18,10 +18,12 @@ import Haptics from 'react-native-haptic-feedback';
 
 import IncomingOrderModal from '../components/IncomingOrderModal';
 import AppLogo from '../components/AppLogo';
+import FloatingQRButton from '../components/FloatingQRButton';
 
 import { useOrders } from '../features/orders/context/OrderProvider';
 import { useDriver } from '../contexts/DriverContext';
 import { Order } from '@/types';
+import { QRScanResult } from '../types/tracking';
 import { Design, getCardStyle } from '../constants/designSystem';
 import { orderActionService } from '../services/orderActionService';
 import { notificationService } from '../services/notificationService';
@@ -195,6 +197,43 @@ const DashboardScreen: React.FC = () => {
     }
   }, [refreshOrders]);
 
+  const handleQRScanResult = useCallback((result: QRScanResult) => {
+    if (result.success) {
+      console.log('QR Code scanned:', result.data);
+      
+      // Handle different types of QR codes
+      if (result.data) {
+        // Check if it's an order number or tracking code
+        if (result.data.match(/^(ORD|ORDER|#)/i)) {
+          // It's an order number - navigate to order details
+          const orderId = result.data.replace(/^(ORD|ORDER|#)/i, '');
+          Alert.alert(
+            'Order QR Code',
+            `Order ${orderId} detected. Would you like to view details?`,
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { 
+                text: 'View Order', 
+                onPress: () => {
+                  // Navigate to order details if it exists
+                  console.log('Navigate to order:', orderId);
+                }
+              }
+            ]
+          );
+        } else {
+          // Generic QR code - show the data
+          Alert.alert(
+            'QR Code Scanned',
+            `Data: ${result.data}`,
+            [{ text: 'OK' }]
+          );
+        }
+      }
+    } else {
+      Alert.alert('Scan Failed', result.message || 'Failed to scan QR code');
+    }
+  }, []);
 
   const renderHeader = () => (
     <View style={styles.header}>
@@ -569,6 +608,12 @@ const DashboardScreen: React.FC = () => {
         onSkip={handleSkipOrder}
         onClose={() => setShowIncomingModal(false)}
         onAcceptRoute={handleAcceptRoute}
+      />
+
+      <FloatingQRButton
+        onScanResult={handleQRScanResult}
+        bottom={100}
+        right={20}
       />
     </View>
   );

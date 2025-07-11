@@ -93,81 +93,37 @@ const QRScanner: React.FC<QRScannerProps> = ({
     onClose();
   };
 
-  // Check camera permission
+  // Check camera permission using camera-kit API
   const checkCameraPermission = async () => {
     try {
-      const permission = Platform.OS === 'ios' ? PERMISSIONS.IOS.CAMERA : PERMISSIONS.ANDROID.CAMERA;
-      const result = await check(permission);
+      console.log('Checking camera permission with camera-kit');
+      const isCameraAuthorized = await CameraKitCamera.checkDeviceCameraAuthorizationStatus();
+      console.log('Camera authorization status:', isCameraAuthorized);
       
-      console.log('Camera permission check result:', result);
-      
-      switch (result) {
-        case RESULTS.GRANTED:
-          console.log('Camera permission granted');
-          setHasPermission(true);
-          break;
-        case RESULTS.DENIED:
-          console.log('Camera permission denied');
-          setHasPermission(false);
-          break;
-        case RESULTS.BLOCKED:
-          console.log('Camera permission blocked');
-          setHasPermission(false);
-          break;
-        case RESULTS.UNAVAILABLE:
-          console.log('Camera unavailable');
-          setHasPermission(false);
-          Alert.alert('Error', 'Camera is not available on this device');
-          break;
-        default:
-          console.log('Camera permission unknown state:', result);
-          setHasPermission(false);
-          break;
-      }
+      setHasPermission(isCameraAuthorized);
     } catch (error) {
       console.error('Permission check error:', error);
       setHasPermission(false);
     }
   };
 
-  // Request camera permission
+  // Request camera permission using camera-kit API
   const requestCameraPermission = async () => {
     if (isRequestingPermission) return;
     
     setIsRequestingPermission(true);
     try {
-      const permission = Platform.OS === 'ios' ? PERMISSIONS.IOS.CAMERA : PERMISSIONS.ANDROID.CAMERA;
-      console.log('Requesting camera permission:', permission);
+      console.log('Requesting camera permission with camera-kit');
+      const granted = await CameraKitCamera.requestDeviceCameraAuthorization();
+      console.log('Camera permission request result:', granted);
       
-      const result = await request(permission);
-      console.log('Camera permission request result:', result);
-      
-      switch (result) {
-        case RESULTS.GRANTED:
-          console.log('Camera permission granted after request');
-          setHasPermission(true);
-          break;
-        case RESULTS.DENIED:
-          console.log('Camera permission denied after request');
-          setHasPermission(false);
-          Alert.alert('Permission Denied', 'Camera permission is required to scan QR codes');
-          break;
-        case RESULTS.BLOCKED:
-          console.log('Camera permission blocked after request');
-          setHasPermission(false);
-          Alert.alert(
-            'Permission Blocked',
-            'Camera permission is blocked. Please enable it in Settings.',
-            [
-              { text: 'Cancel', style: 'cancel' },
-              { text: 'Settings', onPress: () => {/* Open settings if needed */} }
-            ]
-          );
-          break;
-        default:
-          console.log('Camera permission unknown result after request:', result);
-          setHasPermission(false);
-          break;
+      if (granted) {
+        console.log('Camera permission granted');
+        setHasPermission(true);
+      } else {
+        console.log('Camera permission denied');
+        setHasPermission(false);
+        Alert.alert('Permission Denied', 'Camera permission is required to scan QR codes');
       }
     } catch (error) {
       console.error('Permission request error:', error);

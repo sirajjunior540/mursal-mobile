@@ -23,6 +23,7 @@ import Haptics from 'react-native-haptic-feedback';
 
 import Card from '../components/ui/Card';
 import OrderDetailsModal from '../components/OrderDetailsModal';
+import FloatingQRButton from '../components/FloatingQRButton';
 
 import { useOrders } from '../features/orders/context/OrderProvider';
 import { useDriver } from '../contexts/DriverContext';
@@ -70,6 +71,19 @@ const RouteNavigationScreen: React.FC = () => {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [showOrderDetails, setShowOrderDetails] = useState(false);
   const [driverOrders, setDriverOrders] = useState<Order[]>([]);
+
+  // QR Scanner integration
+  const handleQRScanResult = useCallback((result: any) => {
+    console.log('QR Scan Result:', result);
+    if (result.success && result.data) {
+      // Handle QR code data - could be order ID or tracking number
+      Alert.alert(
+        'QR Code Scanned',
+        `Scanned: ${result.data}`,
+        [{ text: 'OK' }]
+      );
+    }
+  }, []);
   
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
@@ -965,6 +979,12 @@ const RouteNavigationScreen: React.FC = () => {
           onClose={handleCloseOrderDetails}
           onStatusUpdate={handleStatusUpdate}
           onNavigate={handleNavigateFromModal}
+        />
+
+        <FloatingQRButton 
+          onScanResult={handleQRScanResult}
+          bottom={30}
+          right={20}
         />
       </SafeAreaView>
     </View>

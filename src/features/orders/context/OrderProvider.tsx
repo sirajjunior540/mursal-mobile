@@ -1,9 +1,11 @@
 /**
  * Simplified OrderProvider for testing the refactored structure
  */
-import React, { createContext, useContext, useState, useRef, useCallback } from 'react';
-import { Order, OrderContextType, OrderStatus } from '../../../shared/types';
+import React, { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react';
+import { Order, OrderContextType, OrderStatus } from '../../../types';
 import { apiService } from '../../../services/api';
+import { realtimeService } from '../../../services/realtimeService';
+import { useAuth } from '../../../contexts/AuthContext';
 
 // Context
 const OrderContext = createContext<OrderContextType | undefined>(undefined);
@@ -18,8 +20,10 @@ interface OrderProviderProps {
 export const OrderProvider: React.FC<OrderProviderProps> = ({
   children,
 }) => {
+  const { isLoggedIn, isLoading: authLoading } = useAuth();
   // State
   const [orders, setOrders] = useState<Order[]>([]);
+  const [driverOrders, setDriverOrders] = useState<Order[]>([]);
   const [orderHistory, setOrderHistory] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,6 +31,84 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
   
   // Store the notification callback
   const notificationCallbackRef = useRef<((order: Order) => void) | null>(null);
+  
+  // Initialize realtime service when user is logged in
+  useEffect(() => {
+    // Only initialize when user is logged in and not still loading auth
+    if (!isLoggedIn || authLoading) {
+      console.log('🔌 OrderProvider: Waiting for authentication...', { isLoggedIn, authLoading });
+      return;
+    }
+
+    const initializeRealtimeService = async () => {
+      try {
+        console.log('🔌 OrderProvider: Initializing realtime service after login...');
+        
+        // Set up realtime service callbacks
+        realtimeService.setCallbacks({
+          onNewOrder: (order: Order) => {
+            console.log('🔔 OrderProvider: New order received from realtime service:', order.id);
+            
+            // Add to orders if not already present
+            setOrders(prev => {
+              const exists = prev.some(o => o.id === order.id);
+              if (!exists) {
+                console.log('📦 Adding new order to orders list:', order.id);
+                return [...prev, order];
+              }
+              return prev;
+            });
+            
+            // Trigger notification callback for IncomingOrderModal
+            if (notificationCallbackRef.current) {
+              console.log('🔔 Triggering notification callback for order:', order.id);
+              notificationCallbackRef.current(order);
+            } else {
+              console.warn('⚠️ No notification callback set, order will not show modal');
+            }
+          },
+          onOrderUpdate: (order: Order) => {
+            console.log('📝 OrderProvider: Order update received:', order.id);
+            setOrders(prev => prev.map(o => o.id === order.id ? order : o));
+          },
+          onConnectionChange: (connected: boolean) => {
+            console.log('🔌 OrderProvider: Realtime connection status:', connected);
+          },
+          onError: (error: string) => {
+            console.error('❌ OrderProvider: Realtime service error:', error);
+            setError(error);
+          }
+        });
+        
+        // Initialize the service
+        await realtimeService.initialize();
+        
+        // Start the service
+        realtimeService.start();
+        
+        console.log('✅ OrderProvider: Realtime service initialized and started');
+      } catch (error) {
+        console.error('❌ OrderProvider: Failed to initialize realtime service:', error);
+        setError('Failed to initialize real-time updates');
+      }
+    };
+    
+    initializeRealtimeService();
+    
+    // Cleanup on unmount or logout
+    return () => {
+      console.log('🧹 OrderProvider: Cleaning up realtime service');
+      realtimeService.stop();
+    };
+  }, [isLoggedIn, authLoading]);
+
+  // Load initial orders when user is logged in
+  useEffect(() => {
+    if (isLoggedIn && !authLoading) {
+      console.log('🔄 OrderProvider: Loading initial orders for logged in user...');
+      refreshOrders();
+    }
+  }, [isLoggedIn, authLoading, refreshOrders]);
 
   // Actions
   const refreshOrders = useCallback(async () => {
@@ -74,7 +156,7 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
     throw new Error('Order not found');
   }, [orders]);
 
-  const acceptOrder = useCallback(async (orderId: string) => {
+  const acceptOrder = useCallback(async (orderId: string): Promise<boolean> => {
     console.log('🔥 OrderProvider: acceptOrder called with ID:', orderId);
     
     // Find the order in our current orders to debug
@@ -99,6 +181,7 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
         // Remove the accepted order from available orders
         setOrders(prev => prev.filter(o => o.id !== orderId));
         console.log('✅ Order accepted successfully');
+        return true;
       } else {
         console.error('❌ API returned error:', response.error);
         throw new Error(response.error || 'Failed to accept order');
@@ -110,7 +193,7 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
         orderId,
         orderExists: !!order
       });
-      throw error;
+      return false;
     }
   }, [orders]);
 
@@ -180,6 +263,35 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
     notificationCallbackRef.current = callback;
   }, []);
 
+  const setOrderAcceptedCallback = useCallback((callback: ((orderId: string) => void) | null) => {
+    console.log('OrderProvider: setOrderAcceptedCallback called:', callback ? 'with callback' : 'with null');
+    // Not implemented yet but required by interface
+  }, []);
+
+  const getDriverOrders = useCallback(async () => {
+    console.log('OrderProvider: getDriverOrders called');
+    setIsLoading(true);
+    try {
+      const response = await apiService.getDriverOrders();
+      if (response.success) {
+        setDriverOrders(response.data);
+        console.log(`✅ Loaded ${response.data.length} driver orders`);
+      } else {
+        console.error('❌ Failed to get driver orders:', response.error);
+      }
+    } catch (error) {
+      console.error('❌ Failed to get driver orders:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const getRouteOptimization = useCallback(async () => {
+    console.log('OrderProvider: getRouteOptimization called');
+    // Not implemented yet but required by interface
+    return null;
+  }, []);
+
   const canAcceptOrder = useCallback((order: Order) => {
     // Check if the order can be accepted by the driver
     // Basic validation: order should be pending/assigned and not already assigned to another driver
@@ -199,10 +311,10 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
   const contextValue: OrderContextType = {
     // State
     orders,
+    driverOrders,
     orderHistory,
     isLoading,
     error,
-    lastUpdated,
     
     // Actions
     refreshOrders,
@@ -211,8 +323,10 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
     declineOrder,
     updateOrderStatus,
     getOrderHistory,
-    clearOrders,
+    getDriverOrders,
+    getRouteOptimization,
     setOrderNotificationCallback,
+    setOrderAcceptedCallback,
     canAcceptOrder,
   };
 

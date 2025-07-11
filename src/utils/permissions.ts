@@ -15,22 +15,8 @@ try {
 export const requestNotificationPermissions = async (): Promise<boolean> => {
   try {
     if (Platform.OS === 'android') {
-      // Request vibration permission first (required for notification vibration)
-      const vibrationGranted = await PermissionsAndroid.request(
-        PermissionsAndroid.PERMISSIONS.VIBRATE,
-        {
-          title: 'Vibration Permission',
-          message: 'This app needs permission to vibrate for order notifications.',
-          buttonNeutral: 'Ask Me Later',
-          buttonNegative: 'Cancel',
-          buttonPositive: 'OK',
-        }
-      );
-      
-      if (vibrationGranted !== PermissionsAndroid.RESULTS.GRANTED) {
-        console.log('Android vibration permission denied');
-        // Continue anyway, just disable vibration
-      }
+      // Note: VIBRATE permission is automatically granted in Android and doesn't need to be requested
+      console.log('📱 Vibration permission is automatically granted on Android');
       
       // Android 13+ requires explicit notification permission
       if (Platform.Version >= 33) {
@@ -107,10 +93,8 @@ export const requestNotificationPermissions = async (): Promise<boolean> => {
 export const checkNotificationPermissions = async (): Promise<boolean> => {
   try {
     if (Platform.OS === 'android') {
-      // Check vibration permission
-      const vibrationGranted = await PermissionsAndroid.check(
-        PermissionsAndroid.PERMISSIONS.VIBRATE
-      );
+      // Note: VIBRATE permission is automatically granted on Android
+      console.log('📱 Vibration permission is automatically available on Android');
       
       // Check notification permission for Android 13+
       if (Platform.Version >= 33) {
@@ -122,7 +106,7 @@ export const checkNotificationPermissions = async (): Promise<boolean> => {
         }
       }
       
-      return vibrationGranted; // At minimum, we need vibration
+      return true; // Vibration is always available, notification checked above
     }
 
     // Check Firebase messaging permission

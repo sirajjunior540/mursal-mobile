@@ -186,26 +186,30 @@ let config: EnvironmentConfig;
 try {
   config = buildConfig();
   console.log('✅ Configuration loaded successfully');
+  console.log('🔧 API Base URL:', config.API_BASE_URL);
+  console.log('🔧 Tenant ID:', config.TENANT_ID);
 } catch (error) {
   console.error('❌ Configuration Error:', error);
   
   // Provide emergency fallback configuration to prevent app crash
   console.warn('🚨 Using emergency fallback configuration');
+  const fallbackIP = '192.168.1.153'; // Use existing IP from .env as fallback
+  
   config = {
     NODE_ENV: 'development',
     IS_DEVELOPMENT: true,
     IS_PRODUCTION: false,
     IS_STAGING: false,
-    SERVER_IP: '192.168.1.153', // Emergency fallback
+    SERVER_IP: fallbackIP,
     SERVER_PORT: 8000,
     SERVER_PROTOCOL: 'http',
-    API_BASE_URL: 'http://192.168.1.153:8000',
-    API_HOST: 'sirajjunior.192.168.1.153',
+    API_BASE_URL: `http://${fallbackIP}:8000`,
+    API_HOST: `sirajjunior.${fallbackIP}`,
     API_TIMEOUT: 30000,
     TENANT_ID: 'sirajjunior',
     TENANT_SUBDOMAIN: 'sirajjunior',
-    WS_BASE_URL: 'ws://192.168.1.153:8000',
-    WS_HOST: 'sirajjunior.192.168.1.153',
+    WS_BASE_URL: `ws://${fallbackIP}:8000`,
+    WS_HOST: `sirajjunior.${fallbackIP}`,
     WS_PROTOCOL: 'ws',
     FEATURES: {
       WEBSOCKET: true,
@@ -220,6 +224,8 @@ try {
       PERFORMANCE: true,
     },
   };
+  
+  console.log('🚨 Emergency config loaded with API URL:', config.API_BASE_URL);
 }
 
 // Export main configuration
@@ -321,11 +327,28 @@ export const debugConfig = (): void => {
   }
 };
 
-// Auto-validate configuration on import
-const validation = validateConfig();
-if (!validation.valid) {
-  console.error('❌ Configuration validation failed:', validation.errors);
+// Auto-validate configuration on import (non-blocking)
+try {
+  const validation = validateConfig();
+  if (!validation.valid) {
+    console.error('❌ Configuration validation failed:', validation.errors);
+    // Only throw in production if it's a critical error
+    if (ENV.IS_PRODUCTION && validation.errors.some(error => 
+      error.includes('SERVER_IP') || error.includes('TENANT_ID')
+    )) {
+      throw new ConfigValidationError(`Critical configuration error: ${validation.errors.join(', ')}`);
+    } else {
+      console.warn('⚠️ Using configuration with warnings in development mode');
+    }
+  } else {
+    console.log('✅ Configuration validation passed');
+  }
+} catch (error) {
+  console.error('❌ Configuration validation error:', error);
+  // Don't let configuration errors prevent app startup in development
   if (ENV.IS_PRODUCTION) {
-    throw new ConfigValidationError(`Invalid configuration: ${validation.errors.join(', ')}`);
+    throw error;
+  } else {
+    console.warn('⚠️ Continuing with fallback configuration in development');
   }
 }

@@ -61,7 +61,7 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
 
   // Timer state
   const [timeRemaining, setTimeRemaining] = useState(timerDuration);
-  const [/* isTimerActive, */ setIsTimerActive] = useState(false);
+  const [isTimerActive, setIsTimerActive] = useState(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const ringingRef = useRef<NodeJS.Timeout | null>(null);
   
@@ -112,12 +112,12 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
           });
         }
       });
-    } else if (batchOrder.delivery_address || batchOrder.deliveryAddress?.street) {
+    } else if (batchOrder.delivery_address) {
       // Single delivery for consolidated orders
       stops.push({
         id: `delivery-${batchOrder.id}`,
         type: 'delivery' as const,
-        address: batchOrder.delivery_address || batchOrder.deliveryAddress?.street || '',
+        address: batchOrder.delivery_address || '',
         orderNumber: batchOrder.order_number,
         customerName: batchOrder.customer_details?.name
       });
