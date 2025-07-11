@@ -241,24 +241,31 @@ const ProfileScreen: React.FC = () => {
             <View style={[styles.statIcon, { backgroundColor: '#F59E0B' }]}>
               <Ionicons name="star" size={20} color="#ffffff" />
             </View>
-            <Text style={styles.statValue}>{driver?.rating?.toFixed(1) || '0.0'}</Text>
+            <Text style={styles.statValue}>
+              {balance?.averageRating?.toFixed(1) || driver?.rating?.toFixed(1) || '0.0'}
+            </Text>
             <Text style={styles.statLabel}>Rating</Text>
           </View>
           <View style={styles.statCard}>
             <View style={[styles.statIcon, { backgroundColor: '#10B981' }]}>
               <Ionicons name="checkmark-circle" size={20} color="#ffffff" />
             </View>
-            <Text style={styles.statValue}>{driver?.totalDeliveries || 0}</Text>
-            <Text style={styles.statLabel}>Deliveries</Text>
+            <Text style={styles.statValue}>
+              {balance?.totalDeliveries || driver?.totalDeliveries || 0}
+            </Text>
+            <Text style={styles.statLabel}>Total Orders</Text>
           </View>
           <View style={styles.statCard}>
             <View style={[styles.statIcon, { backgroundColor: '#3B82F6' }]}>
               <Ionicons name="time" size={20} color="#ffffff" />
             </View>
-            <Text style={styles.statValue}>4.2</Text>
+            <Text style={styles.statValue}>
+              {balance?.averageDeliveryTime ? `${balance.averageDeliveryTime.toFixed(0)}m` : 'N/A'}
+            </Text>
             <Text style={styles.statLabel}>Avg Time</Text>
           </View>
         </View>
+
 
         {/* Driver Information */}
         <View style={styles.section}>

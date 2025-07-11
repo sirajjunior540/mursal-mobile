@@ -1409,7 +1409,64 @@ class ApiService {
 
   // Balance Management
   async getDriverBalance(): Promise<ApiResponse<DriverBalance>> {
-    return this.client.get<DriverBalance>('/api/v1/auth/drivers/balance/');
+    console.log('💰 Getting driver balance overview...');
+    
+    try {
+      const response = await this.client.get<any>('/api/v1/users/drivers/balance/');
+      
+      if (response.success && response.data) {
+        const balance: DriverBalance = {
+          // Financial data
+          totalEarnings: response.data.totalEarnings || 0,
+          pendingEarnings: response.data.pendingPayouts || 0,
+          totalWithdrawals: response.data.depositBalance || 0,
+          availableBalance: response.data.cashOnHand || 0,
+          cashOnHand: response.data.cashOnHand || 0,
+          depositBalance: response.data.depositBalance || 0,
+          todayEarnings: response.data.todayEarnings || 0,
+          weekEarnings: response.data.weekEarnings || 0,
+          monthEarnings: response.data.monthEarnings || 0,
+          pendingPayouts: response.data.pendingPayouts || 0,
+          
+          // Performance metrics
+          averageDeliveryTime: response.data.average_delivery_time || 0,
+          availableOrders: response.data.available_orders || 0,
+          completedOrders: response.data.completed_orders || 0,
+          todayCompletedOrders: response.data.today_completed_orders || 0,
+          totalDeliveries: response.data.total_deliveries || 0,
+          successfulDeliveries: response.data.successful_deliveries || 0,
+          successRate: response.data.success_rate || 0,
+          averageRating: response.data.average_rating || 0,
+          
+          // Period information
+          lastUpdated: new Date().toISOString(),
+          breakdown: {
+            today: response.data.todayEarnings || 0,
+            week: response.data.weekEarnings || 0,
+            month: response.data.monthEarnings || 0,
+            deliveryEarnings: response.data.totalEarnings || 0,
+            tips: 0,
+            bonuses: 0
+          }
+        };
+        
+        console.log('✅ Driver balance retrieved successfully:', balance);
+        return {
+          success: true,
+          data: balance,
+          message: response.message
+        };
+      }
+      
+      return response as ApiResponse<DriverBalance>;
+    } catch (error) {
+      console.error('❌ Error getting driver balance:', error);
+      return {
+        success: false,
+        data: null!,
+        error: error instanceof Error ? error.message : 'Failed to get balance'
+      };
+    }
   }
 
   async addDeposit(amount: number): Promise<ApiResponse<void>> {
@@ -1811,6 +1868,149 @@ class ApiService {
     } catch {
       return null;
     }
+  }
+
+  // ===== EARNINGS AND BALANCE METHODS =====
+
+  /**
+   * Get driver earnings summary for a specific period
+   */
+  async getDriverEarnings(startDate?: string, endDate?: string): Promise<ApiResponse<DriverBalance>> {
+    console.log('💰 Getting driver earnings...', { startDate, endDate });
+    
+    try {
+      let endpoint = '/api/v1/users/drivers/balance/';
+      const params = new URLSearchParams();
+      
+      if (startDate) params.append('start_date', startDate);
+      if (endDate) params.append('end_date', endDate);
+      
+      if (params.toString()) {
+        endpoint += `?${params.toString()}`;
+      }
+      
+      const response = await this.client.get<any>(endpoint);
+      
+      if (response.success && response.data) {
+        // Use custom period earnings if available, otherwise use total earnings
+        const periodEarnings = response.data.customPeriodEarnings !== null 
+          ? response.data.customPeriodEarnings 
+          : response.data.totalEarnings || 0;
+
+        const earnings: DriverBalance = {
+          totalEarnings: periodEarnings,
+          pendingEarnings: response.data.pendingPayouts || 0,
+          totalWithdrawals: response.data.depositBalance || 0,
+          availableBalance: response.data.cashOnHand || 0,
+          lastUpdated: new Date().toISOString(),
+          breakdown: {
+            today: response.data.todayEarnings || 0,
+            week: response.data.weekEarnings || 0,
+            month: response.data.monthEarnings || 0,
+            deliveryEarnings: periodEarnings,
+            tips: 0, // Will be available from transactions
+            bonuses: 0 // Will be available from transactions
+          },
+          period: response.data.period || { start_date: startDate, end_date: endDate }
+        };
+        
+        console.log('✅ Driver earnings retrieved successfully:', earnings);
+        return {
+          success: true,
+          data: earnings,
+          message: response.message
+        };
+      }
+      
+      return response as ApiResponse<DriverBalance>;
+    } catch (error) {
+      console.error('❌ Error getting driver earnings:', error);
+      return {
+        success: false,
+        data: null!,
+        error: error instanceof Error ? error.message : 'Failed to get earnings'
+      };
+    }
+  }
+
+  /**
+   * Get driver balance transactions (earnings history)
+   */
+  async getBalanceTransactions(page: number = 1, pageSize: number = 20): Promise<ApiResponse<BalanceTransaction[]>> {
+    console.log('📊 Getting balance transactions...', { page, pageSize });
+    
+    try {
+      const endpoint = `/api/v1/users/drivers/transaction_history/?page=${page}&page_size=${pageSize}`;
+      const response = await this.client.get<any>(endpoint);
+      
+      if (response.success && response.data) {
+        // Handle paginated response
+        const transactions = (response.data.results || response.data || []).map((transaction: any): BalanceTransaction => ({
+          id: transaction.id,
+          transactionType: transaction.transaction_type,
+          amount: transaction.amount,
+          description: transaction.description,
+          status: transaction.status,
+          orderId: transaction.order_id,
+          deliveryId: transaction.delivery_id,
+          processedAt: transaction.processed_at,
+          createdAt: transaction.created_at,
+          metadata: transaction.metadata || {}
+        }));
+        
+        console.log('✅ Balance transactions retrieved:', transactions.length);
+        return {
+          success: true,
+          data: transactions,
+          message: response.message
+        };
+      }
+      
+      return response as ApiResponse<BalanceTransaction[]>;
+    } catch (error) {
+      console.error('❌ Error getting balance transactions:', error);
+      return {
+        success: false,
+        data: [],
+        error: error instanceof Error ? error.message : 'Failed to get balance transactions'
+      };
+    }
+  }
+
+  /**
+   * Get earnings for today only
+   */
+  async getTodayEarnings(): Promise<ApiResponse<DriverBalance>> {
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+    return this.getDriverEarnings(today, today);
+  }
+
+  /**
+   * Get earnings for this week
+   */
+  async getWeekEarnings(): Promise<ApiResponse<DriverBalance>> {
+    const today = new Date();
+    const startOfWeek = new Date(today.setDate(today.getDate() - today.getDay()));
+    const endOfWeek = new Date(today.setDate(startOfWeek.getDate() + 6));
+    
+    return this.getDriverEarnings(
+      startOfWeek.toISOString().split('T')[0],
+      endOfWeek.toISOString().split('T')[0]
+    );
+  }
+
+  /**
+   * Get earnings for this month
+   */
+  async getMonthEarnings(): Promise<ApiResponse<DriverBalance>> {
+    const today = new Date();
+    const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    
+    return this.getDriverEarnings(
+      startOfMonth.toISOString().split('T')[0],
+      endOfMonth.toISOString().split('T')[0]
+    );
   }
 }
 

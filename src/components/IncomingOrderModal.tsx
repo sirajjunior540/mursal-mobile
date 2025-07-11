@@ -49,7 +49,7 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
   onDecline,
   onSkip,
   onClose,
-  timerDuration = 30,
+  timerDuration = 10,
   onBatchAccept,
   onAcceptRoute,
 }) => {

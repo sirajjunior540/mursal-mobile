@@ -235,7 +235,7 @@ const IncomingOrderManager = () => {
       onSkip={handleSkip}
       onClose={handleClose}
       onAcceptRoute={handleAcceptRoute}
-      timerDuration={30}
+      timerDuration={10}
     />
   );
 };

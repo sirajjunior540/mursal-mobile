@@ -17,7 +17,8 @@ import LinearGradient from 'react-native-linear-gradient';
 
 import { useOrders } from '../features/orders/context/OrderProvider';
 import { useDriver } from '../contexts/DriverContext';
-import { Order, OrderStatus } from '../types';
+import { Order, OrderStatus, DriverBalance } from '../types';
+import { apiService } from '../services/api';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -55,6 +56,8 @@ const HistoryScreen: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedRange, setSelectedRange] = useState<string>('week');
   const [expandedCard, setExpandedCard] = useState<string | null>(null);
+  const [realEarnings, setRealEarnings] = useState<DriverBalance | null>(null);
+  const [earningsLoading, setEarningsLoading] = useState(false);
 
   // Filter orders based on selected date range
   const filteredOrders = useMemo(() => {
@@ -86,21 +89,83 @@ const HistoryScreen: React.FC = () => {
       });
   }, [orderHistory, selectedRange]);
 
+  // Load real earnings data based on selected range
+  const loadEarningsData = useCallback(async () => {
+    setEarningsLoading(true);
+    try {
+      let response;
+      
+      switch (selectedRange) {
+        case 'today':
+          response = await apiService.getTodayEarnings();
+          break;
+        case 'week':
+          response = await apiService.getWeekEarnings();
+          break;
+        case 'month':
+          response = await apiService.getMonthEarnings();
+          break;
+        case 'all':
+        default:
+          response = await apiService.getDriverEarnings();
+          break;
+      }
+      
+      if (response.success) {
+        setRealEarnings(response.data);
+        console.log('✅ Loaded real earnings data:', response.data);
+      } else {
+        console.error('❌ Failed to load earnings:', response.error);
+      }
+    } catch (error) {
+      console.error('❌ Error loading earnings:', error);
+    } finally {
+      setEarningsLoading(false);
+    }
+  }, [selectedRange]);
+
   // Calculate earnings data
   const earningsData = useMemo((): EarningsData => {
-    const completedOrders = filteredOrders.filter(order => order.status === 'delivered');
-    const totalEarnings = completedOrders.reduce((sum, order) => sum + (order.total || 0), 0);
-    const totalOrders = filteredOrders.length;
-    const avgOrderValue = completedOrders.length > 0 ? totalEarnings / completedOrders.length : 0;
-    const completionRate = totalOrders > 0 ? (completedOrders.length / totalOrders) * 100 : 0;
+    if (realEarnings) {
+      // Use real earnings data from backend
+      const completedOrders = filteredOrders.filter(order => order.status === 'delivered');
+      const totalOrders = filteredOrders.length;
+      
+      // Get earnings for the selected period
+      let periodEarnings = realEarnings.totalEarnings;
+      if (selectedRange === 'today' && realEarnings.breakdown?.today !== undefined) {
+        periodEarnings = realEarnings.breakdown.today;
+      } else if (selectedRange === 'week' && realEarnings.breakdown?.week !== undefined) {
+        periodEarnings = realEarnings.breakdown.week;
+      } else if (selectedRange === 'month' && realEarnings.breakdown?.month !== undefined) {
+        periodEarnings = realEarnings.breakdown.month;
+      }
+      
+      const avgOrderValue = completedOrders.length > 0 ? periodEarnings / completedOrders.length : 0;
+      const completionRate = totalOrders > 0 ? (completedOrders.length / totalOrders) * 100 : 0;
 
-    return {
-      totalEarnings,
-      totalOrders,
-      avgOrderValue,
-      completionRate,
-    };
-  }, [filteredOrders]);
+      return {
+        totalEarnings: periodEarnings,
+        totalOrders,
+        avgOrderValue,
+        completionRate,
+      };
+    } else {
+      // Fallback to calculated earnings from orders (mock data behavior)
+      const completedOrders = filteredOrders.filter(order => order.status === 'delivered');
+      const totalEarnings = completedOrders.reduce((sum, order) => sum + (order.total || 0), 0);
+      const totalOrders = filteredOrders.length;
+      const avgOrderValue = completedOrders.length > 0 ? totalEarnings / completedOrders.length : 0;
+      const completionRate = totalOrders > 0 ? (completedOrders.length / totalOrders) * 100 : 0;
+
+      return {
+        totalEarnings,
+        totalOrders,
+        avgOrderValue,
+        completionRate,
+      };
+    }
+  }, [filteredOrders, realEarnings, selectedRange]);
 
   useEffect(() => {
     // Load order history on mount
@@ -109,16 +174,26 @@ const HistoryScreen: React.FC = () => {
     }
   }, [driver?.id, getOrderHistory]);
 
+  useEffect(() => {
+    // Load earnings data when range changes
+    if (driver?.id) {
+      loadEarningsData();
+    }
+  }, [driver?.id, selectedRange, loadEarningsData]);
+
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await getOrderHistory?.();
+      await Promise.all([
+        getOrderHistory?.(),
+        loadEarningsData()
+      ]);
     } catch (error) {
       console.error('Error refreshing history:', error);
     } finally {
       setRefreshing(false);
     }
-  }, [getOrderHistory]);
+  }, [getOrderHistory, loadEarningsData]);
 
   const handleOrderPress = useCallback((order: Order) => {
     navigation.navigate('OrderDetails', { orderId: order.id });
@@ -223,23 +298,30 @@ const HistoryScreen: React.FC = () => {
           <Ionicons name="trending-up" size={24} color="#FFFFFF" />
         </View>
         
-        <View style={styles.earningsStats}>
-          <View style={styles.earningsStat}>
-            <Text style={styles.earningsAmount}>
-              ${earningsData.totalEarnings.toFixed(2)}
-            </Text>
-            <Text style={styles.earningsLabel}>Total Earnings</Text>
+        {earningsLoading ? (
+          <View style={styles.earningsLoadingContainer}>
+            <ActivityIndicator size="large" color="#FFFFFF" />
+            <Text style={styles.earningsLoadingText}>Loading earnings...</Text>
           </View>
-          
-          <View style={styles.earningsStatDivider} />
-          
-          <View style={styles.earningsStat}>
-            <Text style={styles.earningsAmount}>
-              {earningsData.totalOrders}
-            </Text>
-            <Text style={styles.earningsLabel}>Total Orders</Text>
+        ) : (
+          <View style={styles.earningsStats}>
+            <View style={styles.earningsStat}>
+              <Text style={styles.earningsAmount}>
+                ${earningsData.totalEarnings.toFixed(2)}
+              </Text>
+              <Text style={styles.earningsLabel}>Total Earnings</Text>
+            </View>
+            
+            <View style={styles.earningsStatDivider} />
+            
+            <View style={styles.earningsStat}>
+              <Text style={styles.earningsAmount}>
+                {earningsData.totalOrders}
+              </Text>
+              <Text style={styles.earningsLabel}>Total Orders</Text>
+            </View>
           </View>
-        </View>
+        )}
         
         <View style={styles.earningsSecondaryStats}>
           <View style={styles.secondaryStat}>
@@ -685,6 +767,15 @@ const styles = StyleSheet.create({
   expandIndicator: {
     alignItems: 'center',
     marginTop: 8,
+  },
+  earningsLoadingContainer: {
+    alignItems: 'center',
+    paddingVertical: 24,
+  },
+  earningsLoadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.8)',
   },
   emptyState: {
     flex: 1,

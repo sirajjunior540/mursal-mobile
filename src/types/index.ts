@@ -53,13 +53,42 @@ export interface Driver {
 }
 
 export interface DriverBalance {
+  // Financial data
   cashOnHand: number;
   depositBalance: number;
   totalEarnings: number;
+  pendingEarnings: number;
+  totalWithdrawals: number;
+  availableBalance: number;
   pendingPayouts: number;
   todayEarnings: number;
   weekEarnings: number;
   monthEarnings: number;
+  
+  // Performance metrics
+  averageDeliveryTime?: number; // in minutes
+  availableOrders?: number;
+  completedOrders?: number;
+  todayCompletedOrders?: number;
+  totalDeliveries?: number;
+  successfulDeliveries?: number;
+  successRate?: number;
+  averageRating?: number;
+  
+  // Period information
+  lastUpdated: string;
+  breakdown?: {
+    today: number;
+    week: number;
+    month: number;
+    deliveryEarnings: number;
+    tips: number;
+    bonuses: number;
+  };
+  period?: {
+    start_date?: string;
+    end_date?: string;
+  };
 }
 
 export interface OrderItem {
