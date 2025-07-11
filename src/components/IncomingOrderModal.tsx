@@ -7,19 +7,19 @@ import {
   StyleSheet,
   Animated,
   Dimensions,
-  Platform,
+  // Platform,
   AppState,
   ScrollView,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Order } from '../types';
-import { COLORS, FONTS } from '../constants';
+import { /* COLORS, FONTS */ } from '../constants';
 import { haptics } from '../utils/haptics';
 import { soundService } from '../services/soundService';
 import { notificationService } from '../services/notificationService';
 import { Design } from '../constants/designSystem';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { /* width: SCREEN_WIDTH, */ height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 interface BatchOrder extends Order {
   isBatch?: boolean;
@@ -48,9 +48,9 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
   onAccept,
   onDecline,
   onSkip,
-  onClose,
+  // onClose,
   timerDuration = 10,
-  onBatchAccept,
+  // onBatchAccept,
   onAcceptRoute,
 }) => {
   // Animation refs
@@ -61,13 +61,13 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
 
   // Timer state
   const [timeRemaining, setTimeRemaining] = useState(timerDuration);
-  const [isTimerActive, setIsTimerActive] = useState(false);
+  const [/* isTimerActive, */ setIsTimerActive] = useState(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const ringingRef = useRef<NodeJS.Timeout | null>(null);
   
   // Batch order state
-  const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
-  const [showBatchDetails, setShowBatchDetails] = useState(false);
+  const [/* selectedOrders, setSelectedOrders */] = useState<string[]>([]);
+  const [/* showBatchDetails, setShowBatchDetails */] = useState(false);
   const [showRouteDetails, setShowRouteDetails] = useState(false);
   
   // Background wake state
@@ -101,14 +101,14 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
     
     // Add delivery stops
     if (batchOrder.orders && batchOrder.orders.length > 0) {
-      batchOrder.orders.forEach(order => {
-        if (order.delivery_address) {
+      batchOrder.orders.forEach(batchOrderItem => {
+        if (batchOrderItem.delivery_address) {
           stops.push({
-            id: `delivery-${order.id}`,
+            id: `delivery-${batchOrderItem.id}`,
             type: 'delivery' as const,
-            address: order.delivery_address || '',
-            orderNumber: order.order_number,
-            customerName: order.customer?.name
+            address: batchOrderItem.delivery_address || '',
+            orderNumber: batchOrderItem.order_number,
+            customerName: batchOrderItem.customer?.name
           });
         }
       });
@@ -227,15 +227,15 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
   }, [order, stopTimer, stopRinging, onSkip]);
   
   // Handle batch order selection
-  const toggleOrderSelection = useCallback((orderId: string) => {
-    setSelectedOrders(prev => {
-      if (prev.includes(orderId)) {
-        return prev.filter(id => id !== orderId);
-      } else {
-        return [...prev, orderId];
-      }
-    });
-  }, []);
+  // const toggleOrderSelection = useCallback((orderId: string) => {
+  //   setSelectedOrders(prev => {
+  //     if (prev.includes(orderId)) {
+  //       return prev.filter(id => id !== orderId);
+  //     } else {
+  //       return [...prev, orderId];
+  //     }
+  //   });
+  // }, []);
   
   // Handle app state changes for background wake
   useEffect(() => {
@@ -256,7 +256,7 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
   }, [wasInBackground, visible, startRinging, stopRinging]);
 
   // Timer progress animation
-  const timerProgress = timeRemaining / timerDuration;
+  // const timerProgress = timeRemaining / timerDuration;
   const progressColor = timeRemaining <= 3 ? '#FF4757' : timeRemaining <= 6 ? '#FFA726' : '#4CAF50';
 
   // Effects
@@ -916,77 +916,8 @@ const styles = StyleSheet.create({
     color: Design.colors.primary,
     fontWeight: '600',
   },
-  batchOrdersList: {
-    marginTop: Design.spacing[4],
-    paddingTop: Design.spacing[4],
-    borderTopWidth: 1,
-    borderTopColor: Design.colors.border,
-  },
-  batchListTitle: {
-    ...Design.typography.bodySmall,
-    fontWeight: '600',
-    color: Design.colors.text,
-    marginBottom: Design.spacing[3],
-  },
-  batchOrderItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: Design.spacing[3],
-    paddingHorizontal: Design.spacing[3],
-    marginBottom: Design.spacing[2],
-    borderRadius: Design.borderRadius.md,
-    backgroundColor: Design.colors.backgroundTertiary,
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  batchOrderItemSelected: {
-    borderColor: Design.colors.success,
-    backgroundColor: Design.colors.successLight || 'rgba(76, 175, 80, 0.1)',
-  },
-  batchOrderCheckbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: Design.colors.border,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: Design.spacing[3],
-  },
-  batchOrderDetails: {
-    flex: 1,
-  },
-  batchOrderNumber: {
-    ...Design.typography.bodySmall,
-    fontWeight: '600',
-    color: Design.colors.text,
-  },
-  batchOrderAddress: {
-    ...Design.typography.caption,
-    color: Design.colors.textSecondary,
-    marginTop: Design.spacing[1],
-  },
-  batchOrderTotal: {
-    ...Design.typography.bodySmall,
-    fontWeight: '600',
-    color: Design.colors.success,
-    marginTop: Design.spacing[1],
-  },
-  selectedSummary: {
-    marginTop: Design.spacing[4],
-    paddingTop: Design.spacing[4],
-    borderTopWidth: 1,
-    borderTopColor: Design.colors.border,
-    alignItems: 'center',
-  },
-  selectedSummaryText: {
-    ...Design.typography.body,
-    fontWeight: '600',
-    color: Design.colors.success,
-  },
-  acceptButtonDisabled: {
-    backgroundColor: Design.colors.gray300,
-  },
+  // Unused styles removed for ESLint compliance
+  // batchOrdersList, batchListTitle, batchOrderItem, etc.
 });
 
 export default IncomingOrderModal;

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, Animated, StyleSheet } from 'react-native';
-import Ionicons from 'react-native-vector-icons/Ionicons';
+// import Ionicons from 'react-native-vector-icons/Ionicons';
 import { COLORS } from '../constants';
 
 export type ConnectionType = 'api' | 'websocket' | 'connecting' | 'disconnected';
@@ -115,19 +115,19 @@ const ConnectionStatusIndicator: React.FC<ConnectionStatusIndicatorProps> = ({
     }
   };
 
-  const getIcon = (): string => {
-    switch (type) {
-      case 'api':
-        return 'pulse-outline';
-      case 'websocket':
-        return 'radio-outline';
-      case 'connecting':
-        return 'ellipsis-horizontal';
-      case 'disconnected':
-      default:
-        return 'radio-button-off-outline';
-    }
-  };
+  // const getIcon = (): string => {
+  //   switch (type) {
+  //     case 'api':
+  //       return 'pulse-outline';
+  //     case 'websocket':
+  //       return 'radio-outline';
+  //     case 'connecting':
+  //       return 'ellipsis-horizontal';
+  //     case 'disconnected':
+  //     default:
+  //       return 'radio-button-off-outline';
+  //   }
+  // };
 
   const getDisplayLabel = (): string => {
     if (label) return label;

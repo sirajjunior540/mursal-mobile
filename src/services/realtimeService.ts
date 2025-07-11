@@ -676,7 +676,7 @@ class RealtimeService {
     const customerInfo = order.customer_details?.name || 
                         order.customer_details?.full_name ||
                         order.customer_name ||
-                        (typeof order.customer === 'object' ? order.customer?.name : 'ID: ' + order.customer) ||
+                        (typeof order.customer === 'object' ? order.customer?.name : `ID: ${  order.customer}`) ||
                         'none';
 
     console.log(`   customer: ${hasCustomer} (${customerInfo})`);

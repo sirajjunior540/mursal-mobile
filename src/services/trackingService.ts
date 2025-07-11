@@ -11,8 +11,9 @@ import {
   ApiResponse,
   PaginatedResponse,
 } from '../types/tracking';
+import { ENV } from '../config/environment';
 
-const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8000';
+const API_BASE_URL = ENV.API_BASE_URL;
 const OFFLINE_STORAGE_KEY = 'tracking_offline_updates';
 const CACHE_KEY_PREFIX = 'tracking_cache_';
 const CACHE_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
@@ -26,7 +27,7 @@ interface CachedData<T> {
 interface OfflineUpdate {
   id: string;
   type: 'status_update' | 'manual_entry' | 'qr_scan';
-  data: any;
+  data: ShipmentUpdateRequest | Record<string, unknown>;
   timestamp: string;
   retryCount: number;
 }
@@ -104,9 +105,9 @@ class TrackingService {
     }
 
     const url = `${API_BASE_URL}${endpoint}`;
-    const headers: HeadersInit = {
+    const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      ...options.headers,
+      ...((options.headers as Record<string, string>) || {}),
     };
 
     if (this.token) {
@@ -379,7 +380,7 @@ class TrackingService {
     for (const update of updates) {
       try {
         let endpoint = '';
-        let method = 'POST';
+        const method = 'POST';
         
         switch (update.type) {
           case 'status_update':

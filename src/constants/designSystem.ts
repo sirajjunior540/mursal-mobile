@@ -21,9 +21,11 @@ export const Design = {
     background: '#FFFFFF',
     backgroundSecondary: '#f8fafc',
     backgroundTertiary: '#f1f5f9',
+    surface: '#FFFFFF',        // Surface color for cards, modals, etc.
     
     // Text colors for maximum readability (WCAG AAA)
     text: '#1a202c',         // Very dark gray (21:1 contrast)
+    textPrimary: '#1a202c',   // Alias for text
     textSecondary: '#4a5568', // Medium dark gray (7:1 contrast)  
     textTertiary: '#718096',  // Medium gray (4.5:1 contrast)
     textInverse: '#ffffff',   // White text for dark backgrounds

@@ -18,7 +18,7 @@ class Logger {
   private logLevel: LogLevel;
 
   constructor() {
-    this.isDevelopment = __DEV__ || process.env.NODE_ENV === 'development';
+    this.isDevelopment = __DEV__;
     this.logLevel = this.isDevelopment ? LogLevel.DEBUG : LogLevel.ERROR;
   }
 

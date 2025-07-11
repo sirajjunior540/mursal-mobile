@@ -83,7 +83,7 @@ const BatchOrderDetailsModal: React.FC<BatchOrderDetailsModalProps> = ({
           <Card style={styles.summaryCard}>
             <View style={styles.summaryHeader}>
               <Text style={styles.batchName}>{batch.name}</Text>
-              <StatusBadge status={batch.status as any} size="md" />
+              <StatusBadge status={batch.status as 'pending' | 'assigned' | 'in_progress' | 'completed' | 'cancelled'} size="md" />
             </View>
             
             <View style={styles.summaryStats}>
@@ -245,7 +245,7 @@ interface OrderItemProps {
   isLast: boolean;
 }
 
-const OrderItem: React.FC<OrderItemProps> = ({ order, index, isLast }) => {
+const OrderItem: React.FC<OrderItemProps> = ({ order, isLast }) => {
   return (
     <View style={[styles.orderItem, !isLast && styles.orderItemBorder]}>
       <View style={styles.orderHeader}>

@@ -1,7 +1,7 @@
 import { Alert, Platform, Vibration } from 'react-native';
 
 // Conditional import for react-native-sound - will be null if not installed
-let Sound: any = null;
+let Sound: typeof import('react-native-sound') | null = null;
 try {
   Sound = require('react-native-sound');
 } catch (e) {
@@ -15,7 +15,7 @@ export interface SoundConfig {
 }
 
 class SoundService {
-  private orderSound: any = null;
+  private orderSound: import('react-native-sound') | null = null;
   private ringingInterval: NodeJS.Timeout | null = null;
   private config: SoundConfig = {
     enabled: true,
@@ -35,7 +35,7 @@ class SoundService {
 
         // Try to load the notification sound, but don't fail if it doesn't exist
         try {
-          this.orderSound = new Sound('order_notification.mp3', Sound.MAIN_BUNDLE, (error: any) => {
+          this.orderSound = new Sound('order_notification.mp3', Sound.MAIN_BUNDLE, (error: Error | null) => {
             if (error) {
               console.log('Custom sound file not found, using vibration only');
               // Fallback to system sound if custom sound fails to load

@@ -10,7 +10,7 @@ import {
 import HapticFeedback from 'react-native-haptic-feedback';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 
-import { designSystem } from '../../constants/designSystem';
+import { Design } from '../../constants/designSystem';
 import { CarrierShipment, ShipmentStatus } from '../../types/tracking';
 
 interface PackageCardProps {
@@ -53,15 +53,15 @@ const PackageCard: React.FC<PackageCardProps> = ({
   const getStatusColor = (status: ShipmentStatus): string => {
     switch (status) {
       case 'delivered':
-        return designSystem.colors.success;
+        return Design.colors.success;
       case 'in_transit':
-        return designSystem.colors.primary;
+        return Design.colors.primary;
       case 'out_for_delivery':
-        return designSystem.colors.warning;
+        return Design.colors.warning;
       case 'exception':
-        return designSystem.colors.error;
+        return Design.colors.error;
       default:
-        return designSystem.colors.textSecondary;
+        return Design.colors.textSecondary;
     }
   };
 
@@ -151,7 +151,7 @@ const PackageCard: React.FC<PackageCardProps> = ({
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.carrierInfo}>
-            <View style={[styles.iconContainer, { backgroundColor: designSystem.colors.primary }]}>
+            <View style={[styles.iconContainer, { backgroundColor: Design.colors.primary }]}>
               <Icon 
                 name={getCarrierIcon()} 
                 size={compact ? 20 : 24} 
@@ -174,7 +174,7 @@ const PackageCard: React.FC<PackageCardProps> = ({
               onPress={handleQRScan}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <Icon name="qr-code-scanner" size={compact ? 20 : 24} color={designSystem.colors.primary} />
+              <Icon name="qr-code-scanner" size={compact ? 20 : 24} color={Design.colors.primary} />
             </TouchableOpacity>
           )}
         </View>
@@ -222,7 +222,7 @@ const PackageCard: React.FC<PackageCardProps> = ({
         <View style={styles.locationContainer}>
           {shipment.current_location && (
             <View style={styles.locationRow}>
-              <Icon name="location-on" size={14} color={designSystem.colors.textSecondary} />
+              <Icon name="location-on" size={14} color={Design.colors.textSecondary} />
               <Text style={[styles.location, compact && styles.textSmallCompact]} numberOfLines={1}>
                 {shipment.current_location}
               </Text>
@@ -258,13 +258,13 @@ const PackageCard: React.FC<PackageCardProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    marginHorizontal: designSystem.spacing.medium,
-    marginVertical: designSystem.spacing.small,
+    marginHorizontal: Design.spacing[4],
+    marginVertical: Design.spacing[2],
   },
   card: {
-    backgroundColor: designSystem.colors.surface,
-    borderRadius: designSystem.borderRadius.large,
-    padding: designSystem.spacing.medium,
+    backgroundColor: Design.colors.surface,
+    borderRadius: Design.borderRadius.lg,
+    padding: Design.spacing[4],
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
@@ -274,16 +274,16 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
     borderWidth: 1,
-    borderColor: designSystem.colors.border,
+    borderColor: Design.colors.border,
   },
   cardCompact: {
-    padding: designSystem.spacing.small,
+    padding: Design.spacing[2],
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: designSystem.spacing.small,
+    marginBottom: Design.spacing[2],
   },
   carrierInfo: {
     flexDirection: 'row',
@@ -298,50 +298,50 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   carrierText: {
-    marginLeft: designSystem.spacing.small,
+    marginLeft: Design.spacing[2],
     flex: 1,
   },
   carrierName: {
-    fontSize: designSystem.typography.sizes.medium,
+    fontSize: Design.typography.body.fontSize,
     fontWeight: '600',
-    color: designSystem.colors.textPrimary,
-    lineHeight: designSystem.typography.lineHeights.medium,
+    color: Design.colors.textPrimary,
+    lineHeight: Design.typography.body.lineHeight,
   },
   trackingNumber: {
-    fontSize: designSystem.typography.sizes.small,
-    color: designSystem.colors.textSecondary,
-    lineHeight: designSystem.typography.lineHeights.small,
+    fontSize: Design.typography.bodySmall.fontSize,
+    color: Design.colors.textSecondary,
+    lineHeight: Design.typography.bodySmall.lineHeight,
   },
   qrButton: {
-    padding: designSystem.spacing.xsmall,
+    padding: Design.spacing[1],
   },
   statusContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: designSystem.spacing.small,
+    marginBottom: Design.spacing[2],
   },
   statusBadge: {
-    paddingHorizontal: designSystem.spacing.small,
-    paddingVertical: designSystem.spacing.xsmall,
-    borderRadius: designSystem.borderRadius.small,
+    paddingHorizontal: Design.spacing[2],
+    paddingVertical: Design.spacing[1],
+    borderRadius: Design.borderRadius.sm,
   },
   statusText: {
-    fontSize: designSystem.typography.sizes.xsmall,
+    fontSize: Design.typography.caption.fontSize,
     fontWeight: '600',
-    color: designSystem.colors.surface,
+    color: Design.colors.surface,
   },
   progressText: {
-    fontSize: designSystem.typography.sizes.small,
-    color: designSystem.colors.textSecondary,
+    fontSize: Design.typography.bodySmall.fontSize,
+    color: Design.colors.textSecondary,
     fontWeight: '500',
   },
   progressContainer: {
-    marginBottom: designSystem.spacing.medium,
+    marginBottom: Design.spacing[4],
   },
   progressBar: {
     height: 6,
-    backgroundColor: designSystem.colors.border,
+    backgroundColor: Design.colors.border,
     borderRadius: 3,
     overflow: 'hidden',
   },
@@ -350,64 +350,64 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   customerInfo: {
-    marginBottom: designSystem.spacing.small,
+    marginBottom: Design.spacing[2],
   },
   customerName: {
-    fontSize: designSystem.typography.sizes.medium,
+    fontSize: Design.typography.body.fontSize,
     fontWeight: '500',
-    color: designSystem.colors.textPrimary,
-    lineHeight: designSystem.typography.lineHeights.medium,
+    color: Design.colors.textPrimary,
+    lineHeight: Design.typography.body.lineHeight,
   },
   orderNumber: {
-    fontSize: designSystem.typography.sizes.small,
-    color: designSystem.colors.textSecondary,
-    lineHeight: designSystem.typography.lineHeights.small,
+    fontSize: Design.typography.bodySmall.fontSize,
+    color: Design.colors.textSecondary,
+    lineHeight: Design.typography.bodySmall.lineHeight,
   },
   locationContainer: {
-    marginBottom: designSystem.spacing.small,
+    marginBottom: Design.spacing[2],
   },
   locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: designSystem.spacing.xsmall,
+    marginBottom: Design.spacing[1],
   },
   location: {
-    fontSize: designSystem.typography.sizes.small,
-    color: designSystem.colors.textSecondary,
-    lineHeight: designSystem.typography.lineHeights.small,
-    marginLeft: designSystem.spacing.xsmall,
+    fontSize: Design.typography.bodySmall.fontSize,
+    color: Design.colors.textSecondary,
+    lineHeight: Design.typography.bodySmall.lineHeight,
+    marginLeft: Design.spacing[1],
     flex: 1,
   },
   eta: {
-    fontSize: designSystem.typography.sizes.small,
-    color: designSystem.colors.primary,
+    fontSize: Design.typography.bodySmall.fontSize,
+    color: Design.colors.primary,
     fontWeight: '500',
   },
   actionButton: {
-    paddingVertical: designSystem.spacing.small,
-    borderRadius: designSystem.borderRadius.medium,
+    paddingVertical: Design.spacing[2],
+    borderRadius: Design.borderRadius.md,
     alignItems: 'center',
-    marginTop: designSystem.spacing.small,
+    marginTop: Design.spacing[2],
   },
   actionButtonText: {
-    fontSize: designSystem.typography.sizes.medium,
+    fontSize: Design.typography.body.fontSize,
     fontWeight: '600',
-    color: designSystem.colors.surface,
+    color: Design.colors.surface,
   },
   serviceType: {
-    fontSize: designSystem.typography.sizes.xsmall,
-    color: designSystem.colors.primary,
+    fontSize: Design.typography.caption.fontSize,
+    color: Design.colors.primary,
     fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-    marginTop: designSystem.spacing.small,
+    marginTop: Design.spacing[2],
     textAlign: 'right',
   },
   textCompact: {
-    fontSize: designSystem.typography.sizes.small,
+    fontSize: Design.typography.bodySmall.fontSize,
   },
   textSmallCompact: {
-    fontSize: designSystem.typography.sizes.xsmall,
+    fontSize: Design.typography.caption.fontSize,
   },
 });
 

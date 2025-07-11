@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -10,11 +10,11 @@ import {
   Dimensions,
   SafeAreaView,
 } from 'react-native';
-import { Camera, useCameraDevices, useCodeScanner } from 'react-native-vision-camera';
+import { Camera, useCameraDevice, useCodeScanner } from 'react-native-vision-camera';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import HapticFeedback from 'react-native-haptic-feedback';
 
-import { designSystem } from '../../constants/designSystem';
+import { Design } from '../../constants/designSystem';
 import { QRScanResult } from '../../types/tracking';
 
 interface QRScannerProps {
@@ -25,7 +25,7 @@ interface QRScannerProps {
   placeholder?: string;
 }
 
-const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+const { width: screenWidth } = Dimensions.get('window');
 
 const QRScanner: React.FC<QRScannerProps> = ({
   isVisible,
@@ -40,8 +40,7 @@ const QRScanner: React.FC<QRScannerProps> = ({
   const [isProcessing, setIsProcessing] = useState(false);
   const [flashEnabled, setFlashEnabled] = useState(false);
 
-  const devices = useCameraDevices();
-  const device = devices.back;
+  const device = useCameraDevice('back');
 
   const codeScanner = useCodeScanner({
     codeTypes: ['qr', 'ean-13', 'code-128', 'code-39'],
@@ -73,7 +72,7 @@ const QRScanner: React.FC<QRScannerProps> = ({
     const checkPermissions = async () => {
       try {
         const permission = await Camera.requestCameraPermission();
-        setHasPermission(permission === 'authorized');
+        setHasPermission(permission === 'granted');
       } catch (error) {
         console.error('Camera permission error:', error);
         setHasPermission(false);
@@ -136,14 +135,14 @@ const QRScanner: React.FC<QRScannerProps> = ({
         <SafeAreaView style={styles.container}>
           <View style={styles.header}>
             <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
-              <Icon name="close" size={24} color={designSystem.colors.textPrimary} />
+              <Icon name="close" size={24} color={Design.colors.text} />
             </TouchableOpacity>
             <Text style={styles.headerTitle}>Camera Access</Text>
             <View style={styles.headerSpacer} />
           </View>
           
           <View style={styles.centerContent}>
-            <Icon name="camera-alt" size={64} color={designSystem.colors.textSecondary} />
+            <Icon name="camera-alt" size={64} color={Design.colors.textSecondary} />
             <Text style={styles.permissionTitle}>Camera Permission Required</Text>
             <Text style={styles.permissionText}>
               Please grant camera access to scan QR codes and barcodes.
@@ -169,11 +168,11 @@ const QRScanner: React.FC<QRScannerProps> = ({
         <SafeAreaView style={styles.container}>
           <View style={styles.header}>
             <TouchableOpacity onPress={() => setShowManualEntry(false)} style={styles.closeButton}>
-              <Icon name="arrow-back" size={24} color={designSystem.colors.textPrimary} />
+              <Icon name="arrow-back" size={24} color={Design.colors.text} />
             </TouchableOpacity>
             <Text style={styles.headerTitle}>Manual Entry</Text>
             <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
-              <Icon name="close" size={24} color={designSystem.colors.textPrimary} />
+              <Icon name="close" size={24} color={Design.colors.text} />
             </TouchableOpacity>
           </View>
           
@@ -185,7 +184,7 @@ const QRScanner: React.FC<QRScannerProps> = ({
                 value={manualInput}
                 onChangeText={setManualInput}
                 placeholder={placeholder}
-                placeholderTextColor={designSystem.colors.textSecondary}
+                placeholderTextColor={Design.colors.textSecondary}
                 autoCapitalize="characters"
                 autoCorrect={false}
                 autoFocus
@@ -254,7 +253,7 @@ const QRScanner: React.FC<QRScannerProps> = ({
               style={styles.manualEntryButton}
               onPress={() => setShowManualEntry(true)}
             >
-              <Icon name="keyboard" size={20} color={designSystem.colors.primary} />
+              <Icon name="keyboard" size={20} color={Design.colors.primary} />
               <Text style={styles.manualEntryButtonText}>Manual Entry</Text>
             </TouchableOpacity>
           )}
@@ -273,24 +272,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: designSystem.spacing.medium,
-    paddingVertical: designSystem.spacing.small,
+    paddingHorizontal: Design.spacing[4],
+    paddingVertical: Design.spacing[2],
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
     zIndex: 1,
   },
   closeButton: {
-    padding: designSystem.spacing.xsmall,
+    padding: Design.spacing[1],
   },
   flashButton: {
-    padding: designSystem.spacing.xsmall,
+    padding: Design.spacing[1],
   },
   headerTitle: {
-    fontSize: designSystem.typography.sizes.large,
+    fontSize: Design.typography.h4.fontSize,
     fontWeight: '600',
-    color: designSystem.colors.textPrimary,
+    color: Design.colors.text,
   },
   headerTitleCamera: {
-    fontSize: designSystem.typography.sizes.large,
+    fontSize: Design.typography.h4.fontSize,
     fontWeight: '600',
     color: '#fff',
   },
@@ -352,88 +351,88 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    paddingHorizontal: designSystem.spacing.medium,
-    paddingVertical: designSystem.spacing.large,
+    paddingHorizontal: Design.spacing[4],
+    paddingVertical: Design.spacing[6],
     alignItems: 'center',
   },
   instructionText: {
-    fontSize: designSystem.typography.sizes.medium,
+    fontSize: Design.typography.body.fontSize,
     color: '#fff',
     textAlign: 'center',
-    marginBottom: designSystem.spacing.medium,
+    marginBottom: Design.spacing[4],
   },
   manualEntryButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: designSystem.colors.surface,
-    paddingHorizontal: designSystem.spacing.medium,
-    paddingVertical: designSystem.spacing.small,
-    borderRadius: designSystem.borderRadius.medium,
+    backgroundColor: Design.colors.surface,
+    paddingHorizontal: Design.spacing[4],
+    paddingVertical: Design.spacing[2],
+    borderRadius: Design.borderRadius.md,
   },
   manualEntryButtonText: {
-    fontSize: designSystem.typography.sizes.medium,
-    color: designSystem.colors.primary,
+    fontSize: Design.typography.body.fontSize,
+    color: Design.colors.primary,
     fontWeight: '600',
-    marginLeft: designSystem.spacing.xsmall,
+    marginLeft: Design.spacing[1],
   },
   centerContent: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: designSystem.spacing.large,
+    paddingHorizontal: Design.spacing[6],
   },
   permissionTitle: {
-    fontSize: designSystem.typography.sizes.xlarge,
+    fontSize: Design.typography.h3.fontSize,
     fontWeight: '600',
-    color: designSystem.colors.textPrimary,
-    marginTop: designSystem.spacing.medium,
-    marginBottom: designSystem.spacing.small,
+    color: Design.colors.text,
+    marginTop: Design.spacing[4],
+    marginBottom: Design.spacing[2],
     textAlign: 'center',
   },
   permissionText: {
-    fontSize: designSystem.typography.sizes.medium,
-    color: designSystem.colors.textSecondary,
+    fontSize: Design.typography.body.fontSize,
+    color: Design.colors.textSecondary,
     textAlign: 'center',
-    lineHeight: designSystem.typography.lineHeights.medium,
-    marginBottom: designSystem.spacing.large,
+    lineHeight: Design.typography.body.lineHeight,
+    marginBottom: Design.spacing[6],
   },
   manualEntryContent: {
     flex: 1,
-    paddingHorizontal: designSystem.spacing.large,
-    paddingTop: designSystem.spacing.large,
+    paddingHorizontal: Design.spacing[6],
+    paddingTop: Design.spacing[6],
   },
   inputContainer: {
-    marginBottom: designSystem.spacing.large,
+    marginBottom: Design.spacing[6],
   },
   inputLabel: {
-    fontSize: designSystem.typography.sizes.medium,
+    fontSize: Design.typography.body.fontSize,
     fontWeight: '600',
-    color: designSystem.colors.textPrimary,
-    marginBottom: designSystem.spacing.small,
+    color: Design.colors.text,
+    marginBottom: Design.spacing[2],
   },
   textInput: {
     borderWidth: 1,
-    borderColor: designSystem.colors.border,
-    borderRadius: designSystem.borderRadius.medium,
-    paddingHorizontal: designSystem.spacing.medium,
-    paddingVertical: designSystem.spacing.small,
-    fontSize: designSystem.typography.sizes.medium,
-    color: designSystem.colors.textPrimary,
-    backgroundColor: designSystem.colors.surface,
+    borderColor: Design.colors.border,
+    borderRadius: Design.borderRadius.md,
+    paddingHorizontal: Design.spacing[4],
+    paddingVertical: Design.spacing[2],
+    fontSize: Design.typography.body.fontSize,
+    color: Design.colors.text,
+    backgroundColor: Design.colors.surface,
   },
   submitButton: {
-    backgroundColor: designSystem.colors.primary,
-    paddingVertical: designSystem.spacing.medium,
-    borderRadius: designSystem.borderRadius.medium,
+    backgroundColor: Design.colors.primary,
+    paddingVertical: Design.spacing[4],
+    borderRadius: Design.borderRadius.md,
     alignItems: 'center',
   },
   submitButtonDisabled: {
-    backgroundColor: designSystem.colors.textSecondary,
+    backgroundColor: Design.colors.textSecondary,
   },
   submitButtonText: {
-    fontSize: designSystem.typography.sizes.medium,
+    fontSize: Design.typography.body.fontSize,
     fontWeight: '600',
-    color: designSystem.colors.surface,
+    color: Design.colors.surface,
   },
 });
 
