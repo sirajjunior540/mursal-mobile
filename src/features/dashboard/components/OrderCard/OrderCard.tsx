@@ -228,7 +228,7 @@ const OrderCard: React.FC<OrderCardProps> = memo(({
         </View>
 
         {/* Action Buttons */}
-        {(order.status === OrderStatus.PENDING || order.status === OrderStatus.ASSIGNED) && (
+        {(order.status === 'pending' || order.status === 'assigned') && (
           <View 
             style={styles.actionRow}
             accessibilityRole="group"

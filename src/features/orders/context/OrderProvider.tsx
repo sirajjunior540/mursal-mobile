@@ -295,8 +295,8 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
   const canAcceptOrder = useCallback((order: Order) => {
     // Check if the order can be accepted by the driver
     // Basic validation: order should be pending/assigned and not already assigned to another driver
-    const validStatuses = [OrderStatus.PENDING, OrderStatus.ASSIGNED];
-    const hasValidStatus = validStatuses.includes(order.status);
+    const validStatuses: OrderStatus[] = ['pending', 'assigned'];
+    const hasValidStatus = validStatuses.includes(order.status!);
     
     // You can add more business logic here, such as:
     // - Driver availability checks

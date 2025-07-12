@@ -139,7 +139,7 @@ export const useOrderAPI = (config: UseOrderAPIConfig) => {
       method: 'POST',
     });
 
-    logger.orderStatusChanged(orderId, 'pending', OrderStatus.ACCEPTED);
+    logger.orderStatusChanged(orderId, 'pending', 'assigned');
     return response.data;
   }, [createRequest]);
 
@@ -157,7 +157,7 @@ export const useOrderAPI = (config: UseOrderAPIConfig) => {
       body: JSON.stringify(payload),
     });
 
-    logger.orderStatusChanged(orderId, 'pending', OrderStatus.DECLINED);
+    logger.orderStatusChanged(orderId, 'pending', 'cancelled');
   }, [createRequest]);
 
   const getOrderHistory = useCallback(async (options?: OrderListOptions): Promise<Order[]> => {

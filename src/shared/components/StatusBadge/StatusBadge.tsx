@@ -32,44 +32,49 @@ const StatusBadge: React.FC<StatusBadgeProps> = memo(({
 
   const getStatusConfig = (status: string) => {
     const statusMap = {
-      [OrderStatus.PENDING]: {
+      'pending': {
         color: theme.colors.statusPending,
         label: 'Pending',
         icon: '⏳',
       },
-      [OrderStatus.ASSIGNED]: {
+      'assigned': {
         color: theme.colors.statusAccepted,
         label: 'Assigned',
         icon: '📋',
       },
-      [OrderStatus.ACCEPTED]: {
+      'confirmed': {
         color: theme.colors.statusAccepted,
-        label: 'Accepted',
+        label: 'Confirmed',
         icon: '✅',
       },
-      [OrderStatus.PICKED_UP]: {
+      'picked_up': {
         color: theme.colors.statusPickedUp,
         label: 'Picked Up',
         icon: '📦',
       },
-      [OrderStatus.IN_TRANSIT]: {
+      'in_transit': {
         color: theme.colors.statusPickedUp,
         label: 'In Transit',
         icon: '🚗',
       },
-      [OrderStatus.DELIVERED]: {
+      'delivered': {
         color: theme.colors.statusDelivered,
         label: 'Delivered',
         icon: '✅',
       },
-      [OrderStatus.CANCELLED]: {
+      'cancelled': {
         color: theme.colors.statusCancelled,
         label: 'Cancelled',
         icon: '❌',
       },
-      [OrderStatus.DECLINED]: {
+      'returned': {
         color: theme.colors.statusCancelled,
-        label: 'Declined',
+        label: 'Returned',
+        icon: '🔄',
+      },
+      'failed': {
+        color: theme.colors.statusCancelled,
+        label: 'Failed',
         icon: '❌',
       },
     };
