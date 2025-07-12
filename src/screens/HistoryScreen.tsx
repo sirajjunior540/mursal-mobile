@@ -6,7 +6,6 @@ import {
   StyleSheet,
   RefreshControl,
   TouchableOpacity,
-  Dimensions,
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -19,7 +18,6 @@ import { useDriver } from '../contexts/DriverContext';
 import { Order, OrderStatus, DriverBalance, BalanceTransaction } from '../types';
 import { apiService } from '../services/api';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 type RootStackParamList = {
   OrderDetails: { orderId: string };
