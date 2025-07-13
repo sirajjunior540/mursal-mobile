@@ -2,6 +2,7 @@
  * Simplified OrderProvider for testing the refactored structure
  */
 import React, { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react';
+import { Alert } from 'react-native';
 import { Order, OrderContextType, OrderStatus } from '../../../types';
 import { apiService } from '../../../services/api';
 import { realtimeService } from '../../../services/realtimeService';
@@ -175,6 +176,14 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
     } else {
       console.warn('⚠️ Order not found in current state with ID:', orderId);
       console.log('📋 Current orders in state:', orders.map(o => ({ id: o.id, orderNumber: o.orderNumber })));
+      
+      // Don't try to accept an order that's not in our state
+      Alert.alert(
+        'Order Not Available',
+        'This order is not available. Please refresh the order list.',
+        [{ text: 'OK' }]
+      );
+      return false;
     }
     
     try {
@@ -189,19 +198,54 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
         console.error('❌ API returned error:', response.error);
         throw new Error(response.error || 'Failed to accept order');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Failed to accept order:', error);
-      console.error('❌ Error details:', {
-        message: error instanceof Error ? error.message : String(error),
-        orderId,
-        orderExists: !!order
-      });
+      
+      // Check if it's a 404 error (order not found)
+      if (error.response?.status === 404 || error.message?.includes('404')) {
+        console.error('❌ Order not found in backend (404):', {
+          orderId,
+          orderExists: !!order,
+          message: 'Order may have been already accepted or no longer exists'
+        });
+        
+        // Remove the order from local state since it doesn't exist in backend
+        setOrders(prev => prev.filter(o => o.id !== orderId));
+        
+        // Show user-friendly error
+        Alert.alert(
+          'Order Not Available',
+          'This order is no longer available. It may have been accepted by another driver.',
+          [{ text: 'OK' }]
+        );
+      } else {
+        console.error('❌ Error details:', {
+          message: error instanceof Error ? error.message : String(error),
+          orderId,
+          orderExists: !!order,
+          status: error.response?.status
+        });
+      }
+      
       return false;
     }
   }, [orders]);
 
   const declineOrder = useCallback(async (orderId: string, reason?: string) => {
     console.log('OrderProvider: declineOrder called:', orderId, reason);
+    
+    // Check if order exists in state
+    const order = orders.find(o => o.id === orderId);
+    if (!order) {
+      console.warn('⚠️ Trying to decline order not in state:', orderId);
+      Alert.alert(
+        'Order Not Available',
+        'This order is not available. Please refresh the order list.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+    
     try {
       const response = await apiService.declineOrder(orderId, reason);
       if (response.success) {
@@ -211,11 +255,23 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
       } else {
         throw new Error(response.error || 'Failed to decline order');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Failed to decline order:', error);
-      throw error;
+      
+      // Handle 404 error
+      if (error.response?.status === 404 || error.message?.includes('404')) {
+        // Remove from local state since it doesn't exist in backend
+        setOrders(prev => prev.filter(o => o.id !== orderId));
+        Alert.alert(
+          'Order Not Available',
+          'This order is no longer available.',
+          [{ text: 'OK' }]
+        );
+      } else {
+        throw error;
+      }
     }
-  }, []);
+  }, [orders]);
 
   const updateOrderStatus = useCallback(async (deliveryId: string, status: OrderStatus): Promise<boolean> => {
     console.log('OrderProvider: updateOrderStatus called with delivery ID:', deliveryId, status);

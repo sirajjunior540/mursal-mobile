@@ -737,17 +737,16 @@ class ApiService {
       }
     }
 
-    // Use the driver ID in the URL - Django ViewSet will handle the lookup
-    const endpoint = driverId 
-      ? `/api/v1/auth/drivers/${driverId}/` 
-      : '/api/v1/auth/drivers/';
+    // For driver profile, always use the 'me' endpoint for current driver
+    // For admin operations, use the admin/drivers endpoint
+    const endpoint = '/api/v1/auth/drivers/me/';
 
     let response = await this.client.get<unknown>(endpoint);
     
-    // If we get a 404 with a specific driver ID, try fetching without ID (to get current user's profile)
-    if (!response.success && response.error?.includes('404') && driverId) {
-      console.warn('⚠️ Driver not found with ID, trying to fetch current user profile...');
-      response = await this.client.get<unknown>('/api/v1/auth/me/');
+    // If the 'me' endpoint fails, try the driver-profile endpoint as fallback
+    if (!response.success && response.error?.includes('404')) {
+      console.warn('⚠️ Driver me endpoint failed, trying driver-profile endpoint...');
+      response = await this.client.get<unknown>('/api/v1/drivers/driver-profile/');
     }
 
     // Transform backend response to match our Driver type
@@ -797,7 +796,7 @@ class ApiService {
         console.log(`✅ Got driver ID from /me/: ${driverId}`);
         
         // Update the status using the correct driver ID
-        const response = await this.client.post<void>(`/api/v1/auth/drivers/${driverId}/update_status/`, {
+        const response = await this.client.post<void>('/api/v1/auth/drivers/update_my_status/', {
           is_online: isOnline,
           is_available: isOnline,
           is_on_duty: isOnline
@@ -858,7 +857,7 @@ class ApiService {
     console.log(`🚚 Updating driver status for ID ${driverId} to ${isOnline ? 'online' : 'offline'}`);
     
     try {
-      const response = await this.client.post<void>(`/api/v1/auth/drivers/${driverId}/update_status/`, {
+      const response = await this.client.post<void>('/api/v1/auth/drivers/update_my_status/', {
         is_online: isOnline,
         is_available: isOnline,
         is_on_duty: isOnline
@@ -989,8 +988,27 @@ class ApiService {
     return response as ApiResponse<Order[]>;
   }
 
+  async debugDriverAuth(): Promise<ApiResponse<any>> {
+    console.log('🔍 Running driver authentication debug...');
+    try {
+      const response = await this.client.get<any>('/api/v1/delivery/deliveries/driver_debug/');
+      console.log('🔐 Driver debug info:', response.data);
+      return response;
+    } catch (error) {
+      console.error('❌ Driver debug failed:', error);
+      return {
+        success: false,
+        data: null,
+        error: 'Debug endpoint failed'
+      };
+    }
+  }
+
   async getDriverOrders(): Promise<ApiResponse<Order[]>> {
     console.log('📋 Fetching driver orders...');
+    
+    // First run debug to check authentication
+    await this.debugDriverAuth();
     
     // Use by_driver endpoint as primary since it has complete order data
     // Based on backend testing, this endpoint includes ASSIGNED status deliveries
@@ -1033,7 +1051,16 @@ class ApiService {
       
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      console.warn(`⚠️ by_driver endpoint failed: ${errorMessage}`);
+      console.error(`❌ by_driver endpoint failed: ${errorMessage}`);
+      
+      // Log authentication status for debugging
+      const token = await this.getValidToken();
+      console.log('🔐 Debug info:', {
+        hasToken: !!token,
+        tokenLength: token ? token.length : 0,
+        errorType: error instanceof Error ? error.constructor.name : typeof error,
+        endpoint: '/api/v1/delivery/deliveries/by_driver/'
+      });
       
       // If by_driver fails, try ongoing-deliveries as fallback (but it has incomplete data)
       if (errorMessage.includes('429') || errorMessage.includes('404') || errorMessage.includes('403')) {
@@ -2053,7 +2080,7 @@ class ApiService {
       };
     }
 
-    const endpoint = `/api/v1/auth/drivers/${driverId}/update_fcm_token/`;
+    const endpoint = '/api/v1/auth/drivers/me/update_fcm_token/';
     console.log(`🎯 Calling FCM token endpoint: ${endpoint}`);
 
     try {
@@ -2195,7 +2222,7 @@ class ApiService {
       const driverId = (cachedDriver as Driver)?.id || this.extractDriverIdFromToken(token);
       
       if (driverId) {
-        const statusResponse = await this.client.get<any>(`/api/v1/auth/drivers/${driverId}/`);
+        const statusResponse = await this.client.get<any>('/api/v1/auth/drivers/me/');
         if (statusResponse.success) {
           console.log('✅ Driver status from backend:', {
             id: statusResponse.data.id,
@@ -2235,6 +2262,9 @@ class ApiService {
    */
   async getDriverEarnings(startDate?: string, endDate?: string): Promise<ApiResponse<DriverBalance>> {
     console.log('💰 Getting driver earnings...', { startDate, endDate });
+    
+    // Debug authentication before trying earnings
+    await this.debugDriverAuth();
     
     try {
       // Try multiple possible endpoints for earnings/balance
@@ -2442,12 +2472,12 @@ class ApiService {
 
   async getDriverProfileNew(): Promise<ApiResponse<DriverProfile>> {
     console.log('👤 Fetching driver profile...');
-    return this.client.get<DriverProfile>('/api/v1/auth/driver-profile/');
+    return this.client.get<DriverProfile>('/api/v1/drivers/driver-profile/');
   }
 
   async updateDriverProfile(profile: Partial<DriverProfile>): Promise<ApiResponse<DriverProfile>> {
     console.log('💾 Updating driver profile...');
-    return this.client.put<DriverProfile>('/api/v1/auth/driver-profile/', profile);
+    return this.client.put<DriverProfile>('/api/v1/drivers/driver-profile/', profile);
   }
 }
 
@@ -2465,6 +2495,7 @@ export const deliveryApi = {
   declineDelivery: (deliveryId: string, data: DeclineDeliveryData) => apiService.declineDelivery(deliveryId, data),
   markDeliveryViewed: (deliveryId: string) => apiService.markDeliveryViewed(deliveryId),
   diagnoseMobileOrderIssue: () => apiService.diagnoseMobileOrderIssue(),
+  debugDriverAuth: () => apiService.debugDriverAuth(),
   // Batch operations
   getAvailableBatches: () => apiService.getAvailableBatches(),
   getBatchDetails: (batchId: string) => apiService.getBatchDetails(batchId),

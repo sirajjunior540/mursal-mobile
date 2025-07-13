@@ -155,25 +155,25 @@ const DashboardScreen: React.FC = () => {
     }
   }, [orderActionService, navigation]);
 
-  const handleDeclineOrder = useCallback(async (orderId: string) => {
+  const handleDeclineOrder = useCallback(async (deliveryId: string) => {
     Haptics.trigger('impactLight');
     setShowIncomingModal(false);
     
     try {
-      await declineOrder(orderId);
+      await declineOrder(deliveryId);
       Alert.alert('Order Declined', 'The order has been declined');
     } catch (error) {
       Alert.alert('Error', 'Failed to decline order');
     }
   }, [declineOrder]);
 
-  const handleSkipOrder = useCallback(async (orderId: string) => {
+  const handleSkipOrder = useCallback(async (deliveryId: string) => {
     Haptics.trigger('selection');
     setShowIncomingModal(false);
     
     try {
-      console.log('⏭️ Skipping order:', orderId);
-      const result = await orderActionService.skipOrder(orderId, {
+      console.log('⏭️ Skipping order with delivery ID:', deliveryId);
+      const result = await orderActionService.skipOrder(deliveryId, {
         showConfirmation: false,
         onSuccess: () => {
           console.log('✅ Order skipped successfully');

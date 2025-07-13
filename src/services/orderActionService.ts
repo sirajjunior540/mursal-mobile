@@ -154,7 +154,29 @@ class OrderActionService {
           message: successMessage,
         };
       } else {
-        throw new Error(response.error || 'Failed to skip order');
+        // Handle specific backend responses for already processed orders
+        const errorMessage = response.error || 'Failed to skip order';
+        if (errorMessage.includes('Already accepted') || errorMessage.includes('Already declined')) {
+          // This is not really an error - the order has already been processed
+          const message = errorMessage.includes('accepted') 
+            ? 'Order already accepted - cannot skip' 
+            : 'Order already processed';
+          
+          if (showConfirmation) {
+            Alert.alert('Order Status', message, [
+              { text: 'OK', onPress: onSuccess }
+            ]);
+          } else {
+            onSuccess?.();
+          }
+          
+          return {
+            success: true, // Treat as success since the order is already processed
+            message: message,
+          };
+        }
+        
+        throw new Error(errorMessage);
       }
     } catch (error: any) {
       console.error('❌ Error skipping order:', error);
