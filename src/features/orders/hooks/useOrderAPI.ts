@@ -2,8 +2,26 @@
  * Order API hooks with proper error handling and caching
  */
 import { useCallback, useRef } from 'react';
-import { logger } from '../../../infrastructure/logging/logger';
-import { Order, OrderStatus, ApiResponse, OrderListOptions } from '../../../shared/types';
+import { Order, OrderStatus } from '../../../types';
+
+interface ApiResponse<T = unknown> {
+  success: boolean;
+  data: T;
+  error?: string;
+}
+
+interface OrderListOptions {
+  filters?: {
+    status?: OrderStatus[];
+    priority?: string[];
+    date_range?: {
+      start: string;
+      end: string;
+    };
+  };
+  page?: number;
+  limit?: number;
+}
 
 interface UseOrderAPIConfig {
   baseURL: string;
@@ -13,12 +31,12 @@ interface UseOrderAPIConfig {
 
 export const useOrderAPI = (config: UseOrderAPIConfig) => {
   const { baseURL, getAuthToken, onError } = config;
-  const abortControllerRef = useRef<AbortController>();
+  const abortControllerRef = useRef<AbortController | undefined>(undefined);
 
-  const createRequest = useCallback(async (
+  const createRequest = useCallback(async <T = unknown>(
     endpoint: string,
     options: RequestInit = {}
-  ): Promise<ApiResponse> => {
+  ): Promise<ApiResponse<T>> => {
     try {
       // Cancel previous request if still pending
       if (abortControllerRef.current) {
@@ -44,7 +62,7 @@ export const useOrderAPI = (config: UseOrderAPIConfig) => {
         signal: abortControllerRef.current.signal,
       };
 
-      logger.apiRequest(options.method || 'GET', url, options.body);
+      console.log(`API Request: ${options.method || 'GET'} ${url}`, options.body);
 
       const response = await fetch(url, requestConfig);
       
@@ -55,7 +73,7 @@ export const useOrderAPI = (config: UseOrderAPIConfig) => {
         data = await response.json();
       }
 
-      logger.apiResponse(options.method || 'GET', url, response.status, data);
+      console.log(`API Response: ${options.method || 'GET'} ${url} ${response.status}`, data);
 
       if (!response.ok) {
         throw new Error(data?.message || `HTTP ${response.status}`);
@@ -65,19 +83,31 @@ export const useOrderAPI = (config: UseOrderAPIConfig) => {
         success: true,
         data,
       };
-    } catch (error: any) {
-      if (error.name === 'AbortError') {
-        logger.debug('Request aborted');
-        throw error;
-      }
+    } catch (error) {
+      if (error instanceof Error) {
+        if (error.name === 'AbortError') {
+          console.log('Request aborted');
+          throw error;
+        }
 
-      logger.apiError(options.method || 'GET', endpoint, error);
-      
-      if (onError) {
-        onError(error);
+        console.error(`API Error: ${options.method || 'GET'} ${endpoint}`, error);
+        
+        if (onError) {
+          onError(error);
+        }
+        
+        throw error;
+      } else {
+        // Handle non-Error objects
+        const genericError = new Error('An unknown error occurred');
+        console.error(`API Error: ${options.method || 'GET'} ${endpoint}`, error);
+        
+        if (onError) {
+          onError(genericError);
+        }
+        
+        throw genericError;
       }
-      
-      throw error;
     }
   }, [baseURL, getAuthToken, onError]);
 
@@ -101,13 +131,13 @@ export const useOrderAPI = (config: UseOrderAPIConfig) => {
     }
 
     const endpoint = `/orders/active${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-    const response = await createRequest(endpoint);
+    const response = await createRequest<Order[]>(endpoint);
     
     return response.data || [];
   }, [createRequest]);
 
   const getOrderDetails = useCallback(async (orderId: string): Promise<Order> => {
-    const response = await createRequest(`/orders/${orderId}`);
+    const response = await createRequest<Order>(`/orders/${orderId}`);
     return response.data;
   }, [createRequest]);
 
@@ -125,21 +155,21 @@ export const useOrderAPI = (config: UseOrderAPIConfig) => {
       timestamp: new Date().toISOString(),
     };
 
-    const response = await createRequest(`/orders/${orderId}/status`, {
+    const response = await createRequest<Order>(`/orders/${orderId}/status`, {
       method: 'PATCH',
       body: JSON.stringify(payload),
     });
 
-    logger.orderStatusChanged(orderId, 'unknown', status);
+    console.log(`Order status changed: ${orderId} -> ${status}`);
     return response.data;
   }, [createRequest]);
 
   const acceptOrder = useCallback(async (orderId: string): Promise<Order> => {
-    const response = await createRequest(`/orders/${orderId}/accept`, {
+    const response = await createRequest<Order>(`/orders/${orderId}/accept`, {
       method: 'POST',
     });
 
-    logger.orderStatusChanged(orderId, 'pending', 'assigned');
+    console.log(`Order accepted: ${orderId} pending -> assigned`);
     return response.data;
   }, [createRequest]);
 
@@ -157,7 +187,7 @@ export const useOrderAPI = (config: UseOrderAPIConfig) => {
       body: JSON.stringify(payload),
     });
 
-    logger.orderStatusChanged(orderId, 'pending', 'cancelled');
+    console.log(`Order declined: ${orderId} pending -> cancelled`);
   }, [createRequest]);
 
   const getOrderHistory = useCallback(async (options?: OrderListOptions): Promise<Order[]> => {
@@ -177,7 +207,7 @@ export const useOrderAPI = (config: UseOrderAPIConfig) => {
     }
 
     const endpoint = `/orders/history${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-    const response = await createRequest(endpoint);
+    const response = await createRequest<Order[]>(endpoint);
     
     return response.data || [];
   }, [createRequest]);
@@ -187,12 +217,20 @@ export const useOrderAPI = (config: UseOrderAPIConfig) => {
     imageUri: string,
     signature?: string
   ): Promise<void> => {
+    // Define proper type for React Native file upload
+    interface FileUpload {
+      uri: string;
+      type: string;
+      name: string;
+    }
+
     const formData = new FormData();
-    formData.append('delivery_proof', {
+    const file: FileUpload = {
       uri: imageUri,
       type: 'image/jpeg',
       name: `delivery_${orderId}_${Date.now()}.jpg`,
-    } as any);
+    };
+    formData.append('delivery_proof', file as unknown as Blob);
     
     if (signature) {
       formData.append('signature', signature);

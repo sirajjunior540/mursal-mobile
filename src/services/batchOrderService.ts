@@ -1,6 +1,7 @@
 /**
- * Batch Order Service for mobile app
- * Handles step-based batch order operations following industry best practices
+ * Batch Service for mobile app
+ * Updated to work with unified Batch model supporting all operational modes
+ * Handles batch operations, driver assignments, and status updates
  */
 
 import { ApiResponse } from '../types';
@@ -11,6 +12,19 @@ import {
   BatchAcceptResponse,
   BatchStatus 
 } from '../shared/types/order.types';
+
+// New batch operation types for unified system
+interface BatchDriverAssignment {
+  driver_id: number;
+}
+
+interface BatchStatusUpdate {
+  status: string;
+}
+
+interface DeliveryStatusUpdate {
+  status: string;
+}
 import { apiService } from './api';
 
 interface BatchOrderTransformer {
@@ -24,7 +38,7 @@ class BatchOrderTransformerImpl implements BatchOrderTransformer {
       id: backendData.id || '',
       batch_number: backendData.batch_number || '',
       name: backendData.name || '',
-      status: backendData.status as BatchStatus || BatchStatus.DRAFT,
+      status: this.mapBackendStatus(backendData.status) || BatchStatus.DRAFT,
       customer_id: backendData.customer || backendData.customer_id || '',
       total_orders: backendData.total_orders || backendData.orders?.length || 0,
       total_items: backendData.total_items || this.calculateTotalItems(backendData.orders),
@@ -177,6 +191,33 @@ class BatchOrderTransformerImpl implements BatchOrderTransformer {
       return total + (order.items?.length || 0);
     }, 0);
   }
+
+  // Map backend status to mobile app status
+  private mapBackendStatus(backendStatus: string): BatchStatus {
+    const statusMap: { [key: string]: BatchStatus } = {
+      'batch_created': BatchStatus.DRAFT,
+      'ready_for_pickup': BatchStatus.READY_FOR_PICKUP,
+      'driver_assigned': BatchStatus.SUBMITTED,
+      'picked_up': BatchStatus.COLLECTED,
+      'at_local_warehouse': BatchStatus.AT_WAREHOUSE,
+      'out_for_delivery': BatchStatus.FINAL_DELIVERY,
+      'arrived_at_wh_1': BatchStatus.AT_WAREHOUSE,
+      'departed_wh_1': BatchStatus.WAREHOUSE_PROCESSING,
+      'arrived_at_wh_2': BatchStatus.AT_WAREHOUSE,
+      'consolidated_at_wh_x': BatchStatus.WAREHOUSE_PROCESSING,
+      'delivered': BatchStatus.COMPLETED,
+      'completed': BatchStatus.COMPLETED,
+      'cancelled': BatchStatus.CANCELLED,
+      // Legacy statuses
+      'draft': BatchStatus.DRAFT,
+      'step1_complete': BatchStatus.DRAFT,
+      'step2_complete': BatchStatus.DRAFT,
+      'step3_complete': BatchStatus.DRAFT,
+      'submitted': BatchStatus.SUBMITTED
+    };
+    
+    return statusMap[backendStatus] || BatchStatus.DRAFT;
+  }
 }
 
 export class BatchOrderService {
@@ -193,36 +234,18 @@ export class BatchOrderService {
     try {
       console.log('📦 Fetching available batch orders...');
       
-      // Try the step-based batch API first
-      const stepBasedResponse = await apiService.get<any[]>('/api/v1/delivery/step-based/batches/list/');
+      // Use unified batch API
+      const response = await apiService.get<any[]>('/api/v1/delivery/batches/?status=ready_for_pickup,driver_assigned');
       
-      if (stepBasedResponse.success && stepBasedResponse.data) {
-        const batchOrders = stepBasedResponse.data
-          .filter(batch => batch.status === 'submitted' || batch.status === 'ready_for_pickup')
+      if (response.success && response.data) {
+        const batchOrders = response.data
           .map(batch => this.transformer.transformFromBackend(batch));
         
-        console.log(`✅ Found ${batchOrders.length} available batch orders via step-based API`);
+        console.log(`✅ Found ${batchOrders.length} available batches via unified API`);
         return {
           success: true,
           data: batchOrders,
-          message: stepBasedResponse.message
-        };
-      }
-      
-      // Fallback to regular batch orders API
-      console.log('🔄 Falling back to regular batch orders API...');
-      const regularResponse = await apiService.get<any[]>('/api/v1/delivery/batch-orders/');
-      
-      if (regularResponse.success && regularResponse.data) {
-        const batchOrders = regularResponse.data
-          .filter(batch => batch.status === 'ready_for_pickup')
-          .map(batch => this.transformer.transformFromBackend(batch));
-        
-        console.log(`✅ Found ${batchOrders.length} available batch orders via regular API`);
-        return {
-          success: true,
-          data: batchOrders,
-          message: regularResponse.message
+          message: response.message
         };
       }
       
@@ -1036,6 +1059,118 @@ export class BatchOrderService {
         data: [],
         error: error instanceof Error ? error.message : 'Failed to fetch driver batch orders'
       };
+    }
+  }
+
+  // === NEW UNIFIED BATCH OPERATIONS ===
+
+  /**
+   * Update batch status using centralized routing
+   */
+  async updateBatchStatus(batchId: string, status: string): Promise<ApiResponse<any>> {
+    try {
+      console.log(`📦 Updating batch ${batchId} status to ${status}`);
+      
+      const response = await apiService.post<any>(
+        `/api/v1/delivery/batches/${batchId}/update_status/`,
+        { status }
+      );
+      
+      if (response.success) {
+        console.log(`✅ Batch status updated successfully`);
+      }
+      
+      return response;
+    } catch (error) {
+      console.error('❌ Error updating batch status:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to update batch status'
+      };
+    }
+  }
+
+  /**
+   * Update delivery status using centralized routing
+   */
+  async updateDeliveryStatus(deliveryId: string, status: string): Promise<ApiResponse<any>> {
+    try {
+      console.log(`🚚 Updating delivery ${deliveryId} status to ${status}`);
+      
+      const response = await apiService.post<any>(
+        `/api/v1/delivery/deliveries/${deliveryId}/update_status_centralized/`,
+        { status }
+      );
+      
+      if (response.success) {
+        console.log(`✅ Delivery status updated successfully`);
+      }
+      
+      return response;
+    } catch (error) {
+      console.error('❌ Error updating delivery status:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to update delivery status'
+      };
+    }
+  }
+
+  /**
+   * Get batch tracking information
+   */
+  async getBatchTracking(batchId: string): Promise<ApiResponse<any>> {
+    try {
+      console.log(`📍 Fetching tracking for batch ${batchId}`);
+      
+      const response = await apiService.get<any>(
+        `/api/v1/delivery/batches/${batchId}/tracking/`
+      );
+      
+      return response;
+    } catch (error) {
+      console.error('❌ Error fetching batch tracking:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to fetch batch tracking'
+      };
+    }
+  }
+
+  /**
+   * Get batch operational mode and workflow
+   */
+  async getBatchOperationalMode(batchId: string): Promise<ApiResponse<any>> {
+    try {
+      console.log(`🔍 Fetching operational mode for batch ${batchId}`);
+      
+      const response = await apiService.get<any>(
+        `/api/v1/delivery/batches/${batchId}/operational_mode/`
+      );
+      
+      return response;
+    } catch (error) {
+      console.error('❌ Error fetching batch operational mode:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to fetch operational mode'
+      };
+    }
+  }
+
+  /**
+   * Check if batch requires network operations
+   */
+  private async isNetworkBatch(batchId: string): Promise<boolean> {
+    try {
+      const response = await this.getBatchOperationalMode(batchId);
+      if (response.success && response.data) {
+        return response.data.operational_mode === 'NETWORK';
+      }
+      return false;
+    } catch (error) {
+      console.error('❌ Error checking if batch is network batch:', error);
+      return false;
     }
   }
 }

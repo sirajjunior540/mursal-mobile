@@ -24,11 +24,13 @@ import Haptics from 'react-native-haptic-feedback';
 import Card from '../components/ui/Card';
 import OrderDetailsModal from '../components/OrderDetailsModal';
 import FloatingQRButton from '../components/FloatingQRButton';
+import EnhancedOrderCard from '../components/EnhancedOrderCard';
+import BatchOrderCard from '../components/BatchOrderCard';
 
 import { useOrders } from '../features/orders/context/OrderProvider';
 import { useDriver } from '../contexts/DriverContext';
 import { useAuth } from '../contexts/AuthContext';
-import { Order } from '../types';
+import { Order, BatchOrder, isBatchOrder } from '../types';
 import { locationService } from '../services/locationService';
 import { apiService } from '../services/api';
 
@@ -326,6 +328,10 @@ const RouteNavigationScreen: React.FC = () => {
       order && order.status === 'delivered'
     );
     
+    // Separate batch orders for special handling
+    const batchOrders = orders.filter(order => isBatchOrder(order));
+    const regularOrders = orders.filter(order => !isBatchOrder(order));
+    
     // Build optimized route that interleaves pickups and deliveries based on proximity
     const pendingPickups = [...ordersToPickup];
     const pendingDeliveries = [...ordersToDeliver];
@@ -482,18 +488,30 @@ const RouteNavigationScreen: React.FC = () => {
   const transformBackendRoute = useCallback((backendRouteData: any): OptimizedRoute => {
     const routeSteps = Array.isArray(backendRouteData?.route_steps) ? backendRouteData.route_steps : [];
     
-    const points: RoutePoint[] = routeSteps.map((step: any, index: number) => ({
-      id: `${step.delivery_id || index}-${step.action || 'unknown'}`,
-      order: (routeOrders || []).find(o => o.id === step.delivery_id) || {} as Order,
-      latitude: step.latitude || 0,
-      longitude: step.longitude || 0,
-      address: step.address || '',
-      type: step.action === 'pickup' ? 'pickup' : 'delivery',
-      sequenceNumber: index + 1,
-      estimatedArrival: step.estimated_arrival || '',
-      distanceFromPrevious: step.distance_from_previous || 0,
-      timeFromPrevious: step.time_from_previous || 0,
-    }));
+    const points: RoutePoint[] = routeSteps
+      .map((step: any, index: number) => {
+        const order = (routeOrders || []).find(o => o.id === step.delivery_id);
+        
+        // Skip this route point if the order is not found
+        if (!order || !order.id) {
+          console.warn(`⚠️ Order not found for delivery_id: ${step.delivery_id}, skipping route point`);
+          return null;
+        }
+        
+        return {
+          id: `${step.delivery_id || index}-${step.action || 'unknown'}`,
+          order: order,
+          latitude: step.latitude || 0,
+          longitude: step.longitude || 0,
+          address: step.address || '',
+          type: step.action === 'pickup' ? 'pickup' : 'delivery',
+          sequenceNumber: index + 1,
+          estimatedArrival: step.estimated_arrival || '',
+          distanceFromPrevious: step.distance_from_previous || 0,
+          timeFromPrevious: step.time_from_previous || 0,
+        };
+      })
+      .filter((point): point is RoutePoint => point !== null); // Remove null entries
 
     return {
       points,

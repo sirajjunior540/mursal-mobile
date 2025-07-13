@@ -2,10 +2,10 @@
  * Enhanced OrderCard component with accessibility and performance optimizations
  */
 import React, { memo, useCallback, useRef } from 'react';
-import { View, Text, Animated, TouchableOpacity, GestureResponderEvent } from 'react-native';
+import { View, Text, Animated, GestureResponderEvent } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import Haptics from 'react-native-haptic-feedback';
-import { Order, OrderStatus, getDeliveryIdForApi } from '../../../../shared/types';
+import { Order, getDeliveryIdForApi } from '../../../../types';
 import { theme } from '../../../../shared/styles/theme';
 import Card from '../../../../shared/components/Card/Card';
 import StatusBadge from '../../../../shared/components/StatusBadge/StatusBadge';
@@ -96,8 +96,8 @@ const OrderCard: React.FC<OrderCardProps> = memo(({
   }, []);
 
   const estimatedDeliveryTime = order.estimated_delivery_time || '30 min';
-  const customerName = order.customer?.name || 'Unknown Customer';
-  const deliveryAddress = order.delivery_address || order.delivery_location?.address || 'No address provided';
+  const customerName = order.customer_details?.name || 'Unknown Customer';
+  const deliveryAddress = order.delivery_address || 'No address provided';
 
   return (
     <Animated.View
@@ -128,14 +128,14 @@ const OrderCard: React.FC<OrderCardProps> = memo(({
             </Text>
             <Text 
               style={styles.orderTime}
-              accessibilityLabel={`Created at ${formatTime(order.created_at)}`}
+              accessibilityLabel={`Created at ${order.created_at ? formatTime(order.created_at.toString()) : 'Unknown'}`}
             >
-              {formatTime(order.created_at)}
+              {order.created_at ? formatTime(order.created_at.toString()) : 'Unknown'}
             </Text>
           </View>
           
           <StatusBadge 
-            status={order.status} 
+            status={order.status || 'pending'} 
             size="small"
             accessibilityLabel={`Order status: ${order.status}`}
           />
@@ -178,7 +178,6 @@ const OrderCard: React.FC<OrderCardProps> = memo(({
         {/* Order Metrics */}
         <View 
           style={styles.metricsRow}
-          accessibilityRole="group"
           accessibilityLabel="Order details"
         >
           <View style={styles.metric}>
@@ -186,7 +185,6 @@ const OrderCard: React.FC<OrderCardProps> = memo(({
               name="time-outline" 
               size={16} 
               color={theme.colors.textSecondary}
-              accessibilityHidden
             />
             <Text 
               style={styles.metricText}
@@ -201,7 +199,6 @@ const OrderCard: React.FC<OrderCardProps> = memo(({
               name="location-outline" 
               size={16} 
               color={theme.colors.textSecondary}
-              accessibilityHidden
             />
             <Text 
               style={styles.metricText}
@@ -216,7 +213,6 @@ const OrderCard: React.FC<OrderCardProps> = memo(({
               name="cash-outline" 
               size={16} 
               color={theme.colors.textSecondary}
-              accessibilityHidden
             />
             <Text 
               style={styles.metricText}
@@ -231,7 +227,6 @@ const OrderCard: React.FC<OrderCardProps> = memo(({
         {(order.status === 'pending' || order.status === 'assigned') && (
           <View 
             style={styles.actionRow}
-            accessibilityRole="group"
             accessibilityLabel="Order actions"
           >
             <Button

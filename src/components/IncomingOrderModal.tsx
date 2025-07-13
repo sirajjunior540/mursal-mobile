@@ -12,7 +12,7 @@ import {
   ScrollView,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { Order, extractOrderApiIds, getOrderDisplayId } from '../types';
+import { Order, BatchOrder, extractOrderApiIds, getOrderDisplayId, isBatchOrder as checkIsBatchOrder, getBatchProperties } from '../types';
 import { /* COLORS, FONTS */ } from '../constants';
 import { haptics } from '../utils/haptics';
 import { soundService } from '../services/soundService';
@@ -20,15 +20,6 @@ import { notificationService } from '../services/notificationService';
 import { Design } from '../constants/designSystem';
 
 const { /* width: SCREEN_WIDTH, */ height: SCREEN_HEIGHT } = Dimensions.get('window');
-
-interface BatchOrder extends Order {
-  isBatch?: boolean;
-  batchId?: string;
-  batchSize?: number;
-  orders?: Order[];
-  consolidationWarehouseId?: string;
-  finalDeliveryAddress?: string;
-}
 
 interface IncomingOrderModalProps {
   visible: boolean;
@@ -74,34 +65,29 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
   const [wasInBackground, setWasInBackground] = useState(false);
   
   // Check if this is a batch order
-  const isBatchOrder = order && (
-    (order && typeof order === 'object' && 'isBatch' in order && order.isBatch) || 
-    (order && typeof order === 'object' && 'batchSize' in order && order.batchSize && order.batchSize > 1) ||
-    (order && typeof order === 'object' && 'orders' in order && order.orders && order.orders.length > 1)
-  );
-  
-  const batchOrder = order as BatchOrder;
+  const isBatchOrder = order && checkIsBatchOrder(order);
+  const batchProperties = order ? getBatchProperties(order) : null;
 
   // Generate route stops for batch orders
   const routeStops = React.useMemo(() => {
-    if (!isBatchOrder || !batchOrder) return [];
+    if (!isBatchOrder || !batchProperties || !order) return [];
     
     const stops = [];
     
     // Add pickup stop(s)
-    if (batchOrder.pickup_address) {
+    if (order.pickup_address) {
       stops.push({
-        id: `pickup-${batchOrder.id}`,
+        id: `pickup-${order.id}`,
         type: 'pickup' as const,
-        address: batchOrder.pickup_address,
-        orderNumber: batchOrder.order_number,
-        customerName: batchOrder.customer_details?.name
+        address: order.pickup_address,
+        orderNumber: order.order_number,
+        customerName: order.customer_details?.name
       });
     }
     
     // Add delivery stops
-    if (batchOrder.orders && batchOrder.orders.length > 0) {
-      batchOrder.orders.forEach(batchOrderItem => {
+    if (batchProperties.orders && batchProperties.orders.length > 0) {
+      batchProperties.orders.forEach(batchOrderItem => {
         if (batchOrderItem.delivery_address) {
           stops.push({
             id: `delivery-${batchOrderItem.id}`,
@@ -112,19 +98,19 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
           });
         }
       });
-    } else if (batchOrder.delivery_address) {
+    } else if (order.delivery_address) {
       // Single delivery for consolidated orders
       stops.push({
-        id: `delivery-${batchOrder.id}`,
+        id: `delivery-${order.id}`,
         type: 'delivery' as const,
-        address: batchOrder.delivery_address || '',
-        orderNumber: batchOrder.order_number,
-        customerName: batchOrder.customer_details?.name
+        address: order.delivery_address || '',
+        orderNumber: order.order_number,
+        customerName: order.customer_details?.name
       });
     }
     
     return stops;
-  }, [isBatchOrder, batchOrder]);
+  }, [isBatchOrder, batchProperties, order]);
 
   // Start countdown timer
   const startTimer = useCallback(() => {
@@ -200,13 +186,13 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
     
     if (isBatchOrder && onAcceptRoute) {
       // For batch orders, accept the entire route
-      console.log('✅ Driver accepted batch/route:', batchOrder.batchId || order.id);
-      onAcceptRoute(batchOrder.batchId || order.id);
+      console.log('✅ Driver accepted batch/route:', batchProperties?.batchId || order.id);
+      onAcceptRoute(batchProperties?.batchId || order.id);
     } else {
       console.log('✅ Driver accepted order:', order.id);
       onAccept(order.id);
     }
-  }, [order, stopTimer, stopRinging, isBatchOrder, onAcceptRoute, batchOrder, onAccept]);
+  }, [order, stopTimer, stopRinging, isBatchOrder, onAcceptRoute, batchProperties, onAccept]);
 
   const handleDecline = useCallback(() => {
     if (!order) return;
@@ -336,7 +322,7 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
       stopTimer();
       stopRinging();
     }
-  }, [visible, order, startTimer, stopTimer, startRinging, stopRinging, isBatchOrder, batchOrder]);
+  }, [visible, order, startTimer, stopTimer, startRinging, stopRinging, isBatchOrder, batchProperties]);
 
   if (!order) return null;
 
@@ -345,9 +331,9 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
   const estimatedTime = order.estimated_delivery_time || '15 min';
   
   // Calculate batch totals
-  const batchTotalOrders = isBatchOrder ? (batchOrder.batchSize || batchOrder.orders?.length || 1) : 1;
-  const batchTotalAmount = isBatchOrder && batchOrder.orders ? 
-    batchOrder.orders.reduce((sum, o) => sum + (Number(o.total) || 0), 0) : 
+  const batchTotalOrders = isBatchOrder ? (batchProperties?.orders?.length || 1) : 1;
+  const batchTotalAmount = isBatchOrder && batchProperties?.orders ? 
+    batchProperties.orders.reduce((sum, o) => sum + (Number(o.total) || 0), 0) : 
     (Number(order.total) || 0);
   const totalDeliveryStops = routeStops.filter(stop => stop.type === 'delivery').length;
   const totalPickupStops = routeStops.filter(stop => stop.type === 'pickup').length;
@@ -450,7 +436,7 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
           {/* Order Summary */}
           <ScrollView style={styles.orderSummary} showsVerticalScrollIndicator={false}>
             <Text style={styles.orderNumber}>
-              {isBatchOrder ? `Route #${batchOrder.batchId || getOrderDisplayId(order)}` : getOrderDisplayId(order)}
+              {isBatchOrder ? `Route #${batchProperties?.batchId || getOrderDisplayId(order)}` : getOrderDisplayId(order)}
             </Text>
             
             {!isBatchOrder ? (

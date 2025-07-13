@@ -2,13 +2,25 @@
  * StatusBadge component for displaying order and delivery statuses
  */
 import React, { memo } from 'react';
-import { View, Text, ViewStyle, TextStyle } from 'react-native';
+import { View, Text, ViewStyle, TextStyle, AccessibilityRole } from 'react-native';
 import { theme } from '../../styles/theme';
-import { BaseComponentProps, OrderStatus } from '../../types';
+import { BaseComponentProps } from '../../types';
 import { createStatusBadgeStyles } from './StatusBadge.styles';
 
+// Define valid status types
+type StatusType = 
+  | 'pending' 
+  | 'assigned'
+  | 'confirmed'
+  | 'picked_up' 
+  | 'in_transit' 
+  | 'delivered' 
+  | 'cancelled'
+  | 'returned'
+  | 'failed';
+
 export interface StatusBadgeProps extends BaseComponentProps {
-  status: OrderStatus | string;
+  status: StatusType | string;
   size?: 'small' | 'medium' | 'large';
   variant?: 'filled' | 'outlined' | 'subtle';
   style?: ViewStyle;
@@ -26,12 +38,12 @@ const StatusBadge: React.FC<StatusBadgeProps> = memo(({
   testID,
   accessibilityLabel,
   accessibilityHint,
-  accessibilityRole = 'text',
+  accessibilityRole,
 }) => {
   const styles = createStatusBadgeStyles(theme);
 
-  const getStatusConfig = (status: string) => {
-    const statusMap = {
+  const getStatusConfig = (statusValue: string) => {
+    const statusMap: Record<string, { color: string; label: string; icon: string }> = {
       'pending': {
         color: theme.colors.statusPending,
         label: 'Pending',
@@ -79,9 +91,9 @@ const StatusBadge: React.FC<StatusBadgeProps> = memo(({
       },
     };
 
-    return statusMap[status as OrderStatus] || {
+    return statusMap[statusValue] || {
       color: theme.colors.gray500,
-      label: status.charAt(0).toUpperCase() + status.slice(1),
+      label: statusValue.charAt(0).toUpperCase() + statusValue.slice(1),
       icon: '📄',
     };
   };
@@ -112,18 +124,16 @@ const StatusBadge: React.FC<StatusBadgeProps> = memo(({
   };
 
   const getTextStyle = () => {
-    const baseStyle = [
+    const baseStyle: TextStyle[] = [
       styles.text,
-      styles[`${size}Text`],
+      styles[`${size}Text`] as TextStyle,
     ];
 
-    if (variant === 'filled') {
-      baseStyle.push({ color: theme.colors.white });
-    } else {
-      baseStyle.push({ color: statusConfig.color });
-    }
+    const colorStyle: TextStyle = variant === 'filled' 
+      ? { color: theme.colors.white }
+      : { color: statusConfig.color };
 
-    return [...baseStyle, textStyle];
+    return [...baseStyle, colorStyle, textStyle].filter(Boolean);
   };
 
   const formatLabel = (label: string) => {
@@ -136,7 +146,7 @@ const StatusBadge: React.FC<StatusBadgeProps> = memo(({
       testID={testID}
       accessibilityLabel={accessibilityLabel || statusConfig.label}
       accessibilityHint={accessibilityHint}
-      accessibilityRole={accessibilityRole}
+      accessibilityRole={accessibilityRole as AccessibilityRole}
     >
       {showIcon && (
         <Text style={[styles.icon, styles[`${size}Icon`]]}>

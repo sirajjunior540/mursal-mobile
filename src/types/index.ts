@@ -194,14 +194,19 @@ export interface Order {
   // Additional constraints
   requires_signature?: boolean;
   
-  // Batch order support
-  isBatch?: boolean;
-  batchId?: string;
-  batchSize?: number;
-  consolidationWarehouseId?: string;
-  finalDeliveryAddress?: string;
-  finalDeliveryLatitude?: number;
-  finalDeliveryLongitude?: number;
+  // Batch order support - based on actual API response
+  current_batch?: {
+    id: string;
+    batch_number: string;
+    name: string;
+    status: string;
+    batch_type: string;
+  } | null;
+  consolidation_warehouse_id?: string;
+  consolidation_batch_id?: string;
+  final_delivery_address?: string;
+  final_delivery_latitude?: number;
+  final_delivery_longitude?: number;
   
   // Distance tracking
   distance?: number;
@@ -222,8 +227,14 @@ export interface Order {
 
 // Extended interface for batch orders
 export interface BatchOrder extends Order {
-  isBatch: true;
-  orders?: Order[]; // Individual orders in the batch
+  current_batch: {
+    id: string;
+    batch_number: string;
+    name: string;
+    status: string;
+    batch_type: string;
+    orders?: Order[]; // Individual orders in the batch
+  };
   warehouseInfo?: {
     id: string;
     name: string;
@@ -389,6 +400,50 @@ export const getDeliveryIdForApi = (order: Order): string => order.id;
  */
 export const getOrderDisplayId = (order: Order): string => {
   return order.order_number || `#${order.id}`;
+};
+
+/**
+ * Type guard to check if an order is a batch order
+ * @param order The order object to check
+ * @returns true if the order is a batch order
+ */
+export const isBatchOrder = (order: Order): order is BatchOrder => {
+  return Boolean(order.current_batch);
+};
+
+/**
+ * Safely get batch properties from an order
+ * @param order The order object
+ * @returns Batch properties if it's a batch order, null otherwise
+ */
+export const getBatchProperties = (order: Order) => {
+  if (!isBatchOrder(order)) {
+    return null;
+  }
+  
+  return {
+    batchId: order.current_batch.id,
+    batchNumber: order.current_batch.batch_number,
+    batchName: order.current_batch.name,
+    batchStatus: order.current_batch.status,
+    batchType: order.current_batch.batch_type,
+    orders: order.current_batch.orders,
+    warehouseInfo: order.warehouseInfo,
+    routingStrategy: order.routingStrategy,
+    batchMetadata: order.batchMetadata,
+    consolidationWarehouseId: order.consolidation_warehouse_id,
+    consolidationBatchId: order.consolidation_batch_id,
+    finalDeliveryAddress: order.final_delivery_address
+  };
+};
+
+/**
+ * Backwards compatibility: Get orders from a batch order
+ * @param batchOrder The batch order object
+ * @returns Array of orders in the batch
+ */
+export const getBatchOrders = (batchOrder: BatchOrder): Order[] => {
+  return batchOrder.current_batch.orders || [];
 };
 
 // Theme Types
