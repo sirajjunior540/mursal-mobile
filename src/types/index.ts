@@ -39,11 +39,14 @@ export interface Driver {
   id: string;
   firstName: string;
   lastName: string;
+  name?: string; // Added for compatibility
   email: string;
   phone: string;
   rating: number;
   totalDeliveries: number;
   isOnline: boolean;
+  isAvailable?: boolean; // Added for compatibility
+  status?: string; // Added for compatibility
   profileImage?: string;
   vehicleInfo?: {
     type: string;
@@ -150,6 +153,7 @@ export interface Order {
   id: string; // This is actually the DELIVERY ID - confusing but necessary for compatibility
   
   order_number?: string; // Match backend snake_case
+  customer?: Customer; // Added for compatibility
   customer_details?: Customer; // Match backend field name
   items?: OrderItem[];
   delivery_address?: string; // Match backend field name (string)

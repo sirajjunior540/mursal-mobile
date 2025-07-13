@@ -1,9 +1,18 @@
 
+/* eslint-disable no-console */
+// eslint-disable-next-line react-native/split-platform-components
 import { Platform, PermissionsAndroid, Alert } from 'react-native';
 
+// Extend global to include fcmToken
+declare global {
+  // eslint-disable-next-line no-var
+  var fcmToken: string | undefined;
+}
+
 // Conditional Firebase messaging import with fallback
-let messaging: any = null;
+let messaging: typeof import('@react-native-firebase/messaging').default | null = null;
 try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
   messaging = require('@react-native-firebase/messaging').default;
 } catch (e) {
   console.warn('Firebase messaging not available - notification permissions will be limited');
@@ -274,11 +283,11 @@ export const checkCameraPermissions = async (): Promise<boolean> => {
 export const showCameraPermissionGuide = () => {
   Alert.alert(
     'Camera Permission Required',
-    'To scan QR codes for order verification, please enable camera access:\n\n' +
-    (Platform.OS === 'ios' 
-      ? '1. Go to Settings > Privacy & Security > Camera\n2. Find Mursal Driver and toggle ON'
-      : '1. Go to Settings > Apps > Mursal Driver\n2. Tap Permissions\n3. Enable Camera access'
-    ),
+    `To scan QR codes for order verification, please enable camera access:\n\n${
+      Platform.OS === 'ios' 
+        ? '1. Go to Settings > Privacy & Security > Camera\n2. Find Mursal Driver and toggle ON'
+        : '1. Go to Settings > Apps > Mursal Driver\n2. Tap Permissions\n3. Enable Camera access'
+    }`,
     [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Open Settings', onPress: () => {

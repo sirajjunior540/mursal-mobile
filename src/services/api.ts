@@ -47,6 +47,8 @@ export interface BackendDelivery {
   customer_email?: string;
   customer?: BackendCustomer;
   customer_details?: BackendCustomer;
+  batch_id?: string;
+  batch?: BackendBatch;
 }
 
 export interface BackendOrder {
@@ -86,6 +88,22 @@ export interface BackendOrder {
   tax?: string | number;
   total?: string | number;
   scheduled_delivery_time?: string;
+  current_batch_id?: string;
+  current_batch?: {
+    id: string;
+    batch_number: string;
+    name: string;
+    status: string;
+    batch_type: string;
+  } | null;
+  batch_id?: string;
+  batchSize?: number;
+  orders?: BackendOrder[];
+  consolidation_warehouse_id?: string;
+  consolidation_batch_id?: string;
+  final_delivery_address?: string;
+  final_delivery_latitude?: string | number;
+  final_delivery_longitude?: string | number;
 }
 
 interface BackendCustomer {
@@ -101,6 +119,67 @@ interface BackendCustomer {
   phone?: string;
   phone_number?: string;
   email?: string;
+}
+
+interface BackendBatch {
+  id: string;
+  batch_id?: string;
+  batch_number?: string;
+  name?: string;
+  batch_type?: string;
+  status?: string;
+  created_at?: string;
+  updated_at?: string;
+  orders?: BackendOrder[];
+  location?: string;
+  location_id?: string;
+  location_address?: string;
+  location_latitude?: string | number;
+  location_longitude?: string | number;
+  parent?: string;
+  total_weight?: number;
+  estimated_duration?: number;
+  previous_batches?: string[];
+  pickup_latitude?: string | number;
+  pickup_longitude?: string | number;
+  delivery_latitude?: string | number;
+  delivery_longitude?: string | number;
+  pickup_address?: string;
+  delivery_address?: string;
+}
+
+interface BackendVehicle {
+  type?: string;
+  model?: string;
+  license_plate?: string;
+}
+
+interface BackendTransactionResponse {
+  transactions: BackendTransactionData[];
+  pagination?: {
+    page?: number;
+    pageSize?: number;
+    totalCount?: number;
+    totalPages?: number;
+    hasNext?: boolean;
+    hasPrev?: boolean;
+  };
+}
+
+interface BackendTransactionData {
+  id: string;
+  type: string;
+  transaction_type?: string;
+  amount: number | string;
+  description?: string;
+  date?: string;
+  created_at?: string;
+  status?: string;
+  orderId?: string;
+  order_id?: string;
+  deliveryId?: string;
+  delivery_id?: string;
+  metadata?: Record<string, unknown>;
 }
 
 interface BackendOrderItem {
@@ -156,6 +235,7 @@ interface EstimatePickupResponse {
 
 interface BackendDriver {
   id: string;
+  username?: string;
   first_name?: string;
   lastName?: string;
   firstName?: string;
@@ -170,11 +250,7 @@ interface BackendDriver {
   profile_image?: string;
   avatar?: string;
   distance_km?: number;
-  vehicle?: {
-    type?: string;
-    model?: string;
-    license_plate?: string;
-  };
+  vehicle?: BackendVehicle;
 }
 
 // Token response interface
@@ -666,11 +742,17 @@ class ApiService {
       ? `/api/v1/auth/drivers/${driverId}/` 
       : '/api/v1/auth/drivers/';
 
-    const response = await this.client.get<unknown>(endpoint);
+    let response = await this.client.get<unknown>(endpoint);
+    
+    // If we get a 404 with a specific driver ID, try fetching without ID (to get current user's profile)
+    if (!response.success && response.error?.includes('404') && driverId) {
+      console.warn('⚠️ Driver not found with ID, trying to fetch current user profile...');
+      response = await this.client.get<unknown>('/api/v1/auth/me/');
+    }
 
     // Transform backend response to match our Driver type
     if (response.success && response.data) {
-      const driverData = response.data as Record<string, unknown>;
+      const driverData = response.data as BackendDriver;
       const driver: Driver = {
         id: String(driverData.id || ''),
         firstName: String(driverData.first_name || driverData.firstName || ''),
@@ -682,11 +764,13 @@ class ApiService {
         isOnline: Boolean(driverData.is_available || driverData.is_online || false),
         profileImage: String(driverData.profile_image || driverData.avatar || ''),
         vehicleInfo: driverData.vehicle ? {
-          type: String((driverData.vehicle as Record<string, unknown>).type || ''),
-          model: String((driverData.vehicle as Record<string, unknown>).model || ''),
-          licensePlate: String((driverData.vehicle as Record<string, unknown>).license_plate || '')
+          type: String(driverData.vehicle?.type || ''),
+          model: String(driverData.vehicle?.model || ''),
+          licensePlate: String(driverData.vehicle?.license_plate || '')
         } : undefined
       };
+      
+      console.log('👤 Driver profile fetched:', { id: driver.id, username: driverData.username });
 
       return {
         success: true,
@@ -703,10 +787,54 @@ class ApiService {
   }
 
   async updateDriverStatus(isOnline: boolean): Promise<ApiResponse<void>> {
-    // Get the current driver ID
+    // First, try to get the correct driver ID from the /me/ endpoint
+    try {
+      console.log('🔄 Fetching current driver info from /me/ endpoint...');
+      const meResponse = await this.client.get<any>('/api/v1/auth/me/');
+      
+      if (meResponse.success && meResponse.data) {
+        const driverId = meResponse.data.id;
+        console.log(`✅ Got driver ID from /me/: ${driverId}`);
+        
+        // Update the status using the correct driver ID
+        const response = await this.client.post<void>(`/api/v1/auth/drivers/${driverId}/update_status/`, {
+          is_online: isOnline,
+          is_available: isOnline,
+          is_on_duty: isOnline
+        });
+        
+        if (response.success) {
+          // Update cached driver data with correct ID
+          const driver: Driver = {
+            id: String(driverId),
+            firstName: String(meResponse.data.first_name || ''),
+            lastName: String(meResponse.data.last_name || ''),
+            email: String(meResponse.data.email || ''),
+            phone: String(meResponse.data.phone_number || ''),
+            rating: Number(meResponse.data.rating || 0),
+            totalDeliveries: Number(meResponse.data.total_deliveries || 0),
+            isOnline: isOnline,
+            profileImage: String(meResponse.data.profile_picture || ''),
+            vehicleInfo: meResponse.data.vehicle_type ? {
+              type: String(meResponse.data.vehicle_type || ''),
+              model: String(meResponse.data.vehicle_number || ''),
+              licensePlate: String(meResponse.data.vehicle_number || '')
+            } : undefined
+          };
+          await Storage.setItem(STORAGE_KEYS.DRIVER_DATA, driver);
+          console.log(`✅ Driver status updated and cache refreshed with ID: ${driverId}`);
+        }
+        
+        return response;
+      }
+    } catch (error) {
+      console.error('❌ Error fetching driver info from /me/:', error);
+    }
+    
+    // Fallback: try with cached driver ID
     const cachedDriver = await Storage.getItem<Driver>(STORAGE_KEYS.DRIVER_DATA);
     let driverId = cachedDriver?.id;
-
+    
     if (!driverId) {
       const token = await SecureStorage.getAuthToken();
       if (token) {
@@ -718,22 +846,39 @@ class ApiService {
         }
       }
     }
-
+    
     if (!driverId) {
       return {
         success: false,
         data: null!,
-        error: 'Driver ID not found'
+        error: 'Driver ID not found. Please log in again.'
       };
     }
-
-    // Use the new update_status endpoint with comprehensive online status
-    // Set both is_available and is_on_duty to ensure orders appear when online
-    return this.client.post<void>(`/api/v1/auth/drivers/${driverId}/update_status/`, {
-      is_online: isOnline,
-      is_available: isOnline,  // Required for available_orders endpoint
-      is_on_duty: isOnline     // Required for available_orders endpoint
-    });
+    
+    console.log(`🚚 Updating driver status for ID ${driverId} to ${isOnline ? 'online' : 'offline'}`);
+    
+    try {
+      const response = await this.client.post<void>(`/api/v1/auth/drivers/${driverId}/update_status/`, {
+        is_online: isOnline,
+        is_available: isOnline,
+        is_on_duty: isOnline
+      });
+      
+      if (!response.success && response.error?.includes('404')) {
+        console.warn('⚠️ Driver not found (404), clearing cached driver data...');
+        await Storage.removeItem(STORAGE_KEYS.DRIVER_DATA);
+        return {
+          success: false,
+          data: null!,
+          error: 'Driver not found. Please log in again.'
+        };
+      }
+      
+      return response;
+    } catch (error) {
+      console.error('❌ Error updating driver status:', error);
+      throw error;
+    }
   }
 
   // Orders
@@ -1070,18 +1215,18 @@ class ApiService {
       throw new Error('Invalid backend data provided to transformOrder');
     }
     
-    const data = backendData as Record<string, unknown>;
+    const data = backendData as BackendOrder | BackendDelivery;
     console.log('🔄 transformOrder input:', {
       hasId: !!data.id,
-      hasOrder: !!(data.order && typeof data.order === 'object'),
+      hasOrder: !!('order' in data && data.order && typeof data.order === 'object'),
       hasDriver: 'driver' in data,
       topLevelKeys: Object.keys(data).slice(0, 10)
     });
 
     // Use type-safe extraction utilities - simplified inline
-    const isDelivery = data.order && typeof data.order === 'object';
-    const order = isDelivery ? (data.order as unknown as BackendOrder) : (data as unknown as BackendOrder);
-    const delivery = isDelivery ? (data as unknown as BackendDelivery) : null;
+    const isDelivery = 'order' in data && data.order && typeof data.order === 'object';
+    const order = isDelivery ? (data as BackendDelivery).order as BackendOrder : (data as BackendOrder);
+    const delivery = isDelivery ? (data as BackendDelivery) : null;
 
     console.log('🔍 Transforming order data:', {
       isDelivery,
@@ -1156,32 +1301,32 @@ class ApiService {
 
     // CRITICAL: For available_orders endpoint, the root object IS the delivery
     // So backendData.id is the delivery ID we need for accept/decline
-    const primaryId = String((backendData as Record<string, unknown>).id || delivery?.id || order.id || '');
+    const primaryId = String(data.id || delivery?.id || order?.id || '');
 
     console.log('🆔 ID Resolution:', {
       primaryId,
-      backendDataId: (backendData as Record<string, unknown>).id,
+      backendDataId: data.id,
       deliveryId: delivery?.id,
-      orderId: order.id,
-      isFromAvailableOrders: !delivery && (backendData as Record<string, unknown>).id && (backendData as Record<string, unknown>).order
+      orderId: order?.id,
+      isFromAvailableOrders: !delivery && data.id && 'order' in data
     });
 
     // Detect if this is a batch order by checking for batch-related fields
     // Check if the delivery is associated with a batch
     const isBatchDelivery = !!(
-      (delivery as any)?.batch_id || 
-      (delivery as any)?.batch ||
-      (backendData as any).batch_id || 
-      (backendData as any).batch ||
+      (delivery as BackendDelivery)?.batch_id || 
+      (delivery as BackendDelivery)?.batch?.id ||
+      data.batch_id || 
+      (backendData as BackendBatch)?.id ||
       order.current_batch_id ||
       order.current_batch
     );
     
     console.log('🔍 Batch detection:', {
       isBatchDelivery,
-      deliveryBatchId: (delivery as any)?.batch_id,
-      orderBatchId: order.current_batch_id,
-      backendBatchId: (backendData as any).batch_id
+      deliveryBatchId: (delivery as BackendDelivery)?.batch_id,
+      orderBatchId: order?.current_batch_id,
+      backendBatchId: data.batch_id
     });
 
     const baseOrder = {
@@ -1235,30 +1380,30 @@ class ApiService {
       
       // Batch order support - use current_batch structure
       current_batch: order.current_batch || null,
-      batchId: (delivery as any)?.batch_id || (backendData as any).batch_id || order.current_batch_id || undefined,
+      batchId: (delivery as BackendDelivery)?.batch_id || data.batch_id || order?.current_batch_id || undefined,
       consolidationWarehouseId: order.consolidation_warehouse_id,
       finalDeliveryAddress: order.final_delivery_address,
       finalDeliveryLatitude: order.final_delivery_latitude ? parseFloat(String(order.final_delivery_latitude)) : undefined,
       finalDeliveryLongitude: order.final_delivery_longitude ? parseFloat(String(order.final_delivery_longitude)) : undefined,
       // Add batch orders if this is a batch
-      orders: isBatchDelivery && (backendData as any).orders ? (backendData as any).orders : undefined,
+      orders: isBatchDelivery && 'orders' in data && Array.isArray(data.orders) ? data.orders : undefined,
     };
 
     // If this is a batch order, try to determine batch size from available data
     if (isBatchDelivery && order.consolidation_batch_id) {
       // For now, we'll estimate batch size from other indicators
       // In a real implementation, this would come from the backend
-      const estimatedBatchSize = (order as any).batchSize || 
-                                (order as any).orders?.length || 
+      const estimatedBatchSize = order?.batchSize || 
+                                order?.orders?.length || 
                                 2; // Default estimate
       
       return {
         ...baseOrder,
         batchSize: estimatedBatchSize,
-      };
+      } as Order;
     }
 
-    return baseOrder;
+    return baseOrder as Order;
   }
 
   async acceptOrder(deliveryId: string): Promise<ApiResponse<void>> {
@@ -1308,7 +1453,7 @@ class ApiService {
     return this.client.post<void>(`/api/v1/delivery/deliveries/${batchId}/accept/`);
   }
 
-  async updateBatchStatus(batchId: string, status: string, data?: any): Promise<ApiResponse<void>> {
+  async updateBatchStatus(batchId: string, status: string, data?: Record<string, unknown>): Promise<ApiResponse<void>> {
     console.log(`🔄 Updating batch ${batchId} status to ${status}`);
     
     try {
@@ -1326,17 +1471,17 @@ class ApiService {
     }
     
     // Fallback to delivery endpoint
-    return this.updateOrderStatus(batchId, status as any);
+    return this.updateOrderStatus(batchId, status as OrderStatus);
   }
 
   async getAvailableBatches(): Promise<ApiResponse<BatchOrder[]>> {
     console.log('📦 Fetching available batches...');
     
     try {
-      const response = await this.client.get<any[]>('/api/v1/delivery/batches/available/');
+      const response = await this.client.get<BackendBatch[]>('/api/v1/delivery/batches/available/');
       
       if (response.success && response.data) {
-        const batches = response.data.map((batch: any) => this.transformBatchOrder(batch));
+        const batches = response.data.map((batch: BackendBatch) => this.transformBatchOrder(batch));
         return {
           success: true,
           data: batches,
@@ -1358,7 +1503,7 @@ class ApiService {
   async getBatchDetails(batchId: string): Promise<ApiResponse<BatchOrder>> {
     console.log(`📦 Fetching batch details for: ${batchId}`);
     
-    const response = await this.client.get<any>(`/api/v1/delivery/batches/${batchId}/`);
+    const response = await this.client.get<BackendBatch>(`/api/v1/delivery/batches/${batchId}/`);
     
     if (response.success && response.data) {
       // Transform to BatchOrder type
@@ -1373,8 +1518,8 @@ class ApiService {
     return response as ApiResponse<BatchOrder>;
   }
 
-  private transformBatchOrder(backendBatch: any): BatchOrder {
-    const orders = (backendBatch.orders || []).map((order: any) => this.transformOrder(order));
+  private transformBatchOrder(backendBatch: BackendBatch): BatchOrder {
+    const orders = (backendBatch.orders || []).map((order: BackendOrder) => this.transformOrder(order));
     
     return {
       id: String(backendBatch.id),
@@ -1389,8 +1534,8 @@ class ApiService {
       status: backendBatch.status,
       orders: orders,
       order_number: `BATCH-${backendBatch.id}`,
-      created_at: new Date(backendBatch.created_at),
-      updated_at: new Date(backendBatch.updated_at),
+      created_at: backendBatch.created_at ? new Date(backendBatch.created_at) : new Date(),
+      updated_at: backendBatch.updated_at ? new Date(backendBatch.updated_at) : new Date(),
       warehouseInfo: backendBatch.location ? {
         id: String(backendBatch.location_id || ''),
         name: backendBatch.location,
@@ -1699,13 +1844,13 @@ class ApiService {
           transactionData = [];
         }
         
-        const transactions = transactionData.map((transaction: any): BalanceTransaction => ({
+        const transactions = transactionData.map((transaction: BackendTransactionData): BalanceTransaction => ({
           id: transaction.id || String(Math.random()),
-          type: transaction.transaction_type || transaction.type || 'earning',
+          type: (transaction.transaction_type || transaction.type || 'earning') as BalanceTransaction['type'],
           amount: Number(transaction.amount || 0),
           description: transaction.description || 'Transaction',
           date: transaction.created_at ? new Date(transaction.created_at) : new Date(),
-          status: transaction.status || 'completed',
+          status: (transaction.status || 'completed') as BalanceTransaction['status'],
           orderId: transaction.order_id || transaction.orderId
         }));
         
@@ -1732,38 +1877,8 @@ class ApiService {
   async updateLocation(latitude: number, longitude: number): Promise<ApiResponse<void>> {
     console.log(`📍 API: Updating location to ${latitude}, ${longitude}`);
 
-    // Get the current driver ID
-    const cachedDriver = await Storage.getItem<Driver>(STORAGE_KEYS.DRIVER_DATA);
-    let driverId = cachedDriver?.id;
-
-    console.log('Cached driver ID:', driverId);
-
-    if (!driverId) {
-      console.log('No cached driver ID, trying to extract from token...');
-      const token = await SecureStorage.getAuthToken();
-      if (token) {
-        try {
-          const payload = JSON.parse(atob(token.split('.')[1]));
-          driverId = payload.user_id || payload.id || payload.driver_id;
-          console.log('Driver ID from token:', driverId);
-        } catch (error) {
-          console.warn('Failed to decode token for driver ID:', error);
-        }
-      } else {
-        console.error('No auth token found');
-      }
-    }
-
-    if (!driverId) {
-      console.error('❌ Cannot update location: Driver ID not found');
-      return {
-        success: false,
-        data: null!,
-        error: 'Driver ID not found'
-      };
-    }
-
-    const endpoint = `/api/v1/auth/drivers/${driverId}/update_location/`;
+    // Use the new update_my_location endpoint that doesn't require driver ID
+    const endpoint = `/api/v1/auth/drivers/update_my_location/`;
     console.log(`🎯 Calling location endpoint: ${endpoint}`);
 
     // Add timestamp and additional data for better tracking
@@ -1785,6 +1900,7 @@ class ApiService {
       console.log('✅ Location update API call successful');
       
       // Also update the cached driver data with new location
+      const cachedDriver = await Storage.getItem<Driver>(STORAGE_KEYS.DRIVER_DATA);
       if (cachedDriver) {
         const updatedDriver = {
           ...cachedDriver,
@@ -1799,7 +1915,6 @@ class ApiService {
       
       // Log additional debugging info
       console.log('🔍 Location update debug info:', {
-        driverId,
         endpoint,
         coordinates: { latitude, longitude },
         error: result.error
@@ -2077,7 +2192,7 @@ class ApiService {
       // 8. Check driver online status in backend
       console.log('🟢 Checking driver online status...');
       const cachedDriver = await Storage.getItem(STORAGE_KEYS.DRIVER_DATA);
-      const driverId = cachedDriver?.id || this.extractDriverIdFromToken(token);
+      const driverId = (cachedDriver as Driver)?.id || this.extractDriverIdFromToken(token);
       
       if (driverId) {
         const statusResponse = await this.client.get<any>(`/api/v1/auth/drivers/${driverId}/`);
@@ -2150,10 +2265,16 @@ class ApiService {
           : response.data.totalEarnings || 0;
 
         const earnings: DriverBalance = {
+          cashOnHand: response.data.cashOnHand || 0,
+          depositBalance: response.data.depositBalance || 0,
           totalEarnings: periodEarnings,
           pendingEarnings: response.data.pendingPayouts || 0,
-          totalWithdrawals: response.data.depositBalance || 0,
-          availableBalance: response.data.cashOnHand || 0,
+          totalWithdrawals: response.data.totalWithdrawals || 0,
+          availableBalance: response.data.availableBalance || response.data.cashOnHand || 0,
+          pendingPayouts: response.data.pendingPayouts || 0,
+          todayEarnings: response.data.todayEarnings || 0,
+          weekEarnings: response.data.weekEarnings || 0,
+          monthEarnings: response.data.monthEarnings || 0,
           lastUpdated: new Date().toISOString(),
           breakdown: {
             today: response.data.todayEarnings || 0,
@@ -2220,13 +2341,13 @@ class ApiService {
           transactionData = [];
         }
         
-        const transactions = transactionData.map((transaction: any): BalanceTransaction => ({
+        const transactions = transactionData.map((transaction: BackendTransactionData): BalanceTransaction => ({
           id: transaction.id || String(Math.random()),
-          type: transaction.transaction_type || transaction.type || 'earning',
+          type: (transaction.transaction_type || transaction.type || 'earning') as BalanceTransaction['type'],
           amount: Number(transaction.amount || 0),
           description: transaction.description || 'Transaction',
           date: transaction.created_at ? new Date(transaction.created_at) : new Date(),
-          status: transaction.status || 'completed',
+          status: (transaction.status || 'completed') as BalanceTransaction['status'],
           orderId: transaction.order_id || transaction.orderId
         }));
         
@@ -2319,7 +2440,7 @@ class ApiService {
     return this.client.post<void>(`/api/v1/delivery/batch-legs/${legId}/decline_leg/`);
   }
 
-  async getDriverProfile(): Promise<ApiResponse<DriverProfile>> {
+  async getDriverProfileNew(): Promise<ApiResponse<DriverProfile>> {
     console.log('👤 Fetching driver profile...');
     return this.client.get<DriverProfile>('/api/v1/auth/driver-profile/');
   }
@@ -2348,5 +2469,5 @@ export const deliveryApi = {
   getAvailableBatches: () => apiService.getAvailableBatches(),
   getBatchDetails: (batchId: string) => apiService.getBatchDetails(batchId),
   acceptBatch: (batchId: string) => apiService.acceptBatchOrder(batchId),
-  updateBatchStatus: (batchId: string, status: string, data?: any) => apiService.updateBatchStatus(batchId, status, data),
+  updateBatchStatus: (batchId: string, status: string, data?: Record<string, unknown>) => apiService.updateBatchStatus(batchId, status, data),
 };
