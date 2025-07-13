@@ -87,7 +87,7 @@ const AppLogo: React.FC<AppLogoProps> = ({
     <View style={[styles.container, style]}>
       <View style={[styles.logoContainer, logoContainerStyle]}>
         <Image
-          source={require('../../logos/android/mipmap-xxxhdpi/ic_launcher.png')}
+          source={require('../assets/images/app_logo.png')}
           style={logoImageStyle}
           resizeMode="contain"
         />

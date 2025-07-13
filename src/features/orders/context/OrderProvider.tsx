@@ -32,6 +32,33 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
   // Store the notification callback
   const notificationCallbackRef = useRef<((order: Order) => void) | null>(null);
   
+  // Actions - Define these before the effects that use them
+  const refreshOrders = useCallback(async () => {
+    console.log('🔄 OrderProvider: refreshOrders called');
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const response = await apiService.getActiveOrders();
+      console.log('📦 OrderProvider: Received orders response:', response);
+      
+      if (response.success) {
+        setOrders(response.data);
+        setLastUpdated(new Date().toISOString());
+        console.log(`✅ OrderProvider: Set ${response.data.length} orders`);
+      } else {
+        setError(response.error || 'Failed to fetch orders');
+        console.error('❌ OrderProvider: Failed to fetch orders:', response.error);
+      }
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+      setError(errorMsg);
+      console.error('❌ OrderProvider: Error fetching orders:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
   // Initialize realtime service when user is logged in
   useEffect(() => {
     // Only initialize when user is logged in and not still loading auth
@@ -80,6 +107,9 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
           }
         });
         
+        // Enable initialization after login
+        realtimeService.enableInitialization();
+        
         // Initialize the service
         await realtimeService.initialize();
         
@@ -109,33 +139,6 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
       refreshOrders();
     }
   }, [isLoggedIn, authLoading, refreshOrders]);
-
-  // Actions
-  const refreshOrders = useCallback(async () => {
-    console.log('🔄 OrderProvider: refreshOrders called');
-    setIsLoading(true);
-    setError(null);
-    
-    try {
-      const response = await apiService.getActiveOrders();
-      console.log('📦 OrderProvider: Received orders response:', response);
-      
-      if (response.success) {
-        setOrders(response.data);
-        setLastUpdated(new Date().toISOString());
-        console.log(`✅ OrderProvider: Set ${response.data.length} orders`);
-      } else {
-        setError(response.error || 'Failed to fetch orders');
-        console.error('❌ OrderProvider: Failed to fetch orders:', response.error);
-      }
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Unknown error';
-      setError(errorMsg);
-      console.error('❌ OrderProvider: Error fetching orders:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
 
   const getOrderDetails = useCallback(async (orderId: string) => {
     console.log('OrderProvider: getOrderDetails called:', orderId);

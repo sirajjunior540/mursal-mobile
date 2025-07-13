@@ -189,8 +189,10 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
       console.log('✅ Driver accepted batch/route:', batchProperties?.batchId || order.id);
       onAcceptRoute(batchProperties?.batchId || order.id);
     } else {
-      console.log('✅ Driver accepted order:', order.id);
-      onAccept(order.id);
+      const apiIds = extractOrderApiIds(order);
+      console.log('✅ Driver accepted order:', getOrderDisplayId(order));
+      console.log('🔍 Using delivery ID for API call:', apiIds.deliveryId);
+      onAccept(apiIds.deliveryId);
     }
   }, [order, stopTimer, stopRinging, isBatchOrder, onAcceptRoute, batchProperties, onAccept]);
 
@@ -199,8 +201,10 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
     stopTimer();
     stopRinging();
     haptics.warning();
-    console.log('❌ Driver declined order:', order.id);
-    onDecline(order.id);
+    const apiIds = extractOrderApiIds(order);
+    console.log('❌ Driver declined order:', getOrderDisplayId(order));
+    console.log('🔍 Using delivery ID for API call:', apiIds.deliveryId);
+    onDecline(apiIds.deliveryId);
   }, [order, stopTimer, stopRinging, onDecline]);
 
   const handleSkip = useCallback(() => {
@@ -208,8 +212,10 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
     stopTimer();
     stopRinging();
     haptics.light();
-    console.log('⏭️ Driver skipped order:', order.id);
-    onSkip(order.id);
+    const apiIds = extractOrderApiIds(order);
+    console.log('⏭️ Driver skipped order:', getOrderDisplayId(order));
+    console.log('🔍 Using delivery ID for API call:', apiIds.deliveryId);
+    onSkip(apiIds.deliveryId);
   }, [order, stopTimer, stopRinging, onSkip]);
   
   // Handle batch order selection

@@ -287,6 +287,18 @@ export class RealtimeSDK {
         }
         break;
         
+      case 'new_batch_leg':
+        if (message.batch_leg) {
+          this.handleNewBatchLeg(message.batch_leg, 'websocket');
+        }
+        break;
+        
+      case 'batch_leg_update':
+        if (message.batch_leg) {
+          this.handleBatchLegUpdate(message.batch_leg, 'websocket');
+        }
+        break;
+        
       case 'auth_success':
         this.log('info', 'WebSocket authentication successful');
         break;
@@ -376,6 +388,43 @@ export class RealtimeSDK {
   private handleOrderUpdate(order: Order, source: CommunicationMode): void {
     this.log('info', `Order update for ${order.id} received from ${source}`);
     this.callbacks.onOrderUpdate?.(order, source);
+  }
+  
+  /**
+   * Handle new batch leg from any source
+   * @param batchLeg New batch leg data
+   * @param source Source of the batch leg
+   */
+  private handleNewBatchLeg(batchLeg: any, source: CommunicationMode): void {
+    this.log('info', `New batch leg ${batchLeg.id} received from ${source}`);
+    this.updateMetrics('ordersReceived', 'all', 1);
+    
+    // Apply deduplication if needed
+    if (this.config.deduplicationEnabled && batchLeg.id) {
+      const now = Date.now();
+      const lastSeen = this.seenOrderIds.get(`batch_leg_${batchLeg.id}`);
+      
+      if (lastSeen && (now - lastSeen) < this.config.deduplicationWindow) {
+        this.updateMetrics('duplicateOrdersFiltered', 'all', 1);
+        this.log('debug', `Filtered duplicate batch leg ${batchLeg.id} from ${source}`);
+        return;
+      }
+      
+      this.seenOrderIds.set(`batch_leg_${batchLeg.id}`, now);
+    }
+    
+    this.updateMetrics('uniqueOrdersReceived', 'all', 1);
+    this.callbacks.onNewBatchLeg?.(batchLeg, source);
+  }
+  
+  /**
+   * Handle batch leg update from any source
+   * @param batchLeg Updated batch leg data
+   * @param source Source of the update
+   */
+  private handleBatchLegUpdate(batchLeg: any, source: CommunicationMode): void {
+    this.log('info', `Batch leg update for ${batchLeg.id} received from ${source}`);
+    this.callbacks.onBatchLegUpdate?.(batchLeg, source);
   }
   
   /**

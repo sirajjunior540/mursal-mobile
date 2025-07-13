@@ -17,6 +17,7 @@ import HapticFeedback from 'react-native-haptic-feedback';
 
 import { Design } from '../../constants/designSystem';
 import { QRScanResult } from '../../types/tracking';
+import { checkCameraPermissions, requestCameraPermissions, showCameraPermissionGuide } from '../../utils/permissions';
 
 interface QRScannerProps {
   isVisible: boolean;
@@ -93,28 +94,46 @@ const QRScanner: React.FC<QRScannerProps> = ({
     onClose();
   };
 
-  // Check camera permission using camera-kit API
+  // Check camera permission using enhanced permissions utility
   const checkCameraPermission = async () => {
     try {
-      console.log('Checking camera permission with camera-kit');
-      const isCameraAuthorized = await CameraKitCamera.checkDeviceCameraAuthorizationStatus();
-      console.log('Camera authorization status:', isCameraAuthorized);
+      console.log('Checking camera permission with enhanced utility');
       
-      setHasPermission(isCameraAuthorized);
+      // First check with camera-kit for iOS/runtime permission
+      if (Platform.OS === 'ios') {
+        const isCameraAuthorized = await CameraKitCamera.checkDeviceCameraAuthorizationStatus();
+        console.log('Camera-kit authorization status:', isCameraAuthorized);
+        setHasPermission(isCameraAuthorized);
+      } else {
+        // For Android, use our enhanced permissions utility
+        const isGranted = await checkCameraPermissions();
+        console.log('Enhanced utility permission status:', isGranted);
+        setHasPermission(isGranted);
+      }
     } catch (error) {
       console.error('Permission check error:', error);
       setHasPermission(false);
     }
   };
 
-  // Request camera permission using camera-kit API
+  // Request camera permission using enhanced permissions utility
   const requestCameraPermission = async () => {
     if (isRequestingPermission) return;
     
     setIsRequestingPermission(true);
     try {
-      console.log('Requesting camera permission with camera-kit');
-      const granted = await CameraKitCamera.requestDeviceCameraAuthorization();
+      console.log('Requesting camera permission with enhanced utility');
+      
+      let granted = false;
+      
+      if (Platform.OS === 'ios') {
+        // For iOS, use camera-kit for runtime permission
+        granted = await CameraKitCamera.requestDeviceCameraAuthorization();
+      } else {
+        // For Android, use our enhanced permissions utility
+        granted = await requestCameraPermissions();
+      }
+      
       console.log('Camera permission request result:', granted);
       
       if (granted) {
@@ -123,7 +142,9 @@ const QRScanner: React.FC<QRScannerProps> = ({
       } else {
         console.log('Camera permission denied');
         setHasPermission(false);
-        Alert.alert('Permission Denied', 'Camera permission is required to scan QR codes');
+        
+        // Show enhanced permission guide instead of simple alert
+        showCameraPermissionGuide();
       }
     } catch (error) {
       console.error('Permission request error:', error);

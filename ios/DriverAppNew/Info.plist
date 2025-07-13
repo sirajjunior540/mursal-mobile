@@ -58,6 +58,8 @@
 	<string>Mursal Driver needs your location to show your position on the map and track deliveries even when the app is in the background.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Mursal Driver needs your location to show your position on the map and provide accurate delivery tracking.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Mursal Driver needs camera access to scan QR codes for order verification and package tracking.</string>
 	<key>RCTNewArchEnabled</key>
 	<true/>
 	<key>UIBackgroundModes</key>
@@ -65,6 +67,7 @@
 		<string>location</string>
 		<string>background-fetch</string>
 		<string>background-processing</string>
+		<string>remote-notification</string>
 	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>

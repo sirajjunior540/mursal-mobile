@@ -13,6 +13,12 @@ import {
   Tenant,
   TenantSettings
 } from '../types';
+import { 
+  BatchLeg, 
+  BatchLegListResponse, 
+  BatchLegAcceptResponse, 
+  DriverProfile 
+} from '../types/batchLeg';
 import { API_CONFIG, TENANT_CONFIG, STORAGE_KEYS } from '../constants';
 import { Storage, SecureStorage } from '../utils';
 import { ENV, getTenantHost, apiDebug } from '../config/environment';
@@ -2277,6 +2283,50 @@ class ApiService {
       startOfMonth.toISOString().split('T')[0],
       endOfMonth.toISOString().split('T')[0]
     );
+  }
+
+  // ==========================================
+  // Batch Leg Methods (New System)
+  // ==========================================
+  
+  async getAvailableBatchLegs(): Promise<ApiResponse<BatchLegListResponse>> {
+    console.log('📦 Fetching available batch legs...');
+    
+    try {
+      const locationService = await import('./locationService');
+      const currentLocation = await locationService.locationService.getCurrentLocation();
+      
+      const url = `/api/v1/delivery/batch-legs/available_legs/?latitude=${currentLocation.latitude}&longitude=${currentLocation.longitude}`;
+      return this.client.get<BatchLegListResponse>(url);
+    } catch (locationError) {
+      console.warn('⚠️ Failed to get location, fetching legs without location filter:', locationError);
+      return this.client.get<BatchLegListResponse>('/api/v1/delivery/batch-legs/available_legs/');
+    }
+  }
+
+  async getBatchLegDetails(legId: string): Promise<ApiResponse<BatchLeg>> {
+    console.log(`📋 Fetching batch leg details: ${legId}`);
+    return this.client.get<BatchLeg>(`/api/v1/delivery/batch-legs/${legId}/leg_details/`);
+  }
+
+  async acceptBatchLeg(legId: string): Promise<ApiResponse<BatchLegAcceptResponse>> {
+    console.log(`✅ Accepting batch leg: ${legId}`);
+    return this.client.post<BatchLegAcceptResponse>(`/api/v1/delivery/batch-legs/${legId}/accept_leg/`);
+  }
+
+  async declineBatchLeg(legId: string): Promise<ApiResponse<void>> {
+    console.log(`❌ Declining batch leg: ${legId}`);
+    return this.client.post<void>(`/api/v1/delivery/batch-legs/${legId}/decline_leg/`);
+  }
+
+  async getDriverProfile(): Promise<ApiResponse<DriverProfile>> {
+    console.log('👤 Fetching driver profile...');
+    return this.client.get<DriverProfile>('/api/v1/auth/driver-profile/');
+  }
+
+  async updateDriverProfile(profile: Partial<DriverProfile>): Promise<ApiResponse<DriverProfile>> {
+    console.log('💾 Updating driver profile...');
+    return this.client.put<DriverProfile>('/api/v1/auth/driver-profile/', profile);
   }
 }
 

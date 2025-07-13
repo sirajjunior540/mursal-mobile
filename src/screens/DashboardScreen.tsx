@@ -283,7 +283,7 @@ const DashboardScreen: React.FC = () => {
             <Ionicons name="cube" size={24} color="#ffffff" />
           </View>
           <Text style={styles.statValue}>{activeOrders?.length || 0}</Text>
-          <Text style={styles.statLabel}>Available Orders</Text>
+          <Text style={styles.statLabel}>Active Deliveries</Text>
         </View>
 
         <View style={[styles.statCard, styles.statCardGreen]}>
@@ -402,145 +402,41 @@ const DashboardScreen: React.FC = () => {
       </View>
       
       {activeOrders && activeOrders.length > 0 ? (
-        <View>
-          {/* Top featured orders as cards (horizontal scroll) */}
-          {activeOrders.length > 0 && (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.featuredOrdersScroll}>
-              {activeOrders.slice(0, 3).map((order) => {
-                const canAccept = canAcceptOrder(order);
-                return (
-                  <View key={order.id} style={[
-                    styles.featuredOrderCard,
-                    !canAccept && styles.disabledOrderCard
-                  ]}>
-                    <View style={styles.orderCardHeader}>
-                      <Text style={styles.orderNumber}>#{order.order_number || order.id}</Text>
-                      <View style={[styles.orderTypeBadge, 
-                        order.delivery_type === 'food' && styles.foodBadge,
-                        order.delivery_type === 'fast' && styles.fastBadge,
-                      ]}>
-                        <Text style={styles.orderTypeText}>{(order.delivery_type || 'regular').toUpperCase()}</Text>
-                      </View>
-                    </View>
-                    
-                    <View style={styles.orderDetails}>
-                      <Text style={styles.customerName} numberOfLines={1}>
-                        {order.customer_details?.name || 'Customer'}
-                      </Text>
-                      <Text style={styles.deliveryAddress} numberOfLines={2}>
-                        {order.delivery_address || 'Delivery location'}
-                      </Text>
-                    </View>
-                    
-                    <View style={styles.orderMetrics}>
-                      <View style={styles.orderMetric}>
-                        <Ionicons name="cash-outline" size={14} color="#666" />
-                        <Text style={styles.metricValue}>${order.total || '0.00'}</Text>
-                      </View>
-                      <View style={styles.orderMetric}>
-                        <Ionicons name="location-outline" size={14} color="#666" />
-                        <Text style={styles.metricValue}>2.5 km</Text>
-                      </View>
-                    </View>
-                    
-                    {!canAccept && (
-                      <View style={styles.capacityWarning}>
-                        <Ionicons name="information-circle" size={14} color="#F59E0B" />
-                        <Text style={styles.capacityWarningText}>
-                          {order.delivery_type === 'food' || order.delivery_type === 'fast' 
-                            ? 'Complete current orders first' 
-                            : 'At capacity (5 orders max)'}
-                        </Text>
-                      </View>
-                    )}
-                    
-                    <View style={styles.orderActions}>
-                      <TouchableOpacity 
-                        style={styles.miniDeclineButton}
-                        onPress={() => handleDeclineOrder(order.id)}
-                      >
-                        <Ionicons name="close" size={16} color="#FF4757" />
-                      </TouchableOpacity>
-                      <TouchableOpacity 
-                        style={[
-                          styles.miniAcceptButton,
-                          !canAccept && styles.disabledAcceptButton
-                        ]}
-                        onPress={() => canAccept && handleAcceptOrder(order.id)}
-                        disabled={!canAccept}
-                      >
-                        <Ionicons name="checkmark" size={16} color={canAccept ? "#fff" : "#999"} />
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                );
-              })}
-            </ScrollView>
-          )}
+        <View style={styles.activeOrdersSummary}>
+          <View style={styles.summaryHeader}>
+            <Text style={styles.summaryTitle}>You have {activeOrders.length} active deliveries</Text>
+            <Text style={styles.summarySubtitle}>Complete these before accepting new batch legs</Text>
+          </View>
           
-          {/* Remaining orders as minimal lines */}
-          {activeOrders.length > 3 && (
-            <View style={styles.orderListContainer}>
-              <Text style={styles.orderListTitle}>More Orders ({activeOrders.length - 3})</Text>
-              {activeOrders.slice(3).map((order) => {
-                const canAccept = canAcceptOrder(order);
-                return (
-                  <TouchableOpacity 
-                    key={order.id} 
-                    style={[
-                      styles.orderListItem,
-                      !canAccept && styles.disabledOrderListItem
-                    ]}
-                    onPress={() => {
-                      Haptics.trigger('selection');
-                      // Navigate to order details or show modal
-                      Alert.alert(
-                        `Order #${order.order_number || order.id}`,
-                        `Customer: ${order.customer_details?.name || 'Unknown'}\nAddress: ${order.delivery_address || 'Unknown'}\nTotal: $${order.total || '0.00'}`,
-                        [
-                          { text: 'Cancel', style: 'cancel' },
-                          { 
-                            text: 'Decline', 
-                            style: 'destructive',
-                            onPress: () => handleDeclineOrder(order.id)
-                          },
-                          { 
-                            text: 'Accept', 
-                            style: 'default',
-                            onPress: () => canAccept && handleAcceptOrder(order.id)
-                          }
-                        ]
-                      );
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.orderListLeft}>
-                      <Text style={styles.orderListNumber}>#{order.order_number || order.id}</Text>
-                      <Text style={styles.orderListCustomer} numberOfLines={1}>
-                        {order.customer_details?.name || 'Customer'}
-                      </Text>
-                    </View>
-                    <View style={styles.orderListCenter}>
-                      <Text style={styles.orderListTotal}>${order.total || '0.00'}</Text>
-                      <Text style={styles.orderListDistance}>2.5 km</Text>
-                    </View>
-                    <View style={styles.orderListRight}>
-                      <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          )}
+          <TouchableOpacity 
+            style={styles.viewOrdersButton}
+            onPress={() => navigation.navigate('AcceptedOrders')}
+          >
+            <Text style={styles.viewOrdersButtonText}>View My Orders</Text>
+            <Ionicons name="arrow-forward" size={20} color="#3B82F6" />
+          </TouchableOpacity>
         </View>
       ) : (
-        <View style={styles.noOrdersContainer}>
-          <Ionicons name="cube-outline" size={48} color="#9CA3AF" />
-          <Text style={styles.noOrdersText}>No available orders</Text>
-          <Text style={styles.noOrdersSubtext}>
-            {driver?.isOnline ? 'New orders will appear here' : 'Go online to see available orders'}
-          </Text>
-        </View>
+        <TouchableOpacity 
+          style={styles.availableDeliveriesCard}
+          onPress={() => navigation.navigate('RouteNavigation')}
+          activeOpacity={0.8}
+        >
+          <View style={styles.deliveriesCardContent}>
+            <View style={styles.deliveriesIconContainer}>
+              <Ionicons name="cube-outline" size={32} color="#3B82F6" />
+            </View>
+            <View style={styles.deliveriesTextContainer}>
+              <Text style={styles.deliveriesTitle}>Check Available Deliveries</Text>
+              <Text style={styles.deliveriesSubtext}>
+                {driver?.isOnline 
+                  ? 'View batch deliveries matching your vehicle type' 
+                  : 'Go online to see available batch deliveries'}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={24} color="#9CA3AF" />
+          </View>
+        </TouchableOpacity>
       )}
     </View>
   );
@@ -1079,6 +975,77 @@ const styles = StyleSheet.create({
     color: Design.colors.textSecondary,
     textAlign: 'center',
     fontWeight: '500',
+  },
+  activeOrdersSummary: {
+    backgroundColor: Design.colors.background,
+    borderRadius: Design.borderRadius.lg,
+    padding: Design.spacing[4],
+    marginTop: Design.spacing[3],
+    borderWidth: 1,
+    borderColor: Design.colors.border,
+  },
+  summaryHeader: {
+    marginBottom: Design.spacing[4],
+  },
+  summaryTitle: {
+    ...Design.typography.body,
+    fontWeight: '600',
+    color: Design.colors.text,
+    marginBottom: Design.spacing[1],
+  },
+  summarySubtitle: {
+    ...Design.typography.caption,
+    color: Design.colors.textSecondary,
+  },
+  viewOrdersButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Design.colors.primaryLight,
+    paddingVertical: Design.spacing[3],
+    paddingHorizontal: Design.spacing[4],
+    borderRadius: Design.borderRadius.md,
+    gap: Design.spacing[2],
+  },
+  viewOrdersButtonText: {
+    ...Design.typography.button,
+    color: Design.colors.primary,
+    fontWeight: '600',
+  },
+  availableDeliveriesCard: {
+    backgroundColor: Design.colors.background,
+    borderRadius: Design.borderRadius.lg,
+    padding: Design.spacing[4],
+    marginTop: Design.spacing[3],
+    borderWidth: 1,
+    borderColor: Design.colors.primary,
+    borderStyle: 'dashed',
+  },
+  deliveriesCardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  deliveriesIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: Design.borderRadius.md,
+    backgroundColor: Design.colors.primaryLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: Design.spacing[3],
+  },
+  deliveriesTextContainer: {
+    flex: 1,
+  },
+  deliveriesTitle: {
+    ...Design.typography.body,
+    fontWeight: '600',
+    color: Design.colors.text,
+    marginBottom: Design.spacing[1],
+  },
+  deliveriesSubtext: {
+    ...Design.typography.caption,
+    color: Design.colors.textSecondary,
   },
 });
 

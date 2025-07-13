@@ -215,3 +215,76 @@ export const checkLocationPermissions = async (): Promise<{
   // For iOS, assume permissions are granted if app is not asking
   return { fineLocation: true, backgroundLocation: true };
 };
+
+/**
+ * Request camera permissions for QR code scanning
+ */
+export const requestCameraPermissions = async (): Promise<boolean> => {
+  try {
+    if (Platform.OS === 'android') {
+      const granted = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.CAMERA,
+        {
+          title: 'Camera Permission',
+          message: 'Mursal Driver needs camera access to scan QR codes for order verification and package tracking.',
+          buttonNeutral: 'Ask Me Later',
+          buttonNegative: 'Cancel',
+          buttonPositive: 'OK',
+        }
+      );
+
+      if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+        console.log('Camera permission denied');
+        return false;
+      }
+    }
+    // iOS camera permissions are handled through Info.plist and runtime prompts
+    
+    console.log('✅ Camera permissions granted');
+    return true;
+  } catch (error) {
+    console.error('Error requesting camera permissions:', error);
+    return false;
+  }
+};
+
+/**
+ * Check camera permission status
+ */
+export const checkCameraPermissions = async (): Promise<boolean> => {
+  try {
+    if (Platform.OS === 'android') {
+      const granted = await PermissionsAndroid.check(
+        PermissionsAndroid.PERMISSIONS.CAMERA
+      );
+      return granted;
+    }
+    
+    // For iOS, camera permission is checked when accessing camera
+    return true;
+  } catch (error) {
+    console.error('Error checking camera permissions:', error);
+    return false;
+  }
+};
+
+/**
+ * Show camera permission settings guide
+ */
+export const showCameraPermissionGuide = () => {
+  Alert.alert(
+    'Camera Permission Required',
+    'To scan QR codes for order verification, please enable camera access:\n\n' +
+    (Platform.OS === 'ios' 
+      ? '1. Go to Settings > Privacy & Security > Camera\n2. Find Mursal Driver and toggle ON'
+      : '1. Go to Settings > Apps > Mursal Driver\n2. Tap Permissions\n3. Enable Camera access'
+    ),
+    [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Open Settings', onPress: () => {
+        // Platform-specific settings navigation would go here
+        console.log('Opening device settings for camera permissions');
+      }}
+    ]
+  );
+};

@@ -6,7 +6,7 @@ import {
   RealtimeSDKConfig, 
   CommunicationMode
 } from '../sdk';
-import { ENV, getApiUrl, getWebSocketUrl, realtimeDebug } from '../config/environment';
+import { ENV, realtimeDebug } from '../config/environment';
 
 // For backward compatibility
 export type RealtimeMode = 'polling' | 'websocket';
@@ -20,8 +20,61 @@ export interface RealtimeConfig {
 export interface RealtimeCallbacks {
   onNewOrder?: (order: Order) => void;
   onOrderUpdate?: (order: Order) => void;
+  onNewBatchLeg?: (batchLeg: any) => void;
+  onBatchLegUpdate?: (batchLeg: any) => void;
   onConnectionChange?: (connected: boolean) => void;
   onError?: (error: string) => void;
+}
+
+// Interface for order data validation
+export interface OrderData {
+  id: string;
+  order?: Order;
+  order_number?: string;
+  customer_details?: {
+    name?: string;
+    full_name?: string;
+  };
+  customer?: {
+    name?: string;
+  } | string;
+  customer_name?: string;
+  delivery_address?: string;
+  status?: string;
+}
+
+// Interface for JWT payload
+export interface JWTPayload {
+  iat?: number;
+  exp?: number;
+  user_id?: string;
+  username?: string;
+}
+
+// Interface for token validation result
+export interface TokenValidation {
+  issued?: string;
+  expires?: string;
+  currentTime: string;
+  isExpired: boolean;
+  needsRefresh: boolean;
+}
+
+// Interface for connection status
+export interface ConnectionStatus {
+  overall: boolean;
+  polling?: boolean;
+  websocket?: boolean;
+  push?: boolean;
+}
+
+// Interface for order tracking stats
+export interface OrderTrackingStats {
+  seen: number;
+  notified: number;
+  seenIds: string[];
+  notifiedIds: string[];
+  metrics?: Record<string, unknown>;
 }
 
 /**
@@ -41,7 +94,6 @@ class RealtimeService {
   private isConnected: boolean = false;
   private initialized: boolean = false;
   private initializationBlocked: boolean = true; // Block all initialization until explicitly enabled
-  private lastPollTime: number = 0;
   private seenOrderIds: Set<string> = new Set();
   private notifiedOrderIds: Set<string> = new Set();
 
@@ -97,7 +149,7 @@ class RealtimeService {
       console.log('🔧 Initializing RealtimeSDK...');
 
       // Check if we're in a valid state for initialization
-      if (!this.initializationEnabled) {
+      if (this.initializationBlocked) {
         console.log('⏸️ Initialization not enabled yet - waiting for enableInitialization()');
         return;
       }
@@ -140,16 +192,19 @@ class RealtimeService {
       // Create SDK configuration
       const sdkConfig: Partial<RealtimeSDKConfig> = {
         baseUrl: ENV.API_BASE_URL,
-        websocketUrl: ENV.WS_BASE_URL,
         authToken: token,
         enabledModes: this.getSdkEnabledModes(),
         primaryMode: this.getSdkPrimaryMode(),
         pollingInterval: this.config.pollingInterval,
         pollingEndpoint: '/api/v1/delivery/deliveries/available_orders/',
         websocketEndpoint: '/ws/driver/orders/',
-        pushEnabled: ENV.ENABLE_PUSH_NOTIFICATIONS,
-        logLevel: ENV.DEBUG_REALTIME ? 'debug' : 'info',
-        deduplicationEnabled: true
+        websocketReconnectInterval: 5000,
+        websocketMaxReconnectAttempts: 5,
+        pushEnabled: false,
+        logLevel: 'info',
+        enableMetrics: true,
+        deduplicationEnabled: true,
+        deduplicationWindow: 30000
       };
 
       // Create SDK instance
@@ -218,13 +273,19 @@ class RealtimeService {
     if (!this.sdk) return;
 
     this.sdk.setCallbacks({
-      onNewOrder: (data, source) => {
+      onNewOrder: (data: unknown, source: string) => {
         // Handle both direct order and delivery with nested order structure
-        const order = data.order || data;
-        const orderId = order.id;
+        const orderData = data as OrderData;
+        const order = orderData.order || orderData;
+        const orderId = order?.id;
         
+        if (!orderId) {
+          console.error('❌ Received order data without valid ID');
+          return;
+        }
+
         console.log(`🔔 New order received from ${source}: ${orderId}`);
-        console.log('📊 Full data structure:', JSON.stringify(data, null, 2));
+        console.log('📊 Full data structure:', JSON.stringify(orderData, null, 2));
 
         // Check if we've already seen this order
         if (this.seenOrderIds.has(orderId)) {
@@ -233,7 +294,7 @@ class RealtimeService {
         }
 
         // Validate order data using backend field names
-        if (!this.validateOrderData(data)) {
+        if (!this.validateOrderData(orderData)) {
           console.error(`❌ Order ${orderId} has invalid data, skipping`);
           return;
         }
@@ -243,14 +304,35 @@ class RealtimeService {
         this.notifiedOrderIds.add(orderId);
 
         // Extract the actual order data for the callback
-        const normalizedOrder = data.order ? data.order : data;
+        const normalizedOrder = orderData.order ? orderData.order : orderData;
         
         // Notify callback with the order data
-        this.callbacks.onNewOrder?.(normalizedOrder);
+        this.callbacks.onNewOrder?.(normalizedOrder as Order);
       },
       onOrderUpdate: (order) => {
         console.log(`📝 Order update received: ${order.id}`);
         this.callbacks.onOrderUpdate?.(order);
+      },
+      onNewBatchLeg: (batchLeg, source) => {
+        console.log(`📦 New batch leg received from ${source}: ${batchLeg.id}`);
+        console.log('📊 Batch leg data:', JSON.stringify(batchLeg, null, 2));
+        
+        // Check if we've already seen this batch leg
+        const legId = `batch_leg_${batchLeg.id}`;
+        if (this.seenOrderIds.has(legId)) {
+          console.log(`📎 Batch leg ${batchLeg.id} already seen, ignoring`);
+          return;
+        }
+        
+        this.seenOrderIds.add(legId);
+        this.notifiedOrderIds.add(legId);
+        
+        // Notify callback
+        this.callbacks.onNewBatchLeg?.(batchLeg);
+      },
+      onBatchLegUpdate: (batchLeg) => {
+        console.log(`📝 Batch leg update received: ${batchLeg.id}`);
+        this.callbacks.onBatchLegUpdate?.(batchLeg);
       },
       onConnectionChange: (connected, mode) => {
         console.log(`🔌 Connection status changed for ${mode}: ${connected}`);
@@ -266,20 +348,20 @@ class RealtimeService {
           this.callbacks.onConnectionChange?.(this.isConnected);
         }
       },
-      onError: (error, mode) => {
+      onError: (error: unknown, mode: string) => {
         console.error(`❌ Error from ${mode}: ${error}`);
         
         // Enhanced error handling for authentication issues
-        const errorMessage = error instanceof Error ? error.message : String(error);
+        const errorStr = typeof error === 'string' ? error : (error instanceof Error ? error.message : String(error));
         
         // Check for authentication/authorization errors
-        if (errorMessage.includes('auth') || 
-            errorMessage.includes('401') || 
-            errorMessage.includes('403') || 
-            errorMessage.includes('unauthorized') || 
-            errorMessage.includes('forbidden') ||
-            errorMessage.includes('token') ||
-            errorMessage.includes('jwt')) {
+        if (errorStr.includes('auth') || 
+            errorStr.includes('401') || 
+            errorStr.includes('403') || 
+            errorStr.includes('unauthorized') || 
+            errorStr.includes('forbidden') ||
+            errorStr.includes('token') ||
+            errorStr.includes('jwt')) {
           
           console.warn('🔑 Authentication error detected in realtime service');
           console.log('🔄 Attempting to refresh authentication token...');
@@ -287,8 +369,8 @@ class RealtimeService {
           // Try to reinitialize with fresh token
           this.handleAuthenticationError();
         } else {
-          console.error('❌ Non-authentication error:', errorMessage);
-          this.callbacks.onError?.(error);
+          console.error('❌ Non-authentication error:', errorStr);
+          this.callbacks.onError?.(errorStr);
         }
       },
       onMetrics: (metrics) => {
@@ -480,7 +562,7 @@ class RealtimeService {
   /**
    * Handle WebSocket messages (deprecated - handled by SDK)
    */
-  private handleWebSocketMessage(_data: any): void {
+  private handleWebSocketMessage(_data: unknown): void {
     // No-op - handled by SDK
   }
 
@@ -560,7 +642,7 @@ class RealtimeService {
   /**
    * Get order tracking stats (for debugging)
    */
-  getOrderTrackingStats(): { seen: number; notified: number; seenIds: string[]; notifiedIds: string[]; metrics?: any } {
+  getOrderTrackingStats(): OrderTrackingStats {
     const stats = {
       seen: this.seenOrderIds.size,
       notified: this.notifiedOrderIds.size,
@@ -572,7 +654,7 @@ class RealtimeService {
     if (this.sdk && this.config.enabled) {
       return {
         ...stats,
-        metrics: this.sdk.getMetrics()
+        metrics: this.sdk.getMetrics() as unknown as Record<string, unknown>
       };
     }
 
@@ -647,19 +729,21 @@ class RealtimeService {
    * @param data Order data to validate (could be Order or Delivery with nested order)
    * @returns True if order data is valid, false otherwise
    */
-  private validateOrderData(data: any): boolean {
-    if (!data) {
-      console.log('❌ Order validation failed: data is null/undefined');
+  private validateOrderData(data: unknown): boolean {
+    if (!data || typeof data !== 'object') {
+      console.log('❌ Order validation failed: data is null/undefined or not an object');
       return false;
     }
     
+    const orderData = data as OrderData;
+    
     // Handle both direct order and delivery with nested order structure
-    const order = data.order || data; // If it's a delivery object, use nested order
-    const deliveryId = data.id && data.order ? data.id : null; // Delivery ID if this is a delivery object
+    const order = orderData.order || orderData; // If it's a delivery object, use nested order
+    const deliveryId = orderData.id && orderData.order ? orderData.id : null; // Delivery ID if this is a delivery object
     
     if (!order.id) {
       console.log('❌ Order validation failed: missing order id');
-      console.log('Available top-level fields:', Object.keys(data));
+      console.log('Available top-level fields:', Object.keys(orderData));
       return false;
     }
 
@@ -667,22 +751,26 @@ class RealtimeService {
     
     // Use backend field names from DeliveryWithOrderSerializer -> OrderDetailSerializer
     // Be more flexible with customer data - accept either customer_details or customer field
-    const hasCustomer = !!(order.customer_details || order.customer);
-    const hasDeliveryAddress = !!order.delivery_address;
-    const hasOrderNumber = !!order.order_number;
-    const hasStatus = !!order.status;
+    const orderAny = order as unknown as Record<string, unknown>;
+    const hasCustomer = !!(orderAny.customer_details || orderAny.customer);
+    const hasDeliveryAddress = !!orderAny.delivery_address;
+    const hasOrderNumber = !!orderAny.order_number;
+    const hasStatus = !!orderAny.status;
 
     // Log customer info safely
-    const customerInfo = order.customer_details?.name || 
-                        order.customer_details?.full_name ||
-                        order.customer_name ||
-                        (typeof order.customer === 'object' ? order.customer?.name : `ID: ${  order.customer}`) ||
+    const customerDetails = orderAny.customer_details as Record<string, unknown> | undefined;
+    const customer = orderAny.customer as Record<string, unknown> | string | undefined;
+    
+    const customerInfo = customerDetails?.name || 
+                        customerDetails?.full_name ||
+                        orderAny.customer_name ||
+                        (typeof customer === 'object' && customer ? customer.name : `ID: ${customer}`) ||
                         'none';
 
     console.log(`   customer: ${hasCustomer} (${customerInfo})`);
-    console.log(`   delivery_address: ${hasDeliveryAddress} (${order.delivery_address || 'none'})`);
-    console.log(`   order_number: ${hasOrderNumber} (${order.order_number || 'none'})`);
-    console.log(`   status: ${hasStatus} (${order.status || 'none'})`);
+    console.log(`   delivery_address: ${hasDeliveryAddress} (${orderAny.delivery_address || 'none'})`);
+    console.log(`   order_number: ${hasOrderNumber} (${orderAny.order_number || 'none'})`);
+    console.log(`   status: ${hasStatus} (${orderAny.status || 'none'})`);
 
     // More lenient validation - only require essential fields
     const isValid = hasCustomer && hasDeliveryAddress && hasOrderNumber;
@@ -722,7 +810,7 @@ class RealtimeService {
       console.log('🗑️ Clearing potentially invalid cached data...');
       
       // Wait a moment before attempting refresh
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise<void>(resolve => setTimeout(() => resolve(), 1000));
       
       // Try to get a fresh token
       console.log('🔄 Attempting to get fresh authentication token...');

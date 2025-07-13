@@ -13,6 +13,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import { useNavigation } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
 
 import { useAuth } from '../contexts/AuthContext';
 import { useDriver } from '../contexts/DriverContext';
@@ -102,7 +104,15 @@ const BalanceCard: React.FC<BalanceCardProps> = ({ balance }) => (
   </View>
 );
 
+type ProfileStackParamList = {
+  Profile: undefined;
+  DriverProfileSettings: undefined;
+};
+
+type NavigationProp = StackNavigationProp<ProfileStackParamList, 'Profile'>;
+
 const ProfileScreen: React.FC = () => {
+  const navigation = useNavigation<NavigationProp>();
   const { user, logout } = useAuth();
   const { driver, balance, isLoading, error, updateOnlineStatus, getDriverProfile, getDriverBalance } = useDriver();
   const { settings } = useTenant();
@@ -336,10 +346,10 @@ const ProfileScreen: React.FC = () => {
           <Text style={styles.sectionTitle}>App Settings</Text>
           <View style={styles.card}>
             <ProfileItem
-              icon="settings-outline"
-              label="Preferences"
-              value="App configuration"
-              onPress={() => Alert.alert('Coming Soon', 'Settings will be available soon.')}
+              icon="car-outline"
+              label="Driver Profile"
+              value="Vehicle & delivery settings"
+              onPress={() => navigation.navigate('DriverProfileSettings' as any)}
             />
             <ProfileItem
               icon="help-circle-outline"

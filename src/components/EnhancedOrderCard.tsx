@@ -69,6 +69,54 @@ const EnhancedOrderCard: React.FC<EnhancedOrderCardProps> = ({
     return colors[order.status as keyof typeof colors] || '#6B7280';
   };
 
+  const getOrderVariant = () => {
+    if (isBatch) return 'batch';
+    if (order.delivery_type === 'fast' || order.delivery_type === 'food') return 'fast_food';
+    return 'regular';
+  };
+
+  const getVariantColors = () => {
+    const variant = getOrderVariant();
+    switch (variant) {
+      case 'fast_food':
+        return {
+          cardBackground: '#FEF3C7', // Warm yellow background
+          borderColor: '#F59E0B', // Orange border
+          iconColor: '#F59E0B', // Orange icon
+          badgeBackground: '#FBBF24', // Bright yellow badge
+          badgeText: '#92400E', // Dark orange text
+        };
+      case 'batch':
+        return {
+          cardBackground: 'linear-gradient', // Will use LinearGradient
+          borderColor: '#6366F1', // Indigo border
+          iconColor: '#FFF', // White icons
+          badgeBackground: 'rgba(255,255,255,0.2)', // Semi-transparent white
+          badgeText: '#FFF', // White text
+        };
+      default:
+        return {
+          cardBackground: Design.colors.background, // Standard white/light
+          borderColor: Design.colors.gray200, // Light gray border
+          iconColor: '#6B7280', // Standard gray
+          badgeBackground: Design.colors.gray100, // Light gray badge
+          badgeText: Design.colors.text, // Standard text
+        };
+    }
+  };
+
+  const getVariantIcon = () => {
+    const variant = getOrderVariant();
+    switch (variant) {
+      case 'fast_food':
+        return 'flash'; // 🚀 Fast delivery icon
+      case 'batch':
+        return 'cube'; // Multi-stop icon
+      default:
+        return 'bag-outline'; // Regular order icon
+    }
+  };
+
   const handleQRScan = async (e: any) => {
     setShowQRScanner(false);
     
@@ -116,52 +164,86 @@ const EnhancedOrderCard: React.FC<EnhancedOrderCardProps> = ({
     );
   };
 
-  const renderRegularOrder = () => (
-    <View style={styles.regularCard}>
-      <View style={styles.regularHeader}>
-        <View style={styles.orderInfo}>
-          <Text style={styles.orderNumber}>Order #{order.order_number || order.id}</Text>
-          <Text style={styles.customerName}>
-            {order.customer_details?.name || 'Customer'}
-          </Text>
+  const renderRegularOrder = () => {
+    const variant = getOrderVariant();
+    const variantColors = getVariantColors();
+    const variantIcon = getVariantIcon();
+    
+    return (
+      <View style={[
+        styles.regularCard,
+        variant === 'fast_food' && { backgroundColor: variantColors.cardBackground, borderWidth: 2, borderColor: variantColors.borderColor }
+      ]}>
+        <View style={styles.regularHeader}>
+          <View style={styles.orderInfo}>
+            <View style={styles.orderNumberRow}>
+              <Ionicons 
+                name={variantIcon} 
+                size={18} 
+                color={variantColors.iconColor} 
+                style={{ marginRight: 8 }}
+              />
+              <Text style={styles.orderNumber}>Order #{order.order_number || order.id}</Text>
+              {variant === 'fast_food' && (
+                <View style={[styles.fastFoodBadge, { backgroundColor: variantColors.badgeBackground }]}>
+                  <Text style={[styles.fastFoodBadgeText, { color: variantColors.badgeText }]}>
+                    {order.delivery_type === 'fast' ? '🚀 FAST' : '🍔 FOOD'}
+                  </Text>
+                </View>
+              )}
+            </View>
+            <Text style={styles.customerName}>
+              {order.customer_details?.name || 'Customer'}
+            </Text>
+          </View>
+          <View style={[styles.statusBadge, { backgroundColor: getStatusColor() }]}>
+            <Text style={styles.statusText}>
+              {order.status?.replace('_', ' ').toUpperCase()}
+            </Text>
+          </View>
         </View>
-        <View style={[styles.statusBadge, { backgroundColor: getStatusColor() }]}>
-          <Text style={styles.statusText}>
-            {order.status?.replace('_', ' ').toUpperCase()}
-          </Text>
-        </View>
-      </View>
 
-      <View style={styles.addressSection}>
-        <View style={styles.addressRow}>
-          <Ionicons name="location" size={16} color="#10B981" />
-          <Text style={styles.addressText} numberOfLines={2}>
-            {order.pickup_address || 'Pickup Location'}
-          </Text>
+        <View style={[
+          styles.addressSection,
+          variant === 'fast_food' && { backgroundColor: 'rgba(251, 191, 36, 0.1)' }
+        ]}>
+          <View style={styles.addressRow}>
+            <Ionicons name="location" size={16} color="#10B981" />
+            <Text style={styles.addressText} numberOfLines={2}>
+              {order.pickup_address || 'Pickup Location'}
+            </Text>
+          </View>
+          <View style={styles.addressDivider} />
+          <View style={styles.addressRow}>
+            <Ionicons name="flag" size={16} color="#EF4444" />
+            <Text style={styles.addressText} numberOfLines={2}>
+              {order.delivery_address || 'Delivery Location'}
+            </Text>
+          </View>
         </View>
-        <View style={styles.addressDivider} />
-        <View style={styles.addressRow}>
-          <Ionicons name="flag" size={16} color="#EF4444" />
-          <Text style={styles.addressText} numberOfLines={2}>
-            {order.delivery_address || 'Delivery Location'}
-          </Text>
-        </View>
-      </View>
 
-      {order.delivery_type && (
-        <View style={styles.deliveryTypeBadge}>
-          <Ionicons 
-            name={order.delivery_type === 'fast' ? 'flash' : 'time-outline'} 
-            size={14} 
-            color="#8B5CF6" 
-          />
-          <Text style={styles.deliveryTypeText}>
-            {order.delivery_type.toUpperCase()}
-          </Text>
-        </View>
-      )}
-    </View>
-  );
+        {order.delivery_type && variant !== 'fast_food' && (
+          <View style={styles.deliveryTypeBadge}>
+            <Ionicons 
+              name={order.delivery_type === 'fast' ? 'flash' : 'time-outline'} 
+              size={14} 
+              color="#8B5CF6" 
+            />
+            <Text style={styles.deliveryTypeText}>
+              {order.delivery_type.toUpperCase()}
+            </Text>
+          </View>
+        )}
+
+        {order.priority === 'urgent' && (
+          <View style={styles.urgentBadge}>
+            <Ionicons name="warning" size={14} color="#DC2626" />
+            <Text style={styles.urgentText}>URGENT</Text>
+          </View>
+        )}
+      </View>
+    );
+  };
 
   const renderBatchOrder = () => (
     <LinearGradient
@@ -309,10 +391,44 @@ const styles = StyleSheet.create({
   orderInfo: {
     flex: 1,
   },
+  orderNumberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    marginBottom: 4,
+  },
   orderNumber: {
     fontSize: 16,
     fontWeight: '700',
     color: Design.colors.text,
+  },
+  fastFoodBadge: {
+    marginLeft: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
+  },
+  fastFoodBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  urgentBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FEF2F2',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+    marginTop: 8,
+  },
+  urgentText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#DC2626',
+    letterSpacing: 0.5,
   },
   customerName: {
     fontSize: 14,

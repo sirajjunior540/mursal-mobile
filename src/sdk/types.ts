@@ -51,6 +51,8 @@ export interface RealtimeSDKConfig {
 export interface RealtimeSDKCallbacks {
   onNewOrder?: (order: Order, source: CommunicationMode) => void;
   onOrderUpdate?: (order: Order, source: CommunicationMode) => void;
+  onNewBatchLeg?: (batchLeg: any, source: CommunicationMode) => void;
+  onBatchLegUpdate?: (batchLeg: any, source: CommunicationMode) => void;
   onConnectionChange?: (connected: boolean, mode: CommunicationMode) => void;
   onError?: (error: string, mode: CommunicationMode) => void;
   onMetrics?: (metrics: RealtimeMetrics) => void;

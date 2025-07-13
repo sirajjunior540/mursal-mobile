@@ -31,7 +31,8 @@ import AcceptedOrdersScreen from './src/screens/AcceptedOrdersScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
-import RouteNavigationScreen from './src/screens/RouteNavigationScreen';
+import BatchLegsScreen from './src/screens/BatchLegsScreen';
+import DriverProfileSettingsScreen from './src/screens/DriverProfileSettingsScreen';
 
 // Context providers
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
@@ -58,6 +59,7 @@ interface RootStackParamList extends Record<string, object | undefined> {
   Login: undefined;
   Main: undefined;
   OrderDetails: { orderId: string; autoNavigate?: boolean };
+  DriverProfileSettings: undefined;
 }
 
 interface TabParamList extends Record<string, object | undefined> {
@@ -86,7 +88,7 @@ const MainTabs = () => {
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarIcon: ({ focused, color, size }: { focused: boolean; color: string; size: number }) => {
-          let iconName: keyof typeof Ionicons.glyphMap = 'home';
+          let iconName: string = 'home';
 
           if (route.name === 'Dashboard') {
             iconName = focused ? 'grid' : 'grid-outline';
@@ -100,7 +102,7 @@ const MainTabs = () => {
             iconName = focused ? 'person' : 'person-outline';
           }
 
-          return <Ionicons name={iconName} size={size} color={color} />;
+          return <Ionicons name={iconName as any} size={size} color={color} />;
         },
         tabBarActiveTintColor: '#3B82F6',
         tabBarInactiveTintColor: '#6B7280',
@@ -135,7 +137,7 @@ const MainTabs = () => {
       />
       <Tab.Screen 
         name="RouteNavigation" 
-        component={RouteNavigationScreen} 
+        component={BatchLegsScreen} 
         options={{ tabBarLabel: 'Available' }}
       />
       <Tab.Screen 
@@ -313,6 +315,15 @@ const AppNavigator = () => {
                 headerShown: false,
                 presentation: 'modal',
                 animation: 'slide_from_bottom'
+              }}
+            />
+            <Stack.Screen 
+              name="DriverProfileSettings" 
+              component={DriverProfileSettingsScreen} 
+              options={{ 
+                headerShown: false,
+                presentation: 'modal',
+                animation: 'slide_from_right'
               }}
             />
           </>
