@@ -23,6 +23,11 @@ import ContextErrorBoundary from './src/components/ContextErrorBoundary';
 import { NetworkStatus } from './src/components/NetworkStatus';
 import IncomingOrderModal from './src/components/IncomingOrderModal';
 
+// Import test utilities in development
+if (__DEV__) {
+  import('./src/utils/testLogin');
+}
+
 // Screens
 import { SplashScreen } from './src/screens/SplashScreen';
 import LoginScreen from './src/screens/auth/LoginScreen';

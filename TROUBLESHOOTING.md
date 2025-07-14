@@ -29,7 +29,7 @@ Make sure your Django server is running properly:
 python manage.py runserver 0.0.0.0:8000
 
 # Check if it's accessible from your network
-curl -H "Host: sirajjunior.192.168.1.153" http://192.168.1.153:8000/
+curl -H "Host: sirajjunior.192.168.1.163" http://192.168.1.163:8000/
 ```
 
 ### 3. Verify Django Configuration
@@ -41,8 +41,8 @@ Check your Django `settings.py`:
 ALLOWED_HOSTS = [
     'localhost',
     '127.0.0.1',
-    '192.168.1.153',  # Your development machine IP
-    'sirajjunior.192.168.1.153',  # Tenant host
+    '192.168.1.163',  # Your development machine IP
+    'sirajjunior.192.168.1.163',  # Tenant host
     'sirajjunior.localhost',  # For local development
 ]
 
@@ -79,18 +79,18 @@ urlpatterns = [
 
 ```bash
 # Test basic connectivity
-curl -v -H "Host: sirajjunior.192.168.1.153" http://192.168.1.153:8000/health/
+curl -v -H "Host: sirajjunior.192.168.1.163" http://192.168.1.163:8000/health/
 
 # Test auth endpoint
-curl -v -H "Host: sirajjunior.192.168.1.153" \
+curl -v -H "Host: sirajjunior.192.168.1.163" \
      -H "Content-Type: application/json" \
-     http://192.168.1.153:8000/api/v1/auth/
+     http://192.168.1.163:8000/api/v1/auth/
 
 # Test login endpoint (replace with actual credentials)
-curl -v -H "Host: sirajjunior.192.168.1.153" \
+curl -v -H "Host: sirajjunior.192.168.1.163" \
      -H "Content-Type: application/json" \
      -d '{"username":"testuser","password":"testpass","tenantId":"sirajjunior"}' \
-     http://192.168.1.153:8000/api/v1/auth/login/
+     http://192.168.1.163:8000/api/v1/auth/login/
 ```
 
 ## 🐛 Common Issues & Solutions
@@ -104,7 +104,7 @@ curl -v -H "Host: sirajjunior.192.168.1.153" \
 
 ### Issue 2: "DisallowedHost" error
 **Cause**: Django ALLOWED_HOSTS doesn't include your IP/host
-**Solution**: Add `192.168.1.153` and `sirajjunior.192.168.1.153` to ALLOWED_HOSTS
+**Solution**: Add `192.168.1.163` and `sirajjunior.192.168.1.163` to ALLOWED_HOSTS
 
 ### Issue 3: "CORS error"
 **Cause**: Django not configured to accept requests from mobile app
@@ -159,8 +159,8 @@ npm run android  # or npm run ios
 The app now has enhanced debug logging. Check the logs for:
 
 ```
-[API] GET http://192.168.1.153:8000/api/v1/auth/
-[API] Host header: sirajjunior.192.168.1.153
+[API] GET http://192.168.1.163:8000/api/v1/auth/
+[API] Host header: sirajjunior.192.168.1.163
 [API] Using auth token: abcd1234...
 ```
 

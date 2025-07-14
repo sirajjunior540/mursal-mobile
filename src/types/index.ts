@@ -231,6 +231,7 @@ export interface Order {
 
 // Extended interface for batch orders
 export interface BatchOrder extends Order {
+  batch_number?: string;  // Added for apiTransformers.ts compatibility
   current_batch: {
     id: string;
     batch_number: string;

@@ -21,6 +21,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Design } from '../../constants/designSystem';
 import AppLogo from '../../components/AppLogo';
+import { runLoginDiagnostics, LoginDiagnostics } from '../../utils/loginDiagnostics';
 
 const { width } = Dimensions.get('window');
 
@@ -220,8 +221,50 @@ const LoginScreen: React.FC = () => {
       await login(formData.username, formData.password, selectedTenant);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Login failed';
-      Alert.alert('Login Error', errorMessage);
+      
+      // Show detailed error with diagnostic option
+      Alert.alert(
+        'Login Error',
+        errorMessage,
+        [
+          {
+            text: 'Run Diagnostics',
+            onPress: async () => {
+              Alert.alert('Running Diagnostics', 'Please check the console for detailed information.');
+              await runLoginDiagnostics();
+              // Also test with the entered credentials
+              await LoginDiagnostics.testLogin(formData.username, formData.password);
+            }
+          },
+          {
+            text: 'OK',
+            style: 'cancel'
+          }
+        ]
+      );
     }
+  };
+
+  const handleRunDiagnostics = async (): Promise<void> => {
+    Alert.alert(
+      'Login Diagnostics',
+      'This will test your connection to the server and help identify login issues. Check the console for detailed results.',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel'
+        },
+        {
+          text: 'Run Diagnostics',
+          onPress: async () => {
+            await runLoginDiagnostics();
+            if (formData.username && formData.password) {
+              await LoginDiagnostics.testLogin(formData.username, formData.password);
+            }
+          }
+        }
+      ]
+    );
   };
 
   return (
@@ -365,6 +408,18 @@ const LoginScreen: React.FC = () => {
                     <Text style={styles.securityNote}>
                       🔒 Your login is secured and will be remembered for convenience
                     </Text>
+                    
+                    {/* Debug Button - Only show in development */}
+                    {__DEV__ && (
+                      <TouchableOpacity
+                        style={styles.diagnosticsButton}
+                        onPress={handleRunDiagnostics}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="bug-outline" size={18} color={Design.colors.primary} />
+                        <Text style={styles.diagnosticsButtonText}>Run Diagnostics</Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                 </View>
 
@@ -607,6 +662,25 @@ const styles = StyleSheet.create({
     height: 6,
     borderRadius: 3,
     backgroundColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  
+  // Diagnostics Button
+  diagnosticsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: Design.spacing[4],
+    paddingVertical: Design.spacing[2],
+    paddingHorizontal: Design.spacing[4],
+    borderRadius: Design.borderRadius.base,
+    borderWidth: 1,
+    borderColor: Design.colors.primary,
+    backgroundColor: 'rgba(33, 150, 243, 0.1)',
+  },
+  diagnosticsButtonText: {
+    ...Design.typography.bodySmall,
+    color: Design.colors.primary,
+    marginLeft: Design.spacing[2],
+    fontWeight: '600',
   },
 });
 

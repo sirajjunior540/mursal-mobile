@@ -10,6 +10,9 @@
 
 import Config from 'react-native-config';
 
+// Declare global __DEV__ variable
+declare const __DEV__: boolean;
+
 // Environment types
 export type Environment = 'development' | 'staging' | 'production' | 'test';
 
@@ -30,9 +33,11 @@ interface EnvironmentConfig {
   API_BASE_URL: string;
   API_HOST: string;
   API_TIMEOUT: number;
+
   
   // Tenant configuration
   TENANT_ID: string;
+  DEFAULT_TENANT_ID: string;
   TENANT_SUBDOMAIN: string;
   
   // WebSocket configuration
@@ -104,6 +109,7 @@ const getCurrentEnvironment = (): Environment => {
   const validEnvs: Environment[] = ['development', 'staging', 'production', 'test'];
   
   if (!env || !validEnvs.includes(env)) {
+    // eslint-disable-next-line no-console
     console.warn(`Invalid NODE_ENV: ${env}, defaulting to development`);
     return 'development';
   }
@@ -155,6 +161,7 @@ const buildConfig = (): EnvironmentConfig => {
     
     // Tenant configuration
     TENANT_ID: tenantId,
+    DEFAULT_TENANT_ID: getEnvVar('DEFAULT_TENANT_ID', tenantId),
     TENANT_SUBDOMAIN: tenantSubdomain,
     
     // WebSocket configuration
@@ -185,15 +192,21 @@ let config: EnvironmentConfig;
 
 try {
   config = buildConfig();
-  console.log('✅ Configuration loaded successfully');
-  console.log('🔧 API Base URL:', config.API_BASE_URL);
-  console.log('🔧 Tenant ID:', config.TENANT_ID);
+  if (__DEV__) {
+    /* eslint-disable no-console */
+    console.log('✅ Configuration loaded successfully');
+    console.log('🔧 API Base URL:', config.API_BASE_URL);
+    console.log('🔧 Tenant ID:', config.TENANT_ID);
+    /* eslint-enable no-console */
+  }
 } catch (error) {
+  /* eslint-disable no-console */
   console.error('❌ Configuration Error:', error);
   
   // Provide emergency fallback configuration to prevent app crash
   console.warn('🚨 Using emergency fallback configuration');
-  const fallbackIP = '192.168.1.153'; // Use existing IP from .env as fallback
+  /* eslint-enable no-console */
+  const fallbackIP = '192.168.1.163'; // Use existing IP from .env as fallback
   
   config = {
     NODE_ENV: 'development',
@@ -207,6 +220,7 @@ try {
     API_HOST: `sirajjunior.${fallbackIP}`,
     API_TIMEOUT: 30000,
     TENANT_ID: 'sirajjunior',
+    DEFAULT_TENANT_ID: 'sirajjunior',
     TENANT_SUBDOMAIN: 'sirajjunior',
     WS_BASE_URL: `ws://${fallbackIP}:8000`,
     WS_HOST: `sirajjunior.${fallbackIP}`,
@@ -225,7 +239,10 @@ try {
     },
   };
   
-  console.log('🚨 Emergency config loaded with API URL:', config.API_BASE_URL);
+  if (__DEV__) {
+    // eslint-disable-next-line no-console
+    console.log('🚨 Emergency config loaded with API URL:', config.API_BASE_URL);
+  }
 }
 
 // Export main configuration
@@ -250,6 +267,7 @@ export const getWebSocketUrl = (endpoint: string): string => {
 };
 
 // Debug logging functions
+/* eslint-disable no-console */
 export const apiDebug = (...args: unknown[]): void => {
   if (ENV.DEBUG.API_CALLS) {
     console.log('[API]', ...args);
@@ -273,6 +291,7 @@ export const performanceDebug = (...args: unknown[]): void => {
     console.log('[PERFORMANCE]', ...args);
   }
 };
+/* eslint-enable no-console */
 
 // Configuration validation function
 export const validateConfig = (): { valid: boolean; errors: string[] } => {
@@ -284,7 +303,11 @@ export const validateConfig = (): { valid: boolean; errors: string[] } => {
   
   // URL validation
   try {
-    new URL(ENV.API_BASE_URL);
+    const url = new URL(ENV.API_BASE_URL);
+    // Use the url variable to satisfy ESLint
+    if (!url.protocol) {
+      errors.push('Invalid API_BASE_URL protocol');
+    }
   } catch {
     errors.push('Invalid API_BASE_URL format');
   }
@@ -308,6 +331,7 @@ export const validateConfig = (): { valid: boolean; errors: string[] } => {
 // Development helper to display configuration
 export const debugConfig = (): void => {
   if (ENV.IS_DEVELOPMENT) {
+    // eslint-disable-next-line no-console
     console.log('🔧 Configuration:', {
       environment: ENV.NODE_ENV,
       server: `${ENV.SERVER_PROTOCOL}://${ENV.SERVER_IP}:${ENV.SERVER_PORT}`,
@@ -320,8 +344,10 @@ export const debugConfig = (): void => {
     
     const validation = validateConfig();
     if (!validation.valid) {
+      // eslint-disable-next-line no-console
       console.error('❌ Configuration errors:', validation.errors);
     } else {
+      // eslint-disable-next-line no-console
       console.log('✅ Configuration is valid');
     }
   }
@@ -331,6 +357,7 @@ export const debugConfig = (): void => {
 try {
   const validation = validateConfig();
   if (!validation.valid) {
+    // eslint-disable-next-line no-console
     console.error('❌ Configuration validation failed:', validation.errors);
     // Only throw in production if it's a critical error
     if (ENV.IS_PRODUCTION && validation.errors.some(error => 
@@ -338,17 +365,23 @@ try {
     )) {
       throw new ConfigValidationError(`Critical configuration error: ${validation.errors.join(', ')}`);
     } else {
+      // eslint-disable-next-line no-console
       console.warn('⚠️ Using configuration with warnings in development mode');
     }
   } else {
-    console.log('✅ Configuration validation passed');
+    if (__DEV__) {
+      // eslint-disable-next-line no-console
+      console.log('✅ Configuration validation passed');
+    }
   }
 } catch (error) {
+  // eslint-disable-next-line no-console
   console.error('❌ Configuration validation error:', error);
   // Don't let configuration errors prevent app startup in development
   if (ENV.IS_PRODUCTION) {
     throw error;
   } else {
+    // eslint-disable-next-line no-console
     console.warn('⚠️ Continuing with fallback configuration in development');
   }
 }

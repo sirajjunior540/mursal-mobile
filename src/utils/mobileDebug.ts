@@ -278,7 +278,7 @@ import { locationService } from '../services/locationService';
       console.log('URL:', url);
       
       // Direct API call (need to use full URL with base)
-      const baseUrl = 'http://192.168.1.153:8000'; // TODO: Use ENV.API_BASE_URL
+      const baseUrl = 'http://192.168.1.163:8000'; // TODO: Use ENV.API_BASE_URL
       const fullUrl = `${baseUrl}${url}`;
       console.log('Full URL:', fullUrl);
       

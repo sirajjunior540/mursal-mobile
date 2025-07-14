@@ -34,6 +34,7 @@ export const STORAGE_KEYS = {
   ORDER_HISTORY: '@order_history',
   DRIVER_SETTINGS: '@driver_settings',
   LAST_SYNC: '@last_sync',
+  TENANT_ID: '@tenant_id',
 } as const;
 
 // App Settings
