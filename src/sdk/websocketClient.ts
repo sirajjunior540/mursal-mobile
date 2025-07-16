@@ -9,6 +9,7 @@ export interface WebSocketClientConfig {
   baseUrl: string;
   endpoint: string;
   authToken?: string;
+  tenantId?: string;
   reconnectInterval: number;
   maxReconnectAttempts: number;
 }
@@ -81,6 +82,12 @@ export class WebSocketClient {
     try {
       const wsUrl = this.getWebSocketUrl();
       console.log(`[WebSocketClient] Connecting to ${wsUrl}`);
+      console.log('[WebSocketClient] Config:', {
+        baseUrl: this.config.baseUrl,
+        endpoint: this.config.endpoint,
+        hasToken: !!this.config.authToken,
+        tenantId: this.config.tenantId
+      });
 
       this.websocket = new WebSocket(wsUrl);
 
@@ -114,10 +121,18 @@ export class WebSocketClient {
    */
   private handleMessage(event: MessageEvent): void {
     try {
+      console.log('[WebSocketClient] Raw message received:', event.data);
       const message = JSON.parse(event.data) as WebSocketMessage;
+      
+      // Log authentication responses
+      if (message.type === 'auth_success' || message.type === 'auth_error' || message.type === 'authenticated') {
+        console.log('[WebSocketClient] Authentication response:', message);
+      }
+      
       this.callbacks.onMessage?.(message);
     } catch (error) {
       console.error('[WebSocketClient] Error parsing message:', error);
+      console.error('[WebSocketClient] Raw data:', event.data);
       this.callbacks.onError?.(`Error parsing WebSocket message: ${error}`);
     }
   }
@@ -149,7 +164,13 @@ export class WebSocketClient {
    */
   private handleError(event: Event): void {
     console.error('[WebSocketClient] WebSocket error:', event);
-    this.callbacks.onError?.('WebSocket error occurred');
+    
+    // Extract error details if available
+    const errorDetails = (event as any).message || (event as any).reason || 'Unknown error';
+    const errorMessage = `WebSocket error: ${errorDetails}`;
+    
+    console.error('[WebSocketClient] Error details:', errorDetails);
+    this.callbacks.onError?.(errorMessage);
   }
 
   /**
@@ -211,7 +232,9 @@ export class WebSocketClient {
       ? this.config.endpoint.substring(1) 
       : this.config.endpoint;
 
-    return `${wsUrl}${endpoint}`;
+    const fullUrl = `${wsUrl}${endpoint}`;
+    console.log('[WebSocketClient] WebSocket URL:', fullUrl);
+    return fullUrl;
   }
 
   /**
@@ -237,7 +260,7 @@ export class WebSocketClient {
         type: 'authenticate',
         token,
         // Add tenant information for multi-tenant WebSocket
-        tenant: 'sirajjunior'  // TODO: Get from config
+        tenant: this.config.tenantId || 'sirajjunior'
       };
 
       this.sendMessage(authMessage);
@@ -246,6 +269,13 @@ export class WebSocketClient {
       console.error('[WebSocketClient] Error sending authentication:', error);
       this.callbacks.onError?.(`Error sending authentication: ${error}`);
     }
+  }
+
+  /**
+   * Check if WebSocket is connected
+   */
+  isConnected(): boolean {
+    return this.connected && this.websocket?.readyState === WebSocket.OPEN;
   }
 
   /**

@@ -35,7 +35,7 @@ const BatchOrderCard: React.FC<BatchOrderCardProps> = ({
   const getStatusColor = () => {
     switch (batch.status) {
       case 'assigned': return '#F59E0B';
-      case 'accepted': return '#3B82F6';
+      case 'confirmed': return '#3B82F6';
       case 'picked_up': return '#8B5CF6';
       case 'in_transit': return '#10B981';
       case 'delivered': return '#059669';

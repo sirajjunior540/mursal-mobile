@@ -34,10 +34,7 @@ class ContextErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    // Log the error
-    console.error(`🚨 Context Error in ${this.props.contextName}:`, error);
-    console.error('Error Info:', errorInfo);
-    
+    // Store error information for display
     this.setState({
       error,
       errorInfo,
@@ -82,14 +79,7 @@ class ContextErrorBoundary extends Component<Props, State> {
               <Text style={styles.retryButtonText}>Try Again</Text>
             </TouchableOpacity>
             
-            {__DEV__ && this.state.errorInfo && (
-              <View style={styles.debugInfo}>
-                <Text style={styles.debugTitle}>Debug Info:</Text>
-                <Text style={styles.debugText}>
-                  {this.state.errorInfo.componentStack}
-                </Text>
-              </View>
-            )}
+            
           </View>
         </View>
       );
@@ -156,23 +146,6 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontWeight: '600',
     marginLeft: 8,
-  },
-  debugInfo: {
-    marginTop: 16,
-    padding: 12,
-    backgroundColor: '#f8f8f8',
-    borderRadius: 8,
-    maxHeight: 200,
-  },
-  debugTitle: {
-    fontWeight: 'bold',
-    marginBottom: 8,
-    color: COLORS.text.primary,
-  },
-  debugText: {
-    fontSize: 12,
-    fontFamily: 'monospace',
-    color: COLORS.text.secondary,
   },
 });
 

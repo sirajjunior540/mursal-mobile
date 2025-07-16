@@ -52,7 +52,7 @@ const Button: React.FC<ButtonProps> = ({
     }).start();
   };
 
-  const handlePress = (event: any) => {
+  const handlePress = (event: object) => {
     if (!disabled && !loading) {
       // Haptic feedback
       Haptics.trigger('impactLight', {

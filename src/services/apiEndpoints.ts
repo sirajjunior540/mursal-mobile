@@ -20,7 +20,6 @@ import {
 } from '../types/batchLeg';
 import { STORAGE_KEYS } from '../constants';
 import { Storage, SecureStorage } from '../utils';
-import { apiDebug } from '../config/environment';
 import { ApiTransformers } from './apiTransformers';
 import { 
   BackendDelivery, 
@@ -29,6 +28,8 @@ import {
   BackendBatch,
   BackendTransactionData,
   BackendTransactionResponse,
+  BackendBatchLeg,
+  BackendBatchLegResponse,
   TokenResponse,
   UserInfoResponse,
   SmartDeliveryData,
@@ -62,8 +63,6 @@ export class ApiEndpoints {
   // ==================== Authentication ====================
   
   async login(credentials: LoginRequest): Promise<ApiResponse<LoginResponse>> {
-    apiDebug('Login attempt with username:', credentials.username);
-    
     try {
       // Convert camelCase tenantId to snake_case tenant_id for backend
       const requestBody = {
@@ -102,7 +101,6 @@ export class ApiEndpoints {
           
           await Storage.setItem(STORAGE_KEYS.USER_DATA, userInfo);
           
-          apiDebug('Login successful, tokens stored');
           
           // Create driver data from user info
           const driverInfo: Driver = {
@@ -133,7 +131,6 @@ export class ApiEndpoints {
         error: 'Invalid response from server'
       };
     } catch (error) {
-      apiDebug('Login error:', error);
       throw error;
     }
   }
@@ -147,9 +144,7 @@ export class ApiEndpoints {
       await Storage.removeItem(STORAGE_KEYS.DRIVER_DATA);
       await Storage.removeItem(STORAGE_KEYS.TENANT_ID);
       
-      apiDebug('Logout successful, all data cleared');
     } catch (error) {
-      apiDebug('Error during logout:', error);
       throw error;
     }
   }
@@ -158,7 +153,6 @@ export class ApiEndpoints {
     try {
       const refreshToken = await SecureStorage.getRefreshToken();
       if (!refreshToken) {
-        apiDebug('No refresh token available');
         return false;
       }
 
@@ -169,13 +163,11 @@ export class ApiEndpoints {
 
       if (response.success && response.data?.access) {
         await SecureStorage.setAuthToken(response.data.access);
-        apiDebug('Token refreshed successfully');
         return true;
       }
 
       return false;
     } catch (error) {
-      apiDebug('Token refresh failed:', error);
       return false;
     }
   }
@@ -183,14 +175,12 @@ export class ApiEndpoints {
   // ==================== Driver Management ====================
 
   async getDriverInfo(driverId?: string): Promise<ApiResponse<Driver>> {
-    apiDebug('👤 Fetching driver info...');
     
     // Try to get driver ID from various sources
     if (!driverId) {
       const cachedDriver = await Storage.getItem(STORAGE_KEYS.DRIVER_DATA);
       if (cachedDriver && (cachedDriver as Driver).id) {
         driverId = (cachedDriver as Driver).id;
-        apiDebug(`📱 Using cached driver ID: ${driverId}`);
       } else {
         // Try to extract from token
         const token = await SecureStorage.getAuthToken();
@@ -198,9 +188,7 @@ export class ApiEndpoints {
           try {
             const payload = JSON.parse(atob(token.split('.')[1]));
             driverId = payload.user_id?.toString();
-            apiDebug(`🔑 Extracted driver ID from token: ${driverId}`);
           } catch (error) {
-            apiDebug('Failed to decode token for driver ID:', error);
           }
         }
       }
@@ -214,7 +202,6 @@ export class ApiEndpoints {
     
     // If the 'me' endpoint fails, try the driver-profile endpoint as fallback
     if (!response.success && response.error?.includes('404')) {
-      apiDebug('⚠️ Driver me endpoint failed, trying driver-profile endpoint...');
       response = await this.client.get<unknown>('/api/v1/auth/driver-profile/');
     }
 
@@ -227,7 +214,6 @@ export class ApiEndpoints {
       // Cache driver data
       await Storage.setItem(STORAGE_KEYS.DRIVER_DATA, driver);
       
-      apiDebug('✅ Driver info retrieved successfully', driver);
       return {
         success: true,
         data: driver,
@@ -239,14 +225,12 @@ export class ApiEndpoints {
   }
 
   async updateDriverStatus(isOnline: boolean): Promise<ApiResponse<void>> {
-    apiDebug(`🔄 Updating driver status to: ${isOnline ? 'online' : 'offline'}`);
     
     // Get driver ID
     const cachedDriver = await Storage.getItem(STORAGE_KEYS.DRIVER_DATA);
     const driverId = (cachedDriver as Driver)?.id || await this.extractDriverIdFromToken();
     
     if (!driverId) {
-      apiDebug('❌ No driver ID available for status update');
       return {
         success: false,
         data: undefined,
@@ -254,7 +238,6 @@ export class ApiEndpoints {
       };
     }
     
-    apiDebug(`🚚 Updating driver status for ID ${driverId} to ${isOnline ? 'online' : 'offline'}`);
     
     try {
       const response = await this.client.post<void>('/api/v1/auth/drivers/update_my_status/', {
@@ -264,7 +247,6 @@ export class ApiEndpoints {
       });
       
       if (!response.success && response.error?.includes('404')) {
-        apiDebug('⚠️ Driver not found (404), clearing cached driver data...');
         await Storage.removeItem(STORAGE_KEYS.DRIVER_DATA);
         return {
           success: false,
@@ -275,7 +257,6 @@ export class ApiEndpoints {
       
       return response;
     } catch (error) {
-      apiDebug('❌ Failed to update driver status:', error);
       return {
         success: false,
         data: undefined,
@@ -285,11 +266,9 @@ export class ApiEndpoints {
   }
 
   async updateLocation(latitude: number, longitude: number): Promise<ApiResponse<void>> {
-    apiDebug(`📍 API: Updating location to ${latitude}, ${longitude}`);
 
     // Use the new update_my_location endpoint that doesn't require driver ID
     const endpoint = `/api/v1/auth/drivers/update_my_location/`;
-    apiDebug(`🎯 Calling location endpoint: ${endpoint}`);
 
     try {
       const response = await this.client.post<void>(endpoint, {
@@ -297,14 +276,9 @@ export class ApiEndpoints {
         longitude
       });
 
-      apiDebug('📡 Location update response:', {
-        success: response.success,
-        error: response.error
-      });
 
       return response;
     } catch (error) {
-      apiDebug('❌ Location update failed:', error);
       throw error;
     }
   }
@@ -342,17 +316,27 @@ export class ApiEndpoints {
   async getAvailableOrders(): Promise<ApiResponse<Order[]>> {
     // Get available orders for the driver to accept (unassigned/broadcast orders)
     try {
-      const locationService = await import('../services/locationService');
-      const currentLocation = await locationService.locationService.getCurrentLocation();
+      let apiUrl = '/api/v1/delivery/deliveries/available_orders/';
       
-      // Use available_orders endpoint that includes location for nearby orders
-      const response = await this.client.get<BackendDelivery[]>(
-        `/api/v1/delivery/deliveries/available_orders/?latitude=${currentLocation.latitude}&longitude=${currentLocation.longitude}`
-      );
+      // Try to get current location for nearby orders (optional)
+      try {
+        const locationService = await import('../services/locationService');
+        const currentLocation = await locationService.locationService.getCurrentLocation();
+        if (currentLocation && currentLocation.latitude && currentLocation.longitude) {
+          apiUrl += `?latitude=${currentLocation.latitude}&longitude=${currentLocation.longitude}`;
+          console.log('[API] Using location for available orders:', currentLocation);
+        }
+      } catch (locationError) {
+        console.warn('[API] Could not get location, fetching all available orders:', locationError);
+        // Continue without location parameters
+      }
+      
+      console.log('[API] Fetching available orders from:', apiUrl);
+      const response = await this.client.get<BackendDelivery[]>(apiUrl);
       
       if (response.success && response.data) {
         const orders: Order[] = (response.data || []).map(ApiTransformers.transformOrder);
-        apiDebug(`✅ Found ${orders.length} available orders`);
+        console.log('[API] Successfully fetched', orders.length, 'available orders');
         return {
           success: true,
           data: orders,
@@ -362,11 +346,47 @@ export class ApiEndpoints {
       
       return response as ApiResponse<Order[]>;
     } catch (error) {
-      apiDebug('Failed to get available orders:', error);
+      console.error('[API] Error fetching available orders:', error);
+      
+      // Try fallback endpoints
+      try {
+        console.log('[API] Trying fallback endpoints for available orders...');
+        
+        // 1. Try pending-deliveries endpoint
+        const pendingResponse = await this.client.get<BackendDelivery[]>('/api/v1/delivery/deliveries/pending-deliveries/');
+        if (pendingResponse.success && pendingResponse.data) {
+          const orders: Order[] = (pendingResponse.data || []).map(ApiTransformers.transformOrder);
+          console.log('[API] Got', orders.length, 'orders from pending-deliveries fallback');
+          return {
+            success: true,
+            data: orders,
+            message: 'Retrieved via pending-deliveries fallback'
+          };
+        }
+        
+        // 2. Try general deliveries endpoint
+        const generalResponse = await this.client.get<BackendDelivery[]>('/api/v1/delivery/deliveries/');
+        if (generalResponse.success && generalResponse.data) {
+          // Filter for unassigned orders
+          const unassignedOrders = (generalResponse.data || [])
+            .filter(delivery => !delivery.assigned_driver || delivery.status === 'pending')
+            .map(ApiTransformers.transformOrder);
+          console.log('[API] Got', unassignedOrders.length, 'orders from general deliveries fallback');
+          return {
+            success: true,
+            data: unassignedOrders,
+            message: 'Retrieved via general deliveries fallback'
+          };
+        }
+        
+      } catch (fallbackError) {
+        console.error('[API] Fallback endpoints also failed:', fallbackError);
+      }
+      
       return {
         success: false,
         data: [],
-        error: 'Failed to fetch available orders'
+        error: error instanceof Error ? error.message : 'Failed to fetch available orders'
       };
     }
   }
@@ -408,7 +428,6 @@ export class ApiEndpoints {
         message: ordersResponse.message
       };
     } catch (error) {
-      apiDebug('Failed to get available orders with distance:', error);
       return {
         success: false,
         data: [],
@@ -417,57 +436,37 @@ export class ApiEndpoints {
     }
   }
 
-  async debugDriverAuth(): Promise<ApiResponse<unknown>> {
-    apiDebug('🔍 Running driver authentication debug...');
-    try {
-      const response = await this.client.get<unknown>('/api/v1/delivery/deliveries/driver_debug/');
-      apiDebug('🔐 Driver debug info:', response.data);
-      return response;
-    } catch (error) {
-      apiDebug('❌ Driver debug failed:', error);
-      return {
-        success: false,
-        data: null,
-        error: 'Debug endpoint failed'
-      };
-    }
+
+  async getActiveOrders(): Promise<ApiResponse<Order[]>> {
+    // Alias for getDriverOrders for backward compatibility
+    return this.getDriverOrders();
   }
 
   async getDriverOrders(): Promise<ApiResponse<Order[]>> {
-    apiDebug('📋 Fetching driver orders...');
-    
-    // First run debug to check authentication
-    await this.debugDriverAuth();
-    
     // Use by_driver endpoint as primary since it has complete order data
     // Based on backend testing, this endpoint includes ASSIGNED status deliveries
-    apiDebug('🚛 Using by_driver endpoint (includes complete order data)...');
     
     try {
+      console.log('[API] Fetching driver orders from /api/v1/delivery/deliveries/by_driver/');
       const response = await this.client.get<BackendDelivery[]>('/api/v1/delivery/deliveries/by_driver/');
+      console.log('[API] Driver orders response:', response);
       
       if (response.success && response.data) {
-        apiDebug(`🔍 Raw backend response: ${response.data.length} delivery records`);
+        console.log('[API] Processing', response.data.length, 'deliveries');
         
-        const orders: Order[] = (response.data || []).map((backendItem) => {
-          const transformedOrder = ApiTransformers.transformOrder(backendItem);
-          apiDebug(`✅ Transformed order ${transformedOrder.id}:`, {
-            status: transformedOrder.status,
-            hasCoordinates: !!(transformedOrder.pickup_latitude && transformedOrder.delivery_latitude),
-            pickup_lat: transformedOrder.pickup_latitude,
-            delivery_lat: transformedOrder.delivery_latitude
-          });
-          return transformedOrder;
+        const orders: Order[] = (response.data || []).map((backendItem, index) => {
+          try {
+            console.log('[API] Transforming delivery', index, ':', backendItem);
+            const transformedOrder = ApiTransformers.transformOrder(backendItem);
+            console.log('[API] Transformed order', index, ':', transformedOrder);
+            return transformedOrder;
+          } catch (transformError) {
+            console.error('[API] Error transforming delivery', index, ':', transformError);
+            throw transformError;
+          }
         });
         
-        apiDebug(`✅ Found ${orders.length} driver orders via by_driver endpoint`);
-        apiDebug('📋 Final transformed orders:', orders.map(o => ({
-          id: o.id,
-          status: o.status,
-          hasPickup: !!(o.pickup_latitude && o.pickup_longitude),
-          hasDelivery: !!(o.delivery_latitude && o.delivery_longitude),
-          customer: o.customer?.name
-        })));
+        console.log('[API] Successfully transformed', orders.length, 'orders');
         
         return {
           success: true,
@@ -480,23 +479,18 @@ export class ApiEndpoints {
       
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      apiDebug(`❌ by_driver endpoint failed: ${errorMessage}`);
+      console.error('[API] Error fetching driver orders:', error);
+      console.error('[API] Error message:', errorMessage);
       
       // Log authentication status for debugging
       const token = await SecureStorage.getAuthToken();
-      apiDebug('🔐 Debug info:', {
-        hasToken: !!token,
-        tokenLength: token ? token.length : 0,
-        errorType: error instanceof Error ? error.constructor.name : typeof error,
-        endpoint: '/api/v1/delivery/deliveries/by_driver/'
-      });
+      console.log('[API] Token exists:', !!token);
       
       // If by_driver fails, try ongoing-deliveries as fallback (but it has incomplete data)
       if (errorMessage.includes('429') || errorMessage.includes('404') || errorMessage.includes('403')) {
-        apiDebug('🔄 Falling back to ongoing-deliveries endpoint (incomplete data)...');
         
         try {
-          const fallbackResponse = await this.client.get<BackendDelivery[]>('/api/v1/delivery/deliveries/ongoing-deliveries/');
+          const fallbackResponse = await this.client.get<BackendDelivery[]>('/api/v1/delivery/deliveries/ongoing_deliveries/');
           
           if (fallbackResponse.success && fallbackResponse.data) {
             // Extract deliveries array from the response
@@ -504,7 +498,6 @@ export class ApiEndpoints {
             const ordersArray = Array.isArray(deliveriesData) ? deliveriesData : [deliveriesData];
             
             const orders: Order[] = ordersArray.map(ApiTransformers.transformOrder);
-            apiDebug(`⚠️ Found ${orders.length} driver orders via ongoing-deliveries endpoint (fallback - incomplete data)`);
             return {
               success: true,
               data: orders,
@@ -515,7 +508,6 @@ export class ApiEndpoints {
           return fallbackResponse as ApiResponse<Order[]>;
           
         } catch (fallbackError) {
-          apiDebug('❌ Both endpoints failed:', fallbackError);
           return {
             success: false,
             data: [],
@@ -533,13 +525,11 @@ export class ApiEndpoints {
   }
 
   async getOrderDetails(orderId: string): Promise<ApiResponse<Order>> {
-    apiDebug(`📋 Fetching order details for: ${orderId}`);
     
     // First try the orders endpoint (has full order data)
     try {
       const orderResponse = await this.client.get<BackendOrder>(`/api/v1/delivery/orders/${orderId}/`);
       if (orderResponse.success && orderResponse.data) {
-        apiDebug('✅ Got order details from orders endpoint');
         const order = ApiTransformers.transformOrder(orderResponse.data);
         return {
           success: true,
@@ -548,7 +538,6 @@ export class ApiEndpoints {
         };
       }
     } catch (orderError) {
-      apiDebug('⚠️ Orders endpoint failed:', orderError);
     }
     
     // If orders endpoint fails, try deliveries endpoint (for backward compatibility)
@@ -556,7 +545,6 @@ export class ApiEndpoints {
       const response = await this.client.get<BackendDelivery>(`/api/v1/delivery/deliveries/${orderId}/`);
       
       if (response.success && response.data) {
-        apiDebug('✅ Got order details from deliveries endpoint (fallback)');
         const order = ApiTransformers.transformOrder(response.data);
         
         return {
@@ -568,7 +556,6 @@ export class ApiEndpoints {
       
       return response as ApiResponse<Order>;
     } catch (error) {
-      apiDebug('❌ Both endpoints failed to get order details:', error);
       return {
         success: false,
         data: null!,
@@ -578,26 +565,124 @@ export class ApiEndpoints {
   }
 
   async acceptOrder(deliveryId: string): Promise<ApiResponse<void>> {
-    apiDebug(`🎯 Attempting to accept order using delivery ID: ${deliveryId}`);
     
     // Debug: Check current user info before making the request
     try {
       const userResponse = await this.client.get<UserInfoResponse>('/whoami/');
-      apiDebug('👤 Current user info:', userResponse.data);
     } catch (error) {
-      apiDebug('⚠️ Could not fetch user info:', error);
     }
     
     const endpoint = `/api/v1/delivery/deliveries/${deliveryId}/accept/`;
-    apiDebug(`📡 Calling accept endpoint: ${endpoint}`);
     
     const response = await this.client.post<void>(endpoint, {});
     
     if (response.success) {
-      apiDebug('✅ Order accepted successfully');
     } else {
-      apiDebug('❌ Failed to accept order:', response.error);
-      apiDebug('📊 Full response:', response);
+    }
+    
+    return response;
+  }
+
+  private async extractDriverIdFromToken(): Promise<string | null> {
+    try {
+      const token = await SecureStorage.getAuthToken();
+      if (!token) return null;
+      
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      return payload.user_id || payload.sub || null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  // ==================== Batch Leg Operations ====================
+  
+  async getAvailableBatchLegs(): Promise<ApiResponse<BatchLegListResponse>> {
+    const response = await this.client.get<BackendBatchLegResponse>('/api/v1/delivery/batch-legs/?status=available');
+    
+    if (response.success && response.data) {
+      const transformedData: BatchLegListResponse = {
+        count: response.data.count || 0,
+        legs: (response.data.results || []).map(ApiTransformers.transformBatchLeg)
+      };
+      
+      return {
+        success: true,
+        data: transformedData,
+        message: response.message
+      };
+    }
+    
+    return {
+      success: false,
+      data: { count: 0, legs: [] },
+      error: response.error || 'Failed to fetch batch legs'
+    };
+  }
+
+  async acceptBatchLeg(legId: string): Promise<ApiResponse<BatchLeg>> {
+    
+    // Try the assign_driver endpoint first (as seen in backend code)
+    const assignResponse = await this.client.post<BackendBatchLeg>(
+      `/api/v1/delivery/batch-legs/${legId}/assign_driver/`,
+      { driver_id: await this.extractDriverIdFromToken() }
+    );
+    
+    if (assignResponse.success && assignResponse.data) {
+      const transformedLeg = ApiTransformers.transformBatchLeg(assignResponse.data);
+      return {
+        success: true,
+        data: transformedLeg,
+        message: 'Batch leg accepted successfully'
+      };
+    }
+    
+    // If assign_driver fails, try accept_leg endpoint (might exist)
+    const acceptResponse = await this.client.post<BackendBatchLeg>(
+      `/api/v1/delivery/batch-legs/${legId}/accept_leg/`,
+      {}
+    );
+    
+    if (acceptResponse.success && acceptResponse.data) {
+      const transformedLeg = ApiTransformers.transformBatchLeg(acceptResponse.data);
+      return {
+        success: true,
+        data: transformedLeg,
+        message: 'Batch leg accepted successfully'
+      };
+    }
+    
+    return {
+      success: false,
+      data: null as any,
+      error: assignResponse.error || acceptResponse.error || 'Failed to accept batch leg'
+    };
+  }
+
+  async getBatchLegDetails(legId: string): Promise<ApiResponse<BatchLeg>> {
+    const response = await this.client.get<BackendBatchLeg>(`/api/v1/delivery/batch-legs/${legId}/`);
+    
+    if (response.success && response.data) {
+      const transformedLeg = ApiTransformers.transformBatchLeg(response.data);
+      return {
+        success: true,
+        data: transformedLeg,
+        message: response.message
+      };
+    }
+    
+    return {
+      success: false,
+      data: null as any,
+      error: response.error || 'Failed to fetch batch leg details'
+    };
+  }
+
+  async completeBatchLeg(legId: string): Promise<ApiResponse<void>> {
+    const response = await this.client.post<void>(`/api/v1/delivery/batch-legs/${legId}/complete/`, {});
+    
+    if (response.success) {
+    } else {
     }
     
     return response;
@@ -605,6 +690,75 @@ export class ApiEndpoints {
 
   async declineOrder(orderId: string): Promise<ApiResponse<void>> {
     return this.client.post<void>(`/api/v1/delivery/deliveries/${orderId}/decline/`, {});
+  }
+
+  async getOrderHistory(filter?: 'today' | 'week' | 'month' | 'all'): Promise<ApiResponse<Order[]>> {
+    
+    try {
+      // Calculate date range based on filter
+      const now = new Date();
+      let startDate: string | undefined;
+      
+      switch (filter) {
+        case 'today':
+          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+          break;
+        case 'week':
+          const weekAgo = new Date(now);
+          weekAgo.setDate(weekAgo.getDate() - 7);
+          startDate = weekAgo.toISOString();
+          break;
+        case 'month':
+          const monthAgo = new Date(now);
+          monthAgo.setMonth(monthAgo.getMonth() - 1);
+          startDate = monthAgo.toISOString();
+          break;
+        default:
+          // 'all' or undefined - no date filter
+          break;
+      }
+      
+      // Build query params
+      const params = new URLSearchParams();
+      if (startDate) {
+        params.append('start_date', startDate);
+        params.append('end_date', now.toISOString());
+      }
+      params.append('status', 'delivered');
+      params.append('driver', 'me'); // Current driver's orders
+      
+      const endpoint = `/api/v1/delivery/deliveries/by_driver/?${params.toString()}`;
+      const response = await this.client.get<BackendDelivery[]>(endpoint);
+      
+      if (response.success && response.data) {
+        // Transform and filter to only delivered orders
+        const orders = (response.data || [])
+          .map(ApiTransformers.transformOrder)
+          .filter(order => order.status === 'delivered')
+          .sort((a, b) => {
+            // Sort by delivery time, most recent first
+            const dateA = a.delivery_time || a.updated_at || a.created_at;
+            const dateB = b.delivery_time || b.updated_at || b.created_at;
+            return dateB.getTime() - dateA.getTime();
+          });
+          
+        
+        return {
+          success: true,
+          data: orders,
+          message: 'Order history fetched successfully'
+        };
+      }
+      
+      return response as ApiResponse<Order[]>;
+      
+    } catch (error) {
+      return {
+        success: false,
+        data: [],
+        error: 'Failed to fetch order history'
+      };
+    }
   }
 
   async updateOrderStatus(orderId: string, status: OrderStatus): Promise<ApiResponse<void>> {
@@ -623,13 +777,30 @@ export class ApiEndpoints {
       'failed': 'failed'
     };
 
-    return this.client.post<void>(`/api/v1/delivery/deliveries/${orderId}/update_status/`, {
+    // Get current location if available
+    let locationData: SmartStatusUpdateData = {
       status: statusMap[status] || status
-    });
+    };
+
+    try {
+      // Try to get current location from locationService
+      const { locationService } = await import('../services/locationService');
+      const location = await locationService.getCurrentLocation();
+      
+      if (location) {
+        locationData.latitude = location.latitude;
+        locationData.longitude = location.longitude;
+        locationData.location = `${location.latitude},${location.longitude}`;
+      }
+    } catch (error) {
+      console.log('[API] Could not get location for status update:', error);
+    }
+
+    // Use smart_update_status endpoint for better handling
+    return this.smartUpdateStatus(orderId, locationData);
   }
 
   async updateBatchStatus(batchId: string, status: string, data?: Record<string, unknown>): Promise<ApiResponse<void>> {
-    apiDebug(`📦 Updating batch ${batchId} status to ${status}`);
     
     // Try the batches endpoint first (newer API)
     try {
@@ -639,11 +810,9 @@ export class ApiEndpoints {
       });
       
       if (result.success) {
-        apiDebug(`✅ Successfully updated batch status to ${status}`);
         return result;
       }
     } catch (error) {
-      apiDebug(`⚠️ Batch status update failed: ${error}`);
     }
     
     // Fallback to delivery endpoint
@@ -651,7 +820,6 @@ export class ApiEndpoints {
   }
 
   async getAvailableBatches(): Promise<ApiResponse<BatchOrder[]>> {
-    apiDebug('📦 Fetching available batches...');
     
     try {
       const response = await this.client.get<BackendBatch[]>('/api/v1/delivery/batches/available/');
@@ -667,7 +835,6 @@ export class ApiEndpoints {
       
       return response as ApiResponse<BatchOrder[]>;
     } catch (error) {
-      apiDebug('Failed to get available batches:', error);
       return {
         success: false,
         data: [],
@@ -677,7 +844,6 @@ export class ApiEndpoints {
   }
 
   async getBatchDetails(batchId: string): Promise<ApiResponse<BatchOrder>> {
-    apiDebug(`📦 Fetching batch details for: ${batchId}`);
     
     const response = await this.client.get<BackendBatch>(`/api/v1/delivery/batches/${batchId}/`);
     
@@ -695,7 +861,6 @@ export class ApiEndpoints {
   }
 
   async acceptBatchOrder(batchId: string): Promise<ApiResponse<void>> {
-    apiDebug(`📦 Accepting batch order: ${batchId}`);
     return this.client.post<void>(`/api/v1/delivery/batches/${batchId}/accept/`, {});
   }
 
@@ -724,7 +889,7 @@ export class ApiEndpoints {
   // ==================== Route Optimization ====================
 
   async getOngoingDeliveries(): Promise<ApiResponse<Order[]>> {
-    const response = await this.client.get<BackendDelivery[]>('/api/v1/delivery/deliveries/ongoing-deliveries/');
+    const response = await this.client.get<BackendDelivery[]>('/api/v1/delivery/deliveries/ongoing_deliveries/');
     
     if (response.success && response.data) {
       const orders = response.data.map(ApiTransformers.transformOrder);
@@ -738,31 +903,23 @@ export class ApiEndpoints {
     return response as ApiResponse<Order[]>;
   }
 
-  async getRouteOptimization(): Promise<ApiResponse<Order[]>> {
+  async getRouteOptimization(latitude?: number, longitude?: number): Promise<ApiResponse<any>> {
     try {
-      const response = await this.client.get<RouteOptimizationResponse>('/api/v1/delivery/deliveries/optimize-route/');
+      // Use the correct endpoint from backend
+      const params = latitude && longitude ? `?latitude=${latitude}&longitude=${longitude}` : '';
+      const response = await this.client.get<any>(`/api/v1/delivery/deliveries/route-optimization/${params}`);
       
-      if (response.success && response.data?.optimized_route) {
-        const deliveryIds = response.data.optimized_route.map(item => item.delivery_id);
-        const deliveriesResponse = await this.getOngoingDeliveries();
-        
-        if (deliveriesResponse.success && deliveriesResponse.data) {
-          const optimizedOrders = deliveryIds
-            .map(id => deliveriesResponse.data.find(order => order.id === id))
-            .filter((order): order is Order => order !== undefined);
-          
-          return {
-            success: true,
-            data: optimizedOrders,
-            message: 'Route optimized successfully'
-          };
-        }
+      if (response.success && response.data) {
+        return {
+          success: true,
+          data: response.data,
+          message: 'Route optimized successfully'
+        };
       }
       
       // Fallback to regular ongoing deliveries if optimization fails
       return this.getOngoingDeliveries();
     } catch (error) {
-      apiDebug('Route optimization failed, falling back to regular order:', error);
       return this.getOngoingDeliveries();
     }
   }
@@ -774,7 +931,6 @@ export class ApiEndpoints {
   }
 
   async getBalanceTransactionsRaw(page: number = 1, pageSize: number = 20): Promise<ApiResponse<BalanceTransaction[]>> {
-    apiDebug('📊 Getting balance transactions from API...');
     
     try {
       let endpoint = '/api/v1/auth/drivers/transaction_history/';
@@ -785,7 +941,6 @@ export class ApiEndpoints {
       
       // If 404, try driver balance endpoint which might have transaction data
       if (!response.success && response.error?.includes('404')) {
-        apiDebug('📡 Trying driver balance endpoint for transactions...');
         endpoint = '/api/v1/auth/drivers/balance/';
         response = await this.client.get<BackendTransactionResponse>(endpoint);
         
@@ -852,7 +1007,6 @@ export class ApiEndpoints {
       };
       
     } catch (error) {
-      apiDebug('Error fetching balance transactions:', error);
       return {
         success: false,
         data: [],
@@ -865,10 +1019,6 @@ export class ApiEndpoints {
    * Get driver earnings summary for a specific period
    */
   async getDriverEarnings(startDate?: string, endDate?: string): Promise<ApiResponse<DriverBalance>> {
-    apiDebug('💰 Getting driver earnings...', { startDate, endDate });
-    
-    // Debug authentication before trying earnings
-    await this.debugDriverAuth();
     
     try {
       // Try multiple possible endpoints for earnings/balance
@@ -882,12 +1032,10 @@ export class ApiEndpoints {
         endpoint += `?${params.toString()}`;
       }
       
-      apiDebug('📡 Trying earnings endpoint:', endpoint);
       let response = await this.client.get<Record<string, unknown>>(endpoint);
       
       // If that fails, try the driver balance endpoint
       if (!response.success && response.error?.includes('404')) {
-        apiDebug('📡 Trying fallback driver balance endpoint...');
         endpoint = '/api/v1/auth/drivers/';
         response = await this.client.get<Record<string, unknown>>(endpoint);
       }
@@ -922,7 +1070,6 @@ export class ApiEndpoints {
           period: data.period || { start_date: startDate, end_date: endDate }
         };
         
-        apiDebug('✅ Driver earnings retrieved successfully:', earnings);
         return {
           success: true,
           data: earnings,
@@ -933,7 +1080,6 @@ export class ApiEndpoints {
       throw new Error(response.error || 'No earnings data available');
       
     } catch (error) {
-      apiDebug('❌ Error getting driver earnings:', error);
       return {
         success: false,
         data: null!,
@@ -946,24 +1092,20 @@ export class ApiEndpoints {
    * Get driver balance transactions (earnings history)
    */
   async getBalanceTransactions(page: number = 1, pageSize: number = 20): Promise<ApiResponse<BalanceTransaction[]>> {
-    apiDebug('📊 Getting balance transactions...', { page, pageSize });
     
     try {
       let endpoint = `/api/v1/auth/drivers/transaction_history/?page=${page}&page_size=${pageSize}`;
       
-      apiDebug('📡 Trying transaction history endpoint:', endpoint);
       let response = await this.client.get<Record<string, unknown>>(endpoint);
       
       // If 404, try without pagination parameters
       if (!response.success && response.error?.includes('404')) {
-        apiDebug('📡 Trying without pagination parameters...');
         endpoint = '/api/v1/auth/drivers/transaction_history/';
         response = await this.client.get<Record<string, unknown>>(endpoint);
       }
       
       // If still 404, try driver balance endpoint which might have transaction data
       if (!response.success && response.error?.includes('404')) {
-        apiDebug('📡 Trying driver balance endpoint for transactions...');
         endpoint = '/api/v1/auth/drivers/balance/';
         response = await this.client.get<Record<string, unknown>>(endpoint);
       }
@@ -990,7 +1132,6 @@ export class ApiEndpoints {
           ApiTransformers.transformTransaction(transaction)
         );
         
-        apiDebug(`✅ Retrieved ${transactions.length} transactions`);
         return {
           success: true,
           data: transactions,
@@ -1005,7 +1146,6 @@ export class ApiEndpoints {
       };
       
     } catch (error) {
-      apiDebug('❌ Error getting balance transactions:', error);
       return {
         success: false,
         data: [],
@@ -1086,7 +1226,6 @@ export class ApiEndpoints {
   // ==================== Diagnostics ====================
 
   async diagnoseMobileOrderIssue(): Promise<ApiResponse<Record<string, unknown>>> {
-    apiDebug('🔍 Running comprehensive order diagnostics...');
     const report: {
       timestamp: string;
       diagnostics: Record<string, unknown>;
@@ -1097,7 +1236,6 @@ export class ApiEndpoints {
 
     try {
       // 1. Check authentication
-      apiDebug('🔐 Checking authentication...');
       const token = await SecureStorage.getAuthToken();
       report.diagnostics['authentication'] = {
         hasToken: !!token,
@@ -1105,7 +1243,6 @@ export class ApiEndpoints {
       };
 
       // 2. Check user info
-      apiDebug('👤 Checking user info...');
       try {
         const userResponse = await this.client.get<UserInfoResponse>('/whoami/');
         report.diagnostics['userInfo'] = userResponse.data || 'Failed to get user info';
@@ -1114,7 +1251,6 @@ export class ApiEndpoints {
       }
 
       // 3. Check driver info
-      apiDebug('🚗 Checking driver data...');
       const driverInfo = await this.getDriverInfo();
       report.diagnostics['driverData'] = {
         success: driverInfo.success,
@@ -1124,7 +1260,6 @@ export class ApiEndpoints {
       };
 
       // 4. Check available orders endpoint
-      apiDebug('📋 Checking available orders endpoint...');
       try {
         const ordersResponse = await this.getAvailableOrdersWithDistance();
         report.diagnostics['availableOrders'] = {
@@ -1137,7 +1272,6 @@ export class ApiEndpoints {
       }
 
       // 5. Check driver orders endpoint
-      apiDebug('📦 Checking driver orders endpoint...');
       try {
         const driverOrdersResponse = await this.getDriverOrders();
         report.diagnostics['driverOrders'] = {
@@ -1150,7 +1284,6 @@ export class ApiEndpoints {
       }
 
       // 6. Check balance endpoint
-      apiDebug('💰 Checking balance endpoint...');
       try {
         const balanceResponse = await this.getDriverEarnings();
         report.diagnostics['balance'] = {
@@ -1163,7 +1296,6 @@ export class ApiEndpoints {
       }
 
       // 7. Direct API test
-      apiDebug('🌐 Testing direct API connection...');
       const directResponse = await this.client.get<BackendDelivery[]>('/api/v1/delivery/deliveries/available_orders/');
       report.diagnostics['directApiTest'] = {
         success: directResponse.success,
@@ -1172,7 +1304,6 @@ export class ApiEndpoints {
       };
       
       // 8. Check driver online status in backend
-      apiDebug('🟢 Checking driver online status...');
       const cachedDriver = await Storage.getItem(STORAGE_KEYS.DRIVER_DATA);
       const driverId = (cachedDriver as Driver)?.id || await this.extractDriverIdFromToken();
       
@@ -1188,7 +1319,6 @@ export class ApiEndpoints {
         }
       }
 
-      apiDebug('✅ Diagnostics complete');
       return {
         success: true,
         data: report,
@@ -1196,7 +1326,6 @@ export class ApiEndpoints {
       };
 
     } catch (error) {
-      apiDebug('❌ Diagnostics failed:', error);
       report.diagnostics.error = error instanceof Error ? error.message : String(error);
       return {
         success: false,
@@ -1209,7 +1338,6 @@ export class ApiEndpoints {
   // ==================== Batch Legs ====================
 
   async getAvailableBatchLegs(): Promise<ApiResponse<BatchLegListResponse>> {
-    apiDebug('📦 Fetching available batch legs...');
     
     try {
       const locationService = await import('../services/locationService');
@@ -1218,35 +1346,29 @@ export class ApiEndpoints {
       const url = `/api/v1/delivery/batch-legs/available_legs/?latitude=${currentLocation.latitude}&longitude=${currentLocation.longitude}`;
       return this.client.get<BatchLegListResponse>(url);
     } catch (locationError) {
-      apiDebug('⚠️ Failed to get location, fetching legs without location filter:', locationError);
       return this.client.get<BatchLegListResponse>('/api/v1/delivery/batch-legs/available_legs/');
     }
   }
 
   async getBatchLegDetails(legId: string): Promise<ApiResponse<BatchLeg>> {
-    apiDebug(`📋 Fetching batch leg details: ${legId}`);
     return this.client.get<BatchLeg>(`/api/v1/delivery/batch-legs/${legId}/leg_details/`);
   }
 
   async acceptBatchLeg(legId: string): Promise<ApiResponse<BatchLegAcceptResponse>> {
-    apiDebug(`✅ Accepting batch leg: ${legId}`);
     return this.client.post<BatchLegAcceptResponse>(`/api/v1/delivery/batch-legs/${legId}/accept_leg/`, {});
   }
 
   async completeBatchLeg(legId: string): Promise<ApiResponse<void>> {
-    apiDebug(`🏁 Completing batch leg: ${legId}`);
     return this.client.post<void>(`/api/v1/delivery/batch-legs/${legId}/complete_leg/`, {});
   }
 
   // ==================== Driver Profile ====================
 
   async getDriverProfileNew(): Promise<ApiResponse<DriverProfile>> {
-    apiDebug('👤 Fetching driver profile...');
     return this.client.get<DriverProfile>('/api/v1/drivers/driver-profile/');
   }
 
   async updateDriverProfile(profile: Partial<DriverProfile>): Promise<ApiResponse<DriverProfile>> {
-    apiDebug('💾 Updating driver profile...');
     return this.client.put<DriverProfile>('/api/v1/drivers/driver-profile/', profile);
   }
 }

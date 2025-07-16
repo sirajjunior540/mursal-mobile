@@ -43,7 +43,7 @@ const QRScanner: React.FC<QRScannerProps> = ({
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [isRequestingPermission, setIsRequestingPermission] = useState(false);
 
-  const onReadCode = (event: any) => {
+  const onReadCode = (event: { data: string }) => {
     if (isProcessing) return;
     
     setIsProcessing(true);
@@ -97,21 +97,21 @@ const QRScanner: React.FC<QRScannerProps> = ({
   // Check camera permission using enhanced permissions utility
   const checkCameraPermission = async () => {
     try {
-      console.log('Checking camera permission with enhanced utility');
+      // Checking camera permission with enhanced utility
       
       // First check with camera-kit for iOS/runtime permission
       if (Platform.OS === 'ios') {
         const isCameraAuthorized = await CameraKitCamera.checkDeviceCameraAuthorizationStatus();
-        console.log('Camera-kit authorization status:', isCameraAuthorized);
+        // Camera-kit authorization status checked
         setHasPermission(isCameraAuthorized);
       } else {
         // For Android, use our enhanced permissions utility
         const isGranted = await checkCameraPermissions();
-        console.log('Enhanced utility permission status:', isGranted);
+        // Enhanced utility permission status checked
         setHasPermission(isGranted);
       }
     } catch (error) {
-      console.error('Permission check error:', error);
+      // Permission check error occurred
       setHasPermission(false);
     }
   };
@@ -122,7 +122,7 @@ const QRScanner: React.FC<QRScannerProps> = ({
     
     setIsRequestingPermission(true);
     try {
-      console.log('Requesting camera permission with enhanced utility');
+      // Requesting camera permission with enhanced utility
       
       let granted = false;
       
@@ -134,20 +134,20 @@ const QRScanner: React.FC<QRScannerProps> = ({
         granted = await requestCameraPermissions();
       }
       
-      console.log('Camera permission request result:', granted);
+      // Camera permission request result received
       
       if (granted) {
-        console.log('Camera permission granted');
+        // Camera permission granted
         setHasPermission(true);
       } else {
-        console.log('Camera permission denied');
+        // Camera permission denied
         setHasPermission(false);
         
         // Show enhanced permission guide instead of simple alert
         showCameraPermissionGuide();
       }
     } catch (error) {
-      console.error('Permission request error:', error);
+      // Permission request error occurred
       setHasPermission(false);
       Alert.alert('Error', 'Failed to request camera permission');
     } finally {

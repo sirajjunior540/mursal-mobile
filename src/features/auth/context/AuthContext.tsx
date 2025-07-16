@@ -1,62 +1,12 @@
-/**
- * Simplified AuthContext for testing the refactored structure
- */
-import React, { createContext, useContext, useMemo } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { Driver, AuthContextType } from '../../../shared/types';
-
-// Mock driver data for testing
-const mockDriver: Driver = {
-  id: 'test-driver-1',
-  email: 'test@mursal.app',
-  firstName: 'Test',
-  lastName: 'Driver',
-  phone: '+971501234567',
-  role: 'driver',
-  license_number: 'DL123456',
-  vehicle_info: {
-    make: 'Toyota',
-    model: 'Camry',
-    year: 2020,
-    license_plate: 'ABC123',
-    color: 'White',
-    type: 'car',
-  },
-  status: 'offline',
-  location: {
-    latitude: 25.1972,
-    longitude: 55.2744,
-    timestamp: new Date().toISOString(),
-  },
-  rating: 4.8,
-  total_deliveries: 156,
-  is_online: false,
-  is_available: true,
-  last_active: new Date().toISOString(),
-  created_at: new Date().toISOString(),
-  updated_at: new Date().toISOString(),
-};
-
-// Simple context value
-const mockContextValue: AuthContextType = {
-  user: mockDriver,
-  tenant: null,
-  isAuthenticated: true,
-  isLoading: false,
-  error: null,
-  login: async (credentials) => {},
-  logout: async () => {},
-  refreshToken: async () => {},
-  updateProfile: async (updates) => {},
-  updateLocation: async (location) => {},
-  setOnlineStatus: async (isOnline: boolean) => {},
-  clearError: () => {},
-  getToken: async () => 'mock-token',
-};
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { authService } from '../../../services/authService';
 
 // Context
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Simple provider component
+// Provider component
 interface AuthProviderProps {
   children: React.ReactNode;
   apiBaseUrl?: string;
@@ -64,8 +14,133 @@ interface AuthProviderProps {
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({
   children,
+  apiBaseUrl,
 }) => {
-  const contextValue = useMemo(() => mockContextValue, []);
+  const [user, setUser] = useState<Driver | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Initialize auth state from storage
+  useEffect(() => {
+    const initializeAuth = async () => {
+      try {
+        const token = await AsyncStorage.getItem('authToken');
+        const userData = await AsyncStorage.getItem('userData');
+        
+        if (token && userData) {
+          const parsedUser = JSON.parse(userData) as Driver;
+          setUser(parsedUser);
+          setIsAuthenticated(true);
+        }
+      } catch (err) {
+        // Error handled silently
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    initializeAuth();
+  }, []);
+
+  const login = useCallback(async (credentials: { email: string; password: string }) => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const response = await authService.login(credentials);
+      if (response.success && response.data) {
+        setUser(response.data.user);
+        setIsAuthenticated(true);
+        await AsyncStorage.setItem('authToken', response.data.token);
+        await AsyncStorage.setItem('userData', JSON.stringify(response.data.user));
+      } else {
+        throw new Error(response.error || 'Login failed');
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Login failed';
+      setError(errorMessage);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const logout = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      await authService.logout();
+      await AsyncStorage.removeItem('authToken');
+      await AsyncStorage.removeItem('userData');
+      setUser(null);
+      setIsAuthenticated(false);
+    } catch (err) {
+      // Error handled silently
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const refreshToken = useCallback(async () => {
+    // Implementation for token refresh
+  }, []);
+
+  const updateProfile = useCallback(async (updates: Partial<Driver>) => {
+    if (user) {
+      const updatedUser = { ...user, ...updates };
+      setUser(updatedUser);
+      await AsyncStorage.setItem('userData', JSON.stringify(updatedUser));
+    }
+  }, [user]);
+
+  const updateLocation = useCallback(async (location: { latitude: number; longitude: number }) => {
+    if (user) {
+      const updatedUser = {
+        ...user,
+        location: {
+          ...location,
+          timestamp: new Date().toISOString(),
+        },
+      };
+      setUser(updatedUser);
+    }
+  }, [user]);
+
+  const setOnlineStatus = useCallback(async (isOnline: boolean) => {
+    if (user) {
+      const updatedUser = {
+        ...user,
+        is_online: isOnline,
+        status: isOnline ? 'online' : 'offline',
+      };
+      setUser(updatedUser);
+      await AsyncStorage.setItem('userData', JSON.stringify(updatedUser));
+    }
+  }, [user]);
+
+  const clearError = useCallback(() => {
+    setError(null);
+  }, []);
+
+  const getToken = useCallback(async () => {
+    return await AsyncStorage.getItem('authToken') || '';
+  }, []);
+
+  const contextValue: AuthContextType = {
+    user,
+    tenant: null,
+    isAuthenticated,
+    isLoading,
+    error,
+    login,
+    logout,
+    refreshToken,
+    updateProfile,
+    updateLocation,
+    setOnlineStatus,
+    clearError,
+    getToken,
+  };
 
   return (
     <AuthContext.Provider value={contextValue}>

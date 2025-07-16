@@ -117,12 +117,9 @@ const HistoryScreen: React.FC = () => {
       
       if (response.success) {
         setRealEarnings(response.data);
-        console.log('✅ Loaded real earnings data:', response.data);
-      } else {
-        console.error('❌ Failed to load earnings:', response.error);
       }
     } catch (err) {
-      console.error('❌ Error loading earnings:', err);
+      // Error handled silently
     } finally {
       setEarningsLoading(false);
     }
@@ -135,12 +132,9 @@ const HistoryScreen: React.FC = () => {
       const response = await apiService.getTransactionHistory();
       if (response.success) {
         setTransactions(response.data);
-        console.log('✅ Loaded transaction history:', response.data);
-      } else {
-        console.error('❌ Failed to load transactions:', response.error);
       }
     } catch (err) {
-      console.error('❌ Error loading transactions:', err);
+      // Error handled silently
     } finally {
       setTransactionsLoading(false);
     }
@@ -173,7 +167,7 @@ const HistoryScreen: React.FC = () => {
         completionRate,
       };
     } else {
-      // Fallback to calculated earnings from orders (mock data behavior)
+      // Fallback when no real earnings data is available
       const completedOrders = filteredOrders.filter(order => order.status === 'delivered');
       const totalEarnings = completedOrders.reduce((sum, order) => sum + (order.total || 0), 0);
       const totalOrders = filteredOrders.length;
@@ -219,7 +213,7 @@ const HistoryScreen: React.FC = () => {
         loadTransactionHistory()
       ]);
     } catch (err) {
-      console.error('Error refreshing history:', err);
+      // Error handled silently
     } finally {
       setRefreshing(false);
     }

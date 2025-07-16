@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as RNLocalize from 'react-native-localize';
 import { I18nManager } from 'react-native';
+import { ENV } from '../config/environment';
 
 interface LanguageContextType {
   currentLanguage: string;
@@ -113,7 +114,7 @@ export const LanguageProvider: React.FC<LanguageProviderProps> = ({ children }) 
         return; // User not authenticated, skip backend sync
       }
 
-      const apiUrl = await AsyncStorage.getItem('apiUrl') || 'http://localhost:8000';
+      const apiUrl = ENV.API_BASE_URL;
       
       const response = await fetch(`${apiUrl}/api/users/language/set/`, {
         method: 'POST',
@@ -125,7 +126,7 @@ export const LanguageProvider: React.FC<LanguageProviderProps> = ({ children }) 
       });
 
       if (!response.ok) {
-        console.warn('Failed to sync language with backend:', response.status);
+        // Failed to sync language with backend
       }
     } catch (error) {
       console.warn('Error syncing language with backend:', error);

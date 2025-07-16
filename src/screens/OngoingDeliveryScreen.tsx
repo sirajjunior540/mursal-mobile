@@ -63,68 +63,21 @@ const OngoingDeliveryScreen: React.FC = () => {
 
   const fetchRouteOptimization = useCallback(async () => {
     try {
-      // For demo purposes, create mock route data since backend might not have route optimization yet
-      const mockRoute: RouteOptimizationResponse = {
-        route: [
-          {
-            id: '1',
-            order_id: 'ORD123',
-            type: 'pickup',
-            location: {
-              lat: 25.2048,
-              lng: 55.2708,
-              address: 'Dubai Mall, Downtown Dubai'
-            },
-            customer_name: 'Restaurant ABC',
-            phone: '+971501234567',
-            status: 'pending',
-            estimated_time: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
-            special_instructions: 'Call upon arrival'
-          },
-          {
-            id: '2',
-            order_id: 'ORD123',
-            type: 'dropoff',
-            location: {
-              lat: 25.2048,
-              lng: 55.2708,
-              address: 'Business Bay, Dubai'
-            },
-            customer_name: 'John Doe',
-            phone: '+971507654321',
-            status: 'pending',
-            estimated_time: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
-          },
-          {
-            id: '3',
-            order_id: 'ORD124',
-            type: 'pickup',
-            location: {
-              lat: 25.2048,
-              lng: 55.2708,
-              address: 'JLT Metro Station'
-            },
-            customer_name: 'Tech Store XYZ',
-            phone: '+971509876543',
-            status: 'pending',
-            estimated_time: new Date(Date.now() + 45 * 60 * 1000).toISOString(),
-          }
-        ],
-        current_stop: undefined,
-        total_distance_km: 15.5,
-        estimated_completion_time: new Date(Date.now() + 90 * 60 * 1000).toISOString()
-      };
-
-      // Set current stop as first pending stop
-      const firstPendingStop = mockRoute.route.find(stop => stop.status === 'pending');
-      mockRoute.current_stop = firstPendingStop;
-
-      setRouteData(mockRoute);
-      setCurrentStop(firstPendingStop || null);
+      // TODO: Replace with actual API call when route optimization endpoint is available
+      const response = await deliveryApi.getRouteOptimization();
       
-      console.log('🗺️ Route optimization loaded:', mockRoute);
+      if (response && response.route) {
+        const firstPendingStop = response.route.find(stop => stop.status === 'pending');
+        response.current_stop = firstPendingStop;
+        
+        setRouteData(response);
+        setCurrentStop(firstPendingStop || null);
+      } else {
+        setRouteData(null);
+        setCurrentStop(null);
+      }
     } catch (error) {
-      console.error('Error fetching route optimization:', error);
+      // Error handled silently
       setRouteData(null);
       setCurrentStop(null);
     } finally {
@@ -199,7 +152,6 @@ const OngoingDeliveryScreen: React.FC = () => {
         setUpdatingStatus(false);
       }, 1000);
     } catch (error) {
-      console.error('Error updating stop status:', error);
       Alert.alert('Error', 'Failed to update stop status');
       setUpdatingStatus(false);
     }

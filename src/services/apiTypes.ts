@@ -9,7 +9,7 @@
 export interface BackendDelivery {
   id: string;
   order_id?: string;
-  order?: BackendOrder;
+  order?: BackendOrder | number | string;
   driver?: string | null;
   driver_id?: string;
   driver_name?: string;
@@ -33,6 +33,11 @@ export interface BackendDelivery {
   batch?: BackendBatch;
   pickup_address?: string;
   delivery_address?: string;
+  // Missing fields that are used in apiTransformers
+  location?: string;
+  latitude?: number;
+  longitude?: number;
+  reason?: string;
 }
 
 export interface BackendOrder {
@@ -348,4 +353,12 @@ export interface BackendBatchLeg {
   scheduled_start_time?: string;
   delivery_deadline?: string;
   scheduled_end_time?: string;
+}
+
+// Batch Leg Response types
+export interface BackendBatchLegResponse {
+  count?: number;
+  results?: BackendBatchLeg[];
+  next?: string | null;
+  previous?: string | null;
 }

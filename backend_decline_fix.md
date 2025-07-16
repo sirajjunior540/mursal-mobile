@@ -127,14 +127,14 @@ def available_orders(self, request):
 ```bash
 # 1. Get available orders
 curl -H "Authorization: Bearer <token>" \
-     -H "Host: sirajjunior.192.168.1.163" \
-     http://192.168.1.163:8000/api/v1/delivery/deliveries/available_orders/
+     -H "Host: sirajjunior.192.168.1.167" \
+     http://192.168.1.167:8000/api/v1/delivery/deliveries/available_orders/
 
 # 2. Try to decline an available order (currently fails)
 curl -X POST \
      -H "Authorization: Bearer <token>" \
-     -H "Host: sirajjunior.192.168.1.163" \
-     http://192.168.1.163:8000/api/v1/delivery/deliveries/19/decline/
+     -H "Host: sirajjunior.192.168.1.167" \
+     http://192.168.1.167:8000/api/v1/delivery/deliveries/19/decline/
 ```
 
 ### Expected Response After Fix:

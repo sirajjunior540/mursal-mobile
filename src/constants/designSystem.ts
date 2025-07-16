@@ -78,10 +78,98 @@ export const Design = {
     delivered: '#48bb78',    // Green
     cancelled: '#f56565',    // Red
     failed: '#f56565',       // Red
+    
+    // iOS System Colors
+    label: '#000000',               // Primary label color
+    secondaryLabel: '#3C3C43',      // Secondary label color
+    tertiaryLabel: '#C7C7CC',       // Tertiary label color
+    quaternaryLabel: '#D1D1D6',     // Quaternary label color
+    systemBackground: '#FFFFFF',     // System background
+    secondarySystemBackground: '#F2F2F7',  // Secondary system background
+    tertiarySystemBackground: '#FFFFFF',   // Tertiary system background
+    systemGroupedBackground: '#F2F2F7',    // Grouped content background
+    secondarySystemGroupedBackground: '#FFFFFF', // Secondary grouped background
+    tertiarySystemGroupedBackground: '#F2F2F7',  // Tertiary grouped background
+    separator: '#C6C6C8',           // Separator color
+    opaqueSeparator: '#C6C6C8',     // Opaque separator
+    systemGray: '#8E8E93',          // System gray
+    systemGray2: '#AEAEB2',         // System gray 2
+    systemGray3: '#C7C7CC',         // System gray 3
+    systemGray4: '#D1D1D6',         // System gray 4
+    systemGray5: '#E5E5EA',         // System gray 5
+    systemGray6: '#F2F2F7',         // System gray 6
   },
   
   // Typography with improved readability
   typography: {
+    // iOS-style Typography
+    largeTitle: {
+      fontSize: 34,
+      lineHeight: 41,
+      fontWeight: '700' as const,
+      letterSpacing: 0.374,
+    },
+    title1: {
+      fontSize: 28,
+      lineHeight: 34,
+      fontWeight: '400' as const,
+      letterSpacing: 0.364,
+    },
+    title2: {
+      fontSize: 22,
+      lineHeight: 28,
+      fontWeight: '400' as const,
+      letterSpacing: 0.352,
+    },
+    title3: {
+      fontSize: 20,
+      lineHeight: 25,
+      fontWeight: '400' as const,
+      letterSpacing: 0.38,
+    },
+    headline: {
+      fontSize: 17,
+      lineHeight: 22,
+      fontWeight: '600' as const,
+      letterSpacing: -0.408,
+    },
+    body: {
+      fontSize: 16,
+      lineHeight: 24,  // 1.5x
+      fontWeight: '400' as const,
+      letterSpacing: 0,
+    },
+    callout: {
+      fontSize: 16,
+      lineHeight: 21,
+      fontWeight: '400' as const,
+      letterSpacing: -0.32,
+    },
+    subheadline: {
+      fontSize: 15,
+      lineHeight: 20,
+      fontWeight: '400' as const,
+      letterSpacing: -0.24,
+    },
+    footnote: {
+      fontSize: 13,
+      lineHeight: 18,
+      fontWeight: '400' as const,
+      letterSpacing: -0.078,
+    },
+    caption1: {
+      fontSize: 12,
+      lineHeight: 16,
+      fontWeight: '400' as const,
+      letterSpacing: 0,
+    },
+    caption2: {
+      fontSize: 11,
+      lineHeight: 13,
+      fontWeight: '400' as const,
+      letterSpacing: 0.066,
+    },
+    
     // Headers with better line height for readability
     h1: {
       fontSize: 32,
@@ -121,12 +209,7 @@ export const Design = {
       fontWeight: '400' as const,
       letterSpacing: 0,
     },
-    body: {
-      fontSize: 16,
-      lineHeight: 24,  // 1.5x
-      fontWeight: '400' as const,
-      letterSpacing: 0,
-    },
+
     bodySmall: {
       fontSize: 14,
       lineHeight: 21,  // 1.5x
@@ -183,15 +266,24 @@ export const Design = {
     16: 64,
     20: 80,
     24: 96,
+    xs: 4,
+    s: 8,
+    m: 16,
+    l: 24,
+    xl: 32,
+    xxl: 48,
   },
   
   // Border Radius for modern UI
   borderRadius: {
     none: 0,
     sm: 6,
+    small: 6,
     base: 8,
     md: 12,
+    medium: 12,
     lg: 16,
+    large: 16,
     xl: 20,
     '2xl': 24,
     full: 999,

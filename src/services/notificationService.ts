@@ -29,7 +29,6 @@ class NotificationService {
     // Initialize push notifications for background wake-up
     this.initializePushNotifications();
 
-    console.log('📱 NotificationService initialized with custom sound support and push notifications');
     this.isInitialized = true;
   }
 
@@ -47,17 +46,15 @@ class NotificationService {
       /*
       this.orderSound = new Sound(soundFile, Sound.MAIN_BUNDLE, (error) => {
         if (error) {
-          console.log('❌ Failed to load sound:', error);
+          // Failed to load sound
           this.orderSound = null;
         } else {
-          console.log('✅ Order notification sound loaded successfully');
+          // Order notification sound loaded successfully
         }
       });
       */
 
-      console.log('🔊 Order sound initialized (using system default for now)');
     } catch (error) {
-      console.error('❌ Failed to initialize order sound:', error);
       this.orderSound = null;
     }
   }
@@ -70,31 +67,25 @@ class NotificationService {
       // Set up callbacks
       this.pushClient.setCallbacks({
         onNotification: (data) => {
-          console.log('📱 Push notification received:', data);
           this.handlePushNotification(data);
         },
         onRegistration: (token) => {
-          console.log('📱 FCM token received:', token);
           // TODO: Send token to backend for this driver
           this.sendTokenToBackend(token);
         },
         onRegistrationError: (error) => {
-          console.error('❌ Push notification registration error:', error);
+          // Handle registration error silently
         }
       });
 
       // Start push notifications
       this.pushClient.start();
-      
-      console.log('🔔 Push notifications initialized for background wake-up');
     } catch (error) {
-      console.error('❌ Failed to initialize push notifications:', error);
     }
   }
 
   private handlePushNotification(data: any) {
     try {
-      console.log('🔔 Processing push notification:', data);
       
       // Check if this is a new order notification
       if (data.type === 'new_order' && data.order) {
@@ -107,7 +98,6 @@ class NotificationService {
         } else {
           // App is in background - the push notification will wake up the phone
           // When user opens the app, we'll handle it through normal channels
-          console.log('📱 App in background - push notification will wake device');
         }
         
         // Always play sound and vibrate for new orders (this will wake the phone)
@@ -115,7 +105,6 @@ class NotificationService {
         this.vibrateForOrder();
       }
     } catch (error) {
-      console.error('❌ Error handling push notification:', error);
     }
   }
 
@@ -124,9 +113,8 @@ class NotificationService {
       // Import API service to send FCM token to backend
       const { apiService } = await import('./api');
       await apiService.updateFcmToken(token);
-      console.log('✅ FCM token sent to backend');
     } catch (error) {
-      console.error('❌ Failed to send FCM token to backend:', error);
+      // Failed to send token
     }
   }
 
@@ -139,21 +127,15 @@ class NotificationService {
         // Play custom sound
         this.orderSound.stop(() => {
           this.orderSound?.play((success) => {
-            if (success) {
-              console.log('🔊 Order notification sound played successfully');
-            } else {
-              console.log('❌ Order notification sound failed to play');
-            }
+            // Sound played
           });
         });
       } else {
         // Fallback to system sound using a more noticeable pattern
         // Create an audible beep pattern using system
         this.createSystemBeep();
-        console.log('🔊 Playing order notification sound (system fallback)');
       }
     } catch (error) {
-      console.error('❌ Failed to play notification sound:', error);
       // Fallback to system beep
       this.createSystemBeep();
     }
@@ -176,10 +158,7 @@ class NotificationService {
       beepPattern();
       setTimeout(beepPattern, 1000);
       setTimeout(beepPattern, 2000);
-      
-      console.log('🔊 System beep pattern created for order notification');
     } catch (error) {
-      console.error('❌ Failed to create system beep:', error);
     }
   }
 
@@ -199,10 +178,7 @@ class NotificationService {
         setTimeout(() => Vibration.vibrate(), 300);
         setTimeout(() => Vibration.vibrate(), 600);
       }
-      
-      console.log('📳 Device vibration triggered for order notification');
     } catch (error) {
-      console.error('❌ Failed to vibrate device:', error);
     }
   }
 
@@ -217,19 +193,8 @@ class NotificationService {
     this.playOrderSound();
     this.vibrateForOrder();
 
-    console.log('📨 Order notification triggered:', {
-      orderId: order.id,
-      customer: order.customer?.name,
-      total: order.total,
-      title,
-      message
-    });
 
     // For development, we can show a simple alert notification
-    // In production, this would be replaced with proper push notifications
-    if (__DEV__) {
-      console.log(`📱 DEV NOTIFICATION: ${title} - ${message}`);
-    }
   }
 
   /**
@@ -268,7 +233,6 @@ class NotificationService {
     onNewOrder?: (order: Order) => void;
   }) {
     this.notificationCallbacks = { ...this.notificationCallbacks, ...callbacks };
-    console.log('📱 Notification callbacks updated');
   }
 
   /**
@@ -278,7 +242,6 @@ class NotificationService {
     if (this.pushClient) {
       return this.pushClient.getToken() || null;
     }
-    console.log('📱 FCM token not available (push notifications not initialized)');
     return null;
   }
 
@@ -290,14 +253,11 @@ class NotificationService {
       if (this.pushClient) {
         // Subscribe to driver-specific topic for targeted notifications
         await this.pushClient.subscribeToTopic('new-orders');
-        console.log('📱 Background notifications enabled with push notification support');
         return true;
       } else {
-        console.log('📱 Background notifications enabled (using built-in APIs only)');
         return true;
       }
     } catch (error) {
-      console.error('❌ Failed to enable background notifications:', error);
       return false;
     }
   }
@@ -306,7 +266,6 @@ class NotificationService {
    * Schedule background check (placeholder)
    */
   public scheduleBackgroundCheck(intervalMinutes: number = 5) {
-    console.log(`📱 Background check scheduled for every ${intervalMinutes} minutes (placeholder)`);
   }
 
   /**
@@ -314,10 +273,8 @@ class NotificationService {
    */
   public async requestPermissions(): Promise<boolean> {
     try {
-      console.log('📱 Notification permissions requested (using system defaults)');
       return true;
     } catch (error) {
-      console.error('❌ Failed to request notification permissions:', error);
       return false;
     }
   }
@@ -327,10 +284,8 @@ class NotificationService {
    */
   public async checkPermissions(): Promise<boolean> {
     try {
-      console.log('📋 Checking notification permissions (assuming granted)');
       return true;
     } catch (error) {
-      console.error('❌ Failed to check notification permissions:', error);
       return false;
     }
   }
@@ -340,7 +295,6 @@ class NotificationService {
    */
   public createNotificationChannel() {
     if (Platform.OS === 'android') {
-      console.log('📢 Notification channel creation (placeholder for Android)');
     }
   }
 
@@ -348,80 +302,20 @@ class NotificationService {
    * Cancel notifications (placeholder)
    */
   public cancelOrderNotification(orderId: string) {
-    console.log(`🚫 Cancel notification for order ${orderId} (placeholder)`);
   }
 
   public cancelAllNotifications() {
-    console.log('🚫 Cancel all notifications (placeholder)');
   }
 
   /**
    * Schedule order reminder (placeholder)
    */
   public scheduleOrderReminder(order: Order, delayMinutes: number = 5) {
-    console.log(`⏰ Order reminder scheduled for ${delayMinutes} minutes (placeholder)`);
   }
 
   public clearOrderReminder(orderId: string) {
-    console.log(`🗑️ Clear reminder for order ${orderId} (placeholder)`);
   }
 
-  /**
-   * Test notification for debugging
-   */
-  public testNotification() {
-    const testOrder: Order = {
-      id: 'test_123',
-      orderNumber: 'TEST-001',
-      customer: {
-        id: 'customer_1',
-        name: 'John Doe',
-        phone: '+1234567890',
-        email: 'john@example.com'
-      },
-      items: [],
-      deliveryAddress: {
-        id: 'addr_1',
-        street: '123 Test Street',
-        city: 'Test City',
-        state: 'TC',
-        zipCode: '12345',
-        apartmentUnit: '',
-        deliveryInstructions: '',
-        coordinates: undefined
-      },
-      restaurantAddress: {
-        id: 'rest_1',
-        street: '456 Restaurant Ave',
-        city: 'Test City',
-        state: 'TC',
-        zipCode: '12345',
-        coordinates: undefined
-      },
-      status: 'pending',
-      paymentMethod: 'credit_card',
-      subtotal: 25.99,
-      deliveryFee: 4.99,
-      tax: 2.48,
-      tip: 5.00,
-      total: 38.46,
-      estimatedDeliveryTime: '30 min',
-      specialInstructions: 'Test order instructions',
-      orderTime: new Date(),
-      acceptedTime: undefined,
-      pickedUpTime: undefined,
-      deliveredTime: undefined
-    };
-
-    this.showOrderNotification(testOrder);
-    
-    // Also show in-app notification for testing
-    this.showInAppNotification(
-      testOrder,
-      () => console.log('✅ Test order accepted'),
-      () => console.log('❌ Test order declined')
-    );
-  }
 
   /**
    * Simple vibration for button taps
@@ -430,7 +324,6 @@ class NotificationService {
     try {
       Vibration.vibrate(50); // Short vibration
     } catch (error) {
-      console.error('❌ Failed to vibrate:', error);
     }
   }
 
@@ -441,7 +334,6 @@ class NotificationService {
     try {
       Vibration.vibrate(200); // Medium vibration
     } catch (error) {
-      console.error('❌ Failed to vibrate:', error);
     }
   }
 
@@ -457,7 +349,6 @@ class NotificationService {
         setTimeout(() => Vibration.vibrate(), 100);
       }
     } catch (error) {
-      console.error('❌ Failed to vibrate:', error);
     }
   }
 }

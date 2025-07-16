@@ -15,7 +15,7 @@ import { QRScanResult } from '../types/tracking';
 
 interface FloatingQRButtonProps {
   onScanResult?: (result: QRScanResult) => void;
-  style?: any;
+  style?: object;
   bottom?: number;
   right?: number;
 }
@@ -54,18 +54,18 @@ const FloatingQRButton: React.FC<FloatingQRButtonProps> = ({
     
     if (result.success) {
       Haptics.trigger('notificationSuccess');
-      console.log('QR Scan Result:', result.data);
+      // QR Scan Result received
       
       // Handle the QR code result
       if (onScanResult) {
         onScanResult(result);
       } else {
         // Default behavior - could show an alert or navigate somewhere
-        console.log('QR Code scanned:', result.data);
+        // QR Code scanned successfully
       }
     } else {
       Haptics.trigger('notificationError');
-      console.error('QR Scan failed:', result.message);
+      // QR Scan failed
     }
   };
 

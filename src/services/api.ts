@@ -1,6 +1,6 @@
 import { STORAGE_KEYS } from '../constants';
 import { Storage, SecureStorage } from '../utils';
-import { ENV, getTenantHost, apiDebug } from '../config/environment';
+import { ENV, getTenantHost } from '../config/environment';
 import { ApiEndpoints } from './apiEndpoints';
 import { ApiResponse } from '../types';
 
@@ -19,11 +19,6 @@ export class HttpClient {
   constructor() {
     this.tenantHost = getTenantHost();
     this.baseUrl = ENV.API_BASE_URL;
-    apiDebug('API Service initialized with:', {
-      tenantHost: this.tenantHost,
-      baseUrl: this.baseUrl,
-      env: ENV
-    });
   }
 
   private async getAuthHeaders(): Promise<HeadersInit> {
@@ -37,6 +32,9 @@ export class HttpClient {
     const authToken = await SecureStorage.getAuthToken();
     if (authToken) {
       headers.Authorization = `Bearer ${authToken}`;
+      console.log('[API] Auth token present, length:', authToken.length);
+    } else {
+      console.log('[API] No auth token found!');
     }
 
     const tenantId = await Storage.getItem(STORAGE_KEYS.TENANT_ID);
@@ -48,8 +46,6 @@ export class HttpClient {
   }
 
   private handleError(error: unknown): ApiResponse<never> {
-    apiDebug('API Error:', error);
-    
     if (error instanceof Error) {
       // Network error or fetch failure
       return {
@@ -104,11 +100,6 @@ export class HttpClient {
       const url = `${this.baseUrl}${endpoint}`;
       const headers = await this.getAuthHeaders();
 
-      apiDebug(`API Request: ${options.method || 'GET'} ${url}`);
-      apiDebug('Request headers:', headers);
-      if (options.body) {
-        apiDebug('Request body:', options.body);
-      }
 
       const response = await fetch(url, {
         ...options,
@@ -128,7 +119,6 @@ export class HttpClient {
         data = await response.text();
       }
 
-      apiDebug(`API Response: ${response.status}`, data);
 
       // Handle 401 Unauthorized - token might be expired
       if (response.status === 401) {
@@ -283,18 +273,3 @@ class ApiService extends ApiEndpoints {
 
 // Export singleton instance
 export const apiService = ApiService.getInstance();
-
-// Legacy exports for backward compatibility
-export const deliveryApi = {
-  getMyOrders: () => apiService.getDriverOrders(),
-  getAvailableOrders: () => apiService.getAvailableOrders(),
-  getOrderDetails: (orderId: string) => apiService.getOrderDetails(orderId),
-  acceptDelivery: (deliveryId: string) => apiService.acceptOrder(deliveryId),
-  declineDelivery: (deliveryId: string, _reason?: string) => apiService.declineOrder(deliveryId),
-  updateDeliveryStatus: (deliveryId: string, status: string, _location?: { latitude: number; longitude: number }, _notes?: string) => 
-    apiService.updateOrderStatus(deliveryId, status as import('../types').OrderStatus),
-  completeDelivery: (deliveryId: string, _signature?: string, _notes?: string) => 
-    apiService.updateOrderStatus(deliveryId, 'delivered'),
-  uploadProofOfDelivery: (deliveryId: string, file: File | Blob) => 
-    apiService.getClient().uploadFile(`/api/v1/delivery/deliveries/${deliveryId}/proof/`, file),
-};

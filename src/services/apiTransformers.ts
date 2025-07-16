@@ -60,12 +60,7 @@ export class ApiTransformers {
     const deliveryStatus = delivery?.status || delivery?.delivery_status;
     const orderStatus = order.status || order.order_status;
     
-    apiDebug('🔍 Determining order status:', {
-      deliveryStatus,
-      orderStatus,
-      hasDriver: !!delivery?.driver,
-      driverId: delivery?.driver
-    });
+    apiDebug('Determining order status', { deliveryStatus, orderStatus });
 
     // Map backend status to frontend OrderStatus enum
     const statusMap: Record<string, OrderStatus> = {
@@ -85,19 +80,19 @@ export class ApiTransformers {
 
     // Available orders are those that drivers can accept
     if (!delivery?.driver || delivery?.driver === null || delivery?.driver === '') {
-      apiDebug('📋 Order has no driver assigned - setting status to pending');
+      apiDebug('Order has no driver assigned - setting status to pending');
       return 'pending';
     }
 
     // If delivery has a driver, use the delivery status directly
     if (delivery?.driver && deliveryStatus) {
-      apiDebug(`🚛 Order has driver - using delivery status: ${deliveryStatus}`);
+      apiDebug('Order has driver - using delivery status', deliveryStatus);
       return deliveryStatus as OrderStatus;
     }
 
     // Use delivery status if available, then order status, default to pending
     const finalStatus = deliveryStatus || orderStatus || 'pending';
-    apiDebug(`✅ Final order status: ${finalStatus}`);
+    apiDebug('Final order status determined', finalStatus);
     return statusMap[finalStatus] || 'pending';
   }
 
@@ -111,44 +106,65 @@ export class ApiTransformers {
     }
     
     const data = backendData as BackendOrder | BackendDelivery;
-    apiDebug('🔄 transformOrder input:', {
-      hasId: !!data.id,
-      hasOrder: !!('order' in data && data.order && typeof data.order === 'object'),
-      hasDriver: 'driver' in data,
-      topLevelKeys: Object.keys(data).slice(0, 10)
-    });
+    apiDebug('transformOrder input', data);
 
-    // Use type-safe extraction utilities - simplified inline
-    const isDelivery = 'order' in data && data.order && typeof data.order === 'object';
-    const order = isDelivery ? (data as BackendDelivery).order as BackendOrder : (data as BackendOrder);
-    const delivery = isDelivery ? (data as BackendDelivery) : null;
+    // Handle different backend response formats
+    let order: BackendOrder | null = null;
+    let delivery: BackendDelivery | null = null;
+    
+    // Check if this is a delivery object
+    if ('order' in data) {
+      delivery = data as BackendDelivery;
+      
+      // If order is just an ID, create a minimal order object
+      if (typeof delivery.order === 'number' || typeof delivery.order === 'string') {
+        apiDebug('Order field is just an ID, creating minimal order object');
+        order = {
+          id: String(delivery.order),
+          order_number: delivery.order_id ? `#${delivery.order_id}` : `#${delivery.order}`,
+          customer_name: delivery.customer_name,
+          customer_phone: delivery.customer_phone,
+          customer_email: delivery.customer_email,
+          customer_id: delivery.customer_id,
+          customer_details: delivery.customer_details,
+          customer: delivery.customer,
+          delivery_address: delivery.delivery_address,
+          pickup_address: delivery.pickup_address,
+          status: delivery.status || delivery.delivery_status,
+          // Set default values for amounts since we don't have them
+          subtotal: 0,
+          delivery_fee: 0,
+          tax: 0,
+          total: 0,
+          items: [],
+          created_at: delivery.created_at
+        };
+      } else if (delivery.order && typeof delivery.order === 'object') {
+        order = delivery.order as BackendOrder;
+      }
+    } else {
+      // This is already an order object
+      order = data as BackendOrder;
+    }
 
-    apiDebug('🔍 Transforming order data:', {
-      isDelivery,
-      hasOrder: !!order,
-      orderId: order?.id,
-      hasCustomer: !!(order?.customer || order?.customer_details),
-      backendDataKeys: Object.keys(backendData),
-      orderKeys: order ? Object.keys(order) : []
-    });
+    apiDebug('Transforming order data', { hasOrder: !!order, hasDelivery: !!delivery });
 
     // Enhanced customer data extraction with debugging
-    apiDebug('🔍 Customer data extraction:', {
-      'order.customer': order.customer,
-      'order.customer_details': order.customer_details,
-      'order.customer_name': order.customer_name,
-      'order.customer_id': order.customer_id,
-      'delivery?.customer': delivery?.customer,
-      'customerIsId': typeof order.customer === 'number' || typeof order.customer === 'string',
-      'hasCustomerDetails': !!order.customer_details,
-      'customerDetailsKeys': order.customer_details ? Object.keys(order.customer_details) : []
+    apiDebug('Customer data extraction started');
+    
+    // Debug coordinates
+    apiDebug('Coordinate data', { 
+      pickup_lat: order?.pickup_latitude, 
+      pickup_lng: order?.pickup_longitude,
+      delivery_lat: order?.delivery_latitude,
+      delivery_lng: order?.delivery_longitude
     });
 
     let customerData: BackendCustomer = {};
     
     // Handle case where customer is just an ID (needs to be fixed in backend)
-    if (typeof order.customer === 'number' || typeof order.customer === 'string') {
-      apiDebug('⚠️ Customer field is just an ID, not an object. Backend should return customer_details.');
+    if (order && (typeof order.customer === 'number' || typeof order.customer === 'string')) {
+      apiDebug('Customer field is just an ID, not an object. Backend should return customer_details.');
       customerData = {
         id: String(order.customer),
         name: order.customer_name,
@@ -156,8 +172,8 @@ export class ApiTransformers {
         email: order.customer_email
       };
     } else {
-      customerData = (order.customer_details as BackendCustomer) ||  // Use customer_details first (contains full object)
-                    (order.customer as BackendCustomer) || 
+      customerData = (order?.customer_details as BackendCustomer) ||  // Use customer_details first (contains full object)
+                    (order?.customer as BackendCustomer) || 
                     (delivery?.customer_details as BackendCustomer) || 
                     (delivery?.customer as BackendCustomer) || 
                     {};
@@ -165,10 +181,10 @@ export class ApiTransformers {
 
     // Fallback customer data if missing
     const customer = {
-      id: String(customerData.id || order.customer_id || delivery?.customer_id || order.customer || `customer_${order.id || 'unknown'}`),
+      id: String(customerData.id || order?.customer_id || delivery?.customer_id || order?.customer || `customer_${order?.id || delivery?.id || 'unknown'}`),
       name: customerData.name || 
             customerData.full_name || 
-            order.customer_name || 
+            order?.customer_name || 
             delivery?.customer_name ||
             `${customerData.first_name || ''} ${customerData.last_name || ''}`.trim() ||
             (customerData.user?.first_name && customerData.user?.last_name ? 
@@ -176,35 +192,25 @@ export class ApiTransformers {
             'Unknown Customer'),
       phone: customerData.phone || 
              customerData.phone_number || 
-             order.customer_phone || 
+             order?.customer_phone || 
              delivery?.customer_phone ||
              '',
       email: customerData.email || 
-             order.customer_email || 
+             order?.customer_email || 
              delivery?.customer_email ||
              ''
     };
 
     // Log if customer data is missing for debugging
     if (!customer.name || customer.name === 'Unknown Customer') {
-      apiDebug('⚠️ Missing customer data in order:', {
-        orderId: order.id,
-        backendData: JSON.stringify(backendData, null, 2),
-        extractedCustomer: customer
-      });
+      apiDebug('Missing customer data in order', { orderId: order?.id, deliveryId: delivery?.id });
     }
 
     // CRITICAL: For available_orders endpoint, the root object IS the delivery
     // So backendData.id is the delivery ID we need for accept/decline
     const primaryId = String(data.id || delivery?.id || order?.id || '');
 
-    apiDebug('🆔 ID Resolution:', {
-      primaryId,
-      backendDataId: data.id,
-      deliveryId: delivery?.id,
-      orderId: order?.id,
-      isFromAvailableOrders: !delivery && data.id && 'order' in data
-    });
+    apiDebug('ID Resolution', { primaryId, dataId: data.id, deliveryId: delivery?.id, orderId: order?.id });
 
     // Batch order support - use current_batch structure
     const isBatchDelivery = !!(
@@ -215,12 +221,7 @@ export class ApiTransformers {
       order?.current_batch_id
     );
 
-    apiDebug('🔍 Batch detection:', {
-      isBatchDelivery,
-      deliveryBatchId: (delivery as BackendDelivery)?.batch_id,
-      orderBatchId: order?.current_batch_id,
-      backendBatchId: data.batch_id
-    });
+    apiDebug('Batch detection', { isBatchDelivery });
 
     // Transform order items
     const items = (order?.items || order?.order_items || []).map((item: BackendOrderItem) => ({
@@ -234,12 +235,22 @@ export class ApiTransformers {
     // Calculate estimated delivery time based on various time fields
     // (This is now directly assigned in the order object below)
 
+    // Parse coordinates with better debugging - coordinates are only on order, not delivery
+    const parsedCoords = {
+      pickup_lat: order?.pickup_latitude ? parseFloat(String(order.pickup_latitude)) : undefined,
+      pickup_lng: order?.pickup_longitude ? parseFloat(String(order.pickup_longitude)) : undefined,
+      delivery_lat: order?.delivery_latitude ? parseFloat(String(order.delivery_latitude)) : undefined,
+      delivery_lng: order?.delivery_longitude ? parseFloat(String(order.delivery_longitude)) : undefined,
+    };
+    
+    apiDebug('Parsed coordinates', parsedCoords);
+
     const baseOrder: Order = {
       // Use the primary ID (delivery ID if available, otherwise order ID)
       id: primaryId,
       deliveryId: primaryId, // Same as id for compatibility
       orderId: order?.id || primaryId, // Original order ID if different
-      order_number: order?.order_number || order?.orderNumber || `#${order?.id || 'N/A'}`,
+      order_number: order?.order_number || order?.orderNumber || `#${order?.id || delivery?.id || 'N/A'}`,
       customer,
       customer_details: customer, // For backward compatibility
       items,
@@ -247,23 +258,23 @@ export class ApiTransformers {
                        order?.delivery_address || 
                        `${customer.name}'s Address`,
       pickup_address: delivery?.pickup_address || order?.pickup_address,
-      // Parse coordinates as floats
-      pickup_latitude: order?.pickup_latitude ? parseFloat(String(order.pickup_latitude)) : undefined,
-      pickup_longitude: order?.pickup_longitude ? parseFloat(String(order.pickup_longitude)) : undefined,
-      delivery_latitude: order?.delivery_latitude ? parseFloat(String(order.delivery_latitude)) : undefined,
-      delivery_longitude: order?.delivery_longitude ? parseFloat(String(order.delivery_longitude)) : undefined,
+      // Use the parsed coordinates
+      pickup_latitude: parsedCoords.pickup_lat,
+      pickup_longitude: parsedCoords.pickup_lng,
+      delivery_latitude: parsedCoords.delivery_lat,
+      delivery_longitude: parsedCoords.delivery_lng,
       
-      status: this.determineOrderStatus(delivery, order),
+      status: ApiTransformers.determineOrderStatus(delivery, order || {} as BackendOrder),
       payment_method: (order?.payment_method as PaymentMethod) || 'cash',
       
-      // Parse amounts as numbers
-      subtotal: order.subtotal ? parseFloat(String(order.subtotal)) : 0,
-      delivery_fee: order.delivery_fee ? parseFloat(String(order.delivery_fee)) : 0,
-      tax: order.tax ? parseFloat(String(order.tax)) : 0,
-      total: order.total ? parseFloat(String(order.total)) : 0,
-      estimated_delivery_time: delivery?.estimated_delivery_time || order.scheduled_delivery_time || '',
-      delivery_notes: order.delivery_notes || '',
-      created_at: order.created_at ? new Date(order.created_at) : new Date(),
+      // Parse amounts as numbers - check order level only
+      subtotal: order?.subtotal ? parseFloat(String(order.subtotal)) : 0,
+      delivery_fee: order?.delivery_fee ? parseFloat(String(order.delivery_fee)) : 0,
+      tax: order?.tax ? parseFloat(String(order.tax)) : 0,
+      total: order?.total ? parseFloat(String(order.total)) : 0,
+      estimated_delivery_time: delivery?.estimated_delivery_time || order?.scheduled_delivery_time || '',
+      delivery_notes: order?.delivery_notes || '',
+      created_at: order?.created_at ? new Date(order.created_at) : delivery?.created_at ? new Date(delivery.created_at) : new Date(),
       // Add delivery-specific fields if this is a delivery object
       driverId: delivery?.driver || undefined,
       driverName: delivery?.driver_name || undefined,
@@ -271,9 +282,9 @@ export class ApiTransformers {
       // Batch order support - use current_batch structure
       current_batch: order?.current_batch || null,
       consolidation_warehouse_id: order?.consolidation_warehouse_id,
-      final_delivery_address: order.final_delivery_address,
-      final_delivery_latitude: order.final_delivery_latitude ? parseFloat(String(order.final_delivery_latitude)) : undefined,
-      final_delivery_longitude: order.final_delivery_longitude ? parseFloat(String(order.final_delivery_longitude)) : undefined,
+      final_delivery_address: order?.final_delivery_address,
+      final_delivery_latitude: order?.final_delivery_latitude ? parseFloat(String(order.final_delivery_latitude)) : undefined,
+      final_delivery_longitude: order?.final_delivery_longitude ? parseFloat(String(order.final_delivery_longitude)) : undefined,
       // Add batch orders if this is a batch
       // Note: 'orders' property is defined in BatchOrder interface but not in base Order
     };

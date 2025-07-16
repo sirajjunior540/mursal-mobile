@@ -59,11 +59,7 @@ class MapboxService {
   constructor() {
     this.accessToken = getMapboxToken();
     
-    if (!this.accessToken) {
-      console.warn('⚠️ Mapbox access token not configured');
-    } else {
-      console.log('✅ Mapbox service initialized with token:', `${this.accessToken.substring(0, 20)}...`);
-    }
+    // Token initialization handled silently
   }
 
   /**
@@ -89,7 +85,6 @@ class MapboxService {
     options: MapboxRouteOptions = {}
   ): Promise<DirectionsResponse | null> {
     if (!this.isConfigured()) {
-      console.error('❌ Mapbox not configured - cannot get directions');
       return null;
     }
 
@@ -120,14 +115,11 @@ class MapboxService {
       const data = await response.json();
       
       if (data.routes && data.routes.length > 0) {
-        console.log('✅ Mapbox directions retrieved successfully');
         return data;
       } else {
-        console.warn('⚠️ No routes found from Mapbox');
         return null;
       }
     } catch (error) {
-      console.error('❌ Failed to get directions from Mapbox:', error);
       return null;
     }
   }
@@ -159,23 +151,18 @@ class MapboxService {
           : `google.navigation:q=${destinationString}&mode=d`;
       }
 
-      console.log('🗺️ Attempting to open navigation:', navigationUrl);
-      
       const canOpen = await Linking.canOpenURL(navigationUrl);
       if (canOpen) {
         await Linking.openURL(navigationUrl);
-        console.log('✅ Opened platform navigation app');
         return true;
       }
 
       // Fallback to web-based navigation
       const fallbackUrl = this.generateWebNavigationUrl(destination, origin, label);
       await Linking.openURL(fallbackUrl);
-      console.log('✅ Opened web navigation as fallback');
       return true;
 
     } catch (error) {
-      console.error('❌ Failed to open navigation:', error);
       return false;
     }
   }
@@ -209,7 +196,6 @@ class MapboxService {
     markers?: Array<{ coordinates: Coordinates; color?: string; label?: string }>
   ): string {
     if (!this.isConfigured()) {
-      console.warn('⚠️ Mapbox not configured - cannot generate static map');
       return '';
     }
 
@@ -286,7 +272,6 @@ class MapboxService {
    */
   public async reverseGeocode(coordinates: Coordinates): Promise<MapboxGeocodeResponse | null> {
     if (!this.isConfigured()) {
-      console.error('❌ Mapbox not configured - cannot perform reverse geocoding');
       return null;
     }
 
@@ -307,14 +292,11 @@ class MapboxService {
       const data = await response.json();
       
       if (data.features && data.features.length > 0) {
-        console.log('✅ Mapbox reverse geocoding successful');
         return data;
       } else {
-        console.warn('⚠️ No geocoding results found');
         return null;
       }
     } catch (error) {
-      console.error('❌ Failed to reverse geocode with Mapbox:', error);
       return null;
     }
   }
@@ -384,7 +366,6 @@ class MapboxService {
         full_address: feature.place_name || ''
       };
     } catch (error) {
-      console.error('❌ Failed to parse address from Mapbox response:', error);
       return null;
     }
   }
@@ -406,7 +387,6 @@ class MapboxService {
    */
   public async testConfiguration(): Promise<boolean> {
     if (!this.isConfigured()) {
-      console.error('❌ Mapbox not configured');
       return false;
     }
 
@@ -416,14 +396,11 @@ class MapboxService {
       const response = await fetch(testUrl);
       
       if (response.ok) {
-        console.log('✅ Mapbox configuration test successful');
         return true;
       } else {
-        console.error('❌ Mapbox configuration test failed:', response.status);
         return false;
       }
     } catch (error) {
-      console.error('❌ Mapbox configuration test error:', error);
       return false;
     }
   }

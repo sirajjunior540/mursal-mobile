@@ -193,6 +193,7 @@ class RealtimeService {
       const sdkConfig: Partial<RealtimeSDKConfig> = {
         baseUrl: ENV.API_BASE_URL,
         authToken: token,
+        tenantId: ENV.TENANT_ID,
         enabledModes: this.getSdkEnabledModes(),
         primaryMode: this.getSdkPrimaryMode(),
         pollingInterval: this.config.pollingInterval,
@@ -500,71 +501,6 @@ class RealtimeService {
     return ['polling', 'websocket'];
   }
 
-  // The following methods are no longer needed as they are handled by the SDK
-  // They are kept as empty methods for backward compatibility
-
-  /**
-   * Start polling for new orders (deprecated - handled by SDK)
-   */
-  private startPolling(): void {
-    console.log('🔄 Polling is now handled by the SDK');
-  }
-
-  /**
-   * Stop polling (deprecated - handled by SDK)
-   */
-  private stopPolling(): void {
-    // No-op - handled by SDK
-  }
-
-  /**
-   * Poll for new orders (deprecated - handled by SDK)
-   */
-  private async pollForNewOrders(): Promise<void> {
-    console.log('🔄 Polling is now handled by the SDK');
-  }
-
-  /**
-   * Clean up old order IDs (deprecated - handled by SDK)
-   */
-  private cleanupOldOrders(_currentOrderIds: Set<string>): void {
-    // No-op - handled by SDK
-  }
-
-  /**
-   * Start WebSocket connection (deprecated - handled by SDK)
-   */
-  private startWebSocket(): void {
-    console.log('🔌 WebSocket is now handled by the SDK');
-  }
-
-  /**
-   * Stop WebSocket connection (deprecated - handled by SDK)
-   */
-  private stopWebSocket(): void {
-    // No-op - handled by SDK
-  }
-
-  /**
-   * Get WebSocket URL (deprecated - handled by SDK)
-   */
-  private getWebSocketUrl(): string {
-    return '';
-  }
-
-  /**
-   * Send WebSocket authentication (deprecated - handled by SDK)
-   */
-  private async sendWebSocketAuth(): Promise<void> {
-    // No-op - handled by SDK
-  }
-
-  /**
-   * Handle WebSocket messages (deprecated - handled by SDK)
-   */
-  private handleWebSocketMessage(_data: unknown): void {
-    // No-op - handled by SDK
-  }
 
   /**
    * Get current configuration

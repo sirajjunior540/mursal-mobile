@@ -107,8 +107,12 @@ const AcceptedOrdersScreen: React.FC = () => {
   }, [getDriverOrders]);
 
   const handleOrderPress = useCallback((order: Order) => {
+    console.log('[AcceptedOrdersScreen] Order pressed:', order.id, order);
     if (order.id && navigation?.navigate) {
+      console.log('[AcceptedOrdersScreen] Navigating to OrderDetails with orderId:', order.id);
       navigation.navigate('OrderDetails', { orderId: order.id });
+    } else {
+      console.error('[AcceptedOrdersScreen] Cannot navigate - missing order.id or navigation:', { orderId: order.id, hasNavigation: !!navigation });
     }
   }, [navigation]);
 
@@ -244,7 +248,10 @@ const AcceptedOrdersScreen: React.FC = () => {
               <Text style={styles.totalLabel}>Total</Text>
               <Text style={styles.totalAmount}>${typeof order.total === 'number' ? order.total.toFixed(2) : '0.00'}</Text>
             </View>
-            <TouchableOpacity style={styles.detailsButton}>
+            <TouchableOpacity 
+              style={styles.detailsButton}
+              onPress={() => handleOrderPress(order)}
+            >
               <Text style={styles.detailsButtonText}>View Details</Text>
               <Ionicons name="chevron-forward" size={16} color="#3B82F6" />
             </TouchableOpacity>

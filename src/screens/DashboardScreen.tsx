@@ -29,17 +29,21 @@ import { orderActionService } from '../services/orderActionService';
 import { notificationService } from '../services/notificationService';
 
 interface DashboardStackParamList extends Record<string, object | undefined> {
+  AvailableOrders: undefined;
   AcceptedOrders: undefined;
-  Dashboard: undefined;
+  Navigation: undefined;
+  History: undefined;
 }
 
-type NavigationProp = StackNavigationProp<DashboardStackParamList, 'Dashboard'>;
+type NavigationProp = StackNavigationProp<DashboardStackParamList, 'Home'>;
 
 const DashboardScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const { 
-    orders: activeOrders, 
+    orders: availableOrders, 
+    driverOrders: activeOrders,
     refreshOrders, 
+    getDriverOrders,
     acceptOrder, 
     declineOrder,
     setOrderNotificationCallback,
@@ -51,6 +55,8 @@ const DashboardScreen: React.FC = () => {
   const [incomingOrder, setIncomingOrder] = useState<Order | null>(null);
   const [showIncomingModal, setShowIncomingModal] = useState(false);
   const [showPerformanceMetrics, setShowPerformanceMetrics] = useState(true);
+  const [showAvailableOrders, setShowAvailableOrders] = useState(true);
+  const [showActiveDeliveries, setShowActiveDeliveries] = useState(true);
   
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
@@ -94,10 +100,11 @@ const DashboardScreen: React.FC = () => {
     Haptics.trigger('impactLight');
     await Promise.all([
       refreshOrders(),
+      getDriverOrders(),
       getDriverBalance(),
     ]);
     setRefreshing(false);
-  }, [refreshOrders, getDriverBalance]);
+  }, [refreshOrders, getDriverOrders, getDriverBalance]);
 
   const handleToggleOnline = useCallback(async () => {
     if (driver) {
@@ -119,7 +126,7 @@ const DashboardScreen: React.FC = () => {
       const result = await acceptOrder(orderId);
       if (result) {
         // Navigate directly to route screen instead of showing popup
-        navigation.navigate('RouteNavigation');
+        navigation.navigate('Navigation');
       } else {
         Alert.alert('Error', 'Failed to accept order');
       }
@@ -139,7 +146,7 @@ const DashboardScreen: React.FC = () => {
         showConfirmation: false,
         onSuccess: () => {
           // Navigate directly to route screen
-          navigation.navigate('RouteNavigation');
+          navigation.navigate('Navigation');
         },
         onError: (error) => {
           Alert.alert('Error', `Failed to accept route: ${error}`);
@@ -329,115 +336,184 @@ const DashboardScreen: React.FC = () => {
 
   const renderPerformanceMetrics = () => (
     <View style={styles.performanceContainer}>
-      <TouchableOpacity 
-        style={styles.performanceHeader}
-        onPress={() => {
-          Haptics.trigger('selection');
-          setShowPerformanceMetrics(!showPerformanceMetrics);
-        }}
-        activeOpacity={0.7}
-      >
-        <View style={styles.performanceHeaderLeft}>
-          <View style={styles.performanceHeaderIcon}>
-            <Ionicons name="analytics" size={20} color="#3B82F6" />
+      <View style={styles.collapsibleCard}>
+        <TouchableOpacity 
+          style={styles.collapsibleHeader}
+          onPress={() => {
+            Haptics.trigger('selection');
+            setShowPerformanceMetrics(!showPerformanceMetrics);
+          }}
+          activeOpacity={0.7}
+        >
+          <View style={styles.collapsibleHeaderLeft}>
+            <View style={styles.collapsibleHeaderIcon}>
+              <Ionicons name="analytics" size={16} color="#3B82F6" />
+            </View>
+            <View style={styles.headerTextContainer}>
+              <Text style={styles.sectionTitle}>Performance Metrics</Text>
+              {!showPerformanceMetrics && (
+                <Text style={styles.summaryText}>
+                  {balance?.completedOrders || 0} completed • {balance?.successRate ? `${balance.successRate.toFixed(0)}%` : '0%'} success rate
+                </Text>
+              )}
+            </View>
           </View>
-          <Text style={styles.sectionTitle}>Performance Metrics</Text>
-        </View>
-        <View style={styles.performanceHeaderRight}>
+        </TouchableOpacity>
+        
+        {showPerformanceMetrics && (
+          <View style={styles.collapsibleContent}>
+            <View style={styles.performanceGrid}>
+              <View style={styles.performanceItem}>
+                <View style={[styles.performanceIcon, styles.performanceIconPurple]}>
+                  <Ionicons name="list-outline" size={18} color="#ffffff" />
+                </View>
+                <Text style={styles.performanceValue}>{balance?.availableOrders || 0}</Text>
+                <Text style={styles.performanceLabel}>Available</Text>
+              </View>
+              <View style={styles.performanceItem}>
+                <View style={[styles.performanceIcon, styles.performanceIconGreen]}>
+                  <Ionicons name="checkmark-done-outline" size={18} color="#ffffff" />
+                </View>
+                <Text style={styles.performanceValue}>{balance?.completedOrders || 0}</Text>
+                <Text style={styles.performanceLabel}>Completed</Text>
+              </View>
+              <View style={styles.performanceItem}>
+                <View style={[styles.performanceIcon, styles.performanceIconOrange]}>
+                  <Ionicons name="today-outline" size={18} color="#ffffff" />
+                </View>
+                <Text style={styles.performanceValue}>{balance?.todayCompletedOrders || 0}</Text>
+                <Text style={styles.performanceLabel}>Today</Text>
+              </View>
+              <View style={styles.performanceItem}>
+                <View style={[styles.performanceIcon, styles.performanceIconRed]}>
+                  <Ionicons name="trending-up-outline" size={18} color="#ffffff" />
+                </View>
+                <Text style={styles.performanceValue}>
+                  {balance?.successRate ? `${balance.successRate.toFixed(0)}%` : '0%'}
+                </Text>
+                <Text style={styles.performanceLabel}>Success Rate</Text>
+              </View>
+            </View>
+          </View>
+        )}
+        
+        <TouchableOpacity 
+          style={styles.collapseArrow}
+          onPress={() => {
+            Haptics.trigger('selection');
+            setShowPerformanceMetrics(!showPerformanceMetrics);
+          }}
+          activeOpacity={0.7}
+        >
           <Ionicons 
             name={showPerformanceMetrics ? "chevron-up" : "chevron-down"} 
             size={20} 
             color="#6B7280" 
           />
-        </View>
-      </TouchableOpacity>
-      
-      {showPerformanceMetrics && (
-        <View style={styles.performanceCard}>
-          <View style={styles.performanceGrid}>
-            <View style={styles.performanceItem}>
-              <View style={[styles.performanceIcon, styles.performanceIconPurple]}>
-                <Ionicons name="list-outline" size={18} color="#ffffff" />
-              </View>
-              <Text style={styles.performanceValue}>{balance?.availableOrders || 0}</Text>
-              <Text style={styles.performanceLabel}>Available</Text>
-            </View>
-            <View style={styles.performanceItem}>
-              <View style={[styles.performanceIcon, styles.performanceIconGreen]}>
-                <Ionicons name="checkmark-done-outline" size={18} color="#ffffff" />
-              </View>
-              <Text style={styles.performanceValue}>{balance?.completedOrders || 0}</Text>
-              <Text style={styles.performanceLabel}>Completed</Text>
-            </View>
-            <View style={styles.performanceItem}>
-              <View style={[styles.performanceIcon, styles.performanceIconOrange]}>
-                <Ionicons name="today-outline" size={18} color="#ffffff" />
-              </View>
-              <Text style={styles.performanceValue}>{balance?.todayCompletedOrders || 0}</Text>
-              <Text style={styles.performanceLabel}>Today</Text>
-            </View>
-            <View style={styles.performanceItem}>
-              <View style={[styles.performanceIcon, styles.performanceIconRed]}>
-                <Ionicons name="trending-up-outline" size={18} color="#ffffff" />
-              </View>
-              <Text style={styles.performanceValue}>
-                {balance?.successRate ? `${balance.successRate.toFixed(0)}%` : '0%'}
-              </Text>
-              <Text style={styles.performanceLabel}>Success Rate</Text>
-            </View>
-          </View>
-        </View>
-      )}
+        </TouchableOpacity>
+      </View>
     </View>
   );
 
 
   const renderAvailableOrders = () => (
     <View style={styles.availableOrdersContainer}>
-      <View style={styles.availableOrdersHeader}>
-        <Text style={styles.sectionTitle}>Available Orders</Text>
-        <TouchableOpacity onPress={handleRefresh} style={styles.refreshButton}>
-          <Ionicons name="refresh" size={20} color="#3B82F6" />
+      <View style={styles.collapsibleCard}>
+        <TouchableOpacity 
+          style={styles.collapsibleHeader}
+          onPress={() => {
+            Haptics.trigger('selection');
+            setShowAvailableOrders(!showAvailableOrders);
+          }}
+          activeOpacity={0.7}
+        >
+          <View style={styles.collapsibleHeaderLeft}>
+            <View style={styles.collapsibleHeaderIcon}>
+              <Ionicons name="cube-outline" size={16} color="#3B82F6" />
+            </View>
+            <View style={styles.headerTextContainer}>
+              <Text style={styles.sectionTitle}>Available Orders</Text>
+              {!showAvailableOrders && (
+                <Text style={styles.summaryText}>
+                  {driver?.isOnline ? 'Ready to accept new orders' : 'Go online to see orders'}
+                </Text>
+              )}
+            </View>
+          </View>
+          <View style={styles.collapsibleHeaderRight}>
+            <TouchableOpacity onPress={handleRefresh} style={styles.refreshButton}>
+              <Ionicons name="refresh" size={20} color="#3B82F6" />
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+        
+        {showAvailableOrders && (
+          <View style={styles.collapsibleContent}>
+            {availableOrders && availableOrders.length > 0 ? (
+              <View style={styles.availableOrdersList}>
+                {availableOrders.filter(order => canAcceptOrder(order)).slice(0, 5).map((order, index) => (
+                  <TouchableOpacity 
+                    key={order.id} 
+                    style={styles.availableOrderItem}
+                    onPress={() => handleAcceptOrder(order.id)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.orderItemLeft}>
+                      <Text style={styles.orderItemNumber}>#{order.order_number || order.id}</Text>
+                      <Text style={styles.orderItemCustomer}>
+                        {order.customer?.name || 'Unknown Customer'}
+                      </Text>
+                    </View>
+                    <View style={styles.orderItemRight}>
+                      <View style={styles.orderItemInfo}>
+                        <Text style={styles.orderItemStatus}>{order.status}</Text>
+                        <Text style={styles.orderItemTime}>
+                          {new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={16} color="#3B82F6" />
+                    </View>
+                  </TouchableOpacity>
+                ))}
+                {availableOrders.filter(order => canAcceptOrder(order)).length > 5 && (
+                  <TouchableOpacity 
+                    style={styles.viewAllButton}
+                    onPress={() => navigation.navigate('AvailableOrders')}
+                  >
+                    <Text style={styles.viewAllButtonText}>View all {availableOrders.filter(order => canAcceptOrder(order)).length} orders</Text>
+                    <Ionicons name="arrow-forward" size={16} color="#3B82F6" />
+                  </TouchableOpacity>
+                )}
+              </View>
+            ) : (
+              <View style={styles.noAvailableOrders}>
+                <Ionicons name="cube-outline" size={32} color="#6B7280" />
+                <Text style={styles.noAvailableOrdersText}>No available orders</Text>
+                <Text style={styles.noAvailableOrdersSubtext}>
+                  {driver?.isOnline 
+                    ? 'New orders will appear here when available' 
+                    : 'Go online to see available orders'}
+                </Text>
+              </View>
+            )}
+          </View>
+        )}
+        
+        <TouchableOpacity 
+          style={styles.collapseArrow}
+          onPress={() => {
+            Haptics.trigger('selection');
+            setShowAvailableOrders(!showAvailableOrders);
+          }}
+          activeOpacity={0.7}
+        >
+          <Ionicons 
+            name={showAvailableOrders ? "chevron-up" : "chevron-down"} 
+            size={20} 
+            color="#6B7280" 
+          />
         </TouchableOpacity>
       </View>
-      
-      {activeOrders && activeOrders.length > 0 ? (
-        <View style={styles.activeOrdersSummary}>
-          <View style={styles.summaryHeader}>
-            <Text style={styles.summaryTitle}>You have {activeOrders.length} active deliveries</Text>
-            <Text style={styles.summarySubtitle}>Complete these before accepting new batch legs</Text>
-          </View>
-          
-          <TouchableOpacity 
-            style={styles.viewOrdersButton}
-            onPress={() => navigation.navigate('AcceptedOrders')}
-          >
-            <Text style={styles.viewOrdersButtonText}>View My Orders</Text>
-            <Ionicons name="arrow-forward" size={20} color="#3B82F6" />
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <TouchableOpacity 
-          style={styles.availableDeliveriesCard}
-          onPress={() => navigation.navigate('RouteNavigation')}
-          activeOpacity={0.8}
-        >
-          <View style={styles.deliveriesCardContent}>
-            <View style={styles.deliveriesIconContainer}>
-              <Ionicons name="cube-outline" size={32} color="#3B82F6" />
-            </View>
-            <View style={styles.deliveriesTextContainer}>
-              <Text style={styles.deliveriesTitle}>Check Available Deliveries</Text>
-              <Text style={styles.deliveriesSubtext}>
-                {driver?.isOnline 
-                  ? 'View batch deliveries matching your vehicle type' 
-                  : 'Go online to see available batch deliveries'}
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={24} color="#9CA3AF" />
-          </View>
-        </TouchableOpacity>
-      )}
     </View>
   );
 
@@ -450,7 +526,7 @@ const DashboardScreen: React.FC = () => {
         <View style={styles.statusHeader}>
           <Ionicons 
             name={driver?.isOnline ? 'radio' : 'radio-outline'} 
-            size={28} 
+            size={24} 
             color="#ffffff" 
           />
           <Text style={styles.statusTitle}>
@@ -459,7 +535,7 @@ const DashboardScreen: React.FC = () => {
         </View>
         <Text style={styles.statusSubtitle}>
           {driver?.isOnline 
-            ? 'Ready to receive new delivery orders' 
+            ? 'Ready to receive orders' 
             : 'Go online to start receiving orders'}
         </Text>
         {!driver?.isOnline && (
@@ -467,6 +543,98 @@ const DashboardScreen: React.FC = () => {
             <Text style={styles.goOnlineButtonText}>Go Online</Text>
           </TouchableOpacity>
         )}
+      </View>
+    </View>
+  );
+
+  const renderActiveDeliveries = () => (
+    <View style={styles.activeDeliveriesContainer}>
+      <View style={styles.collapsibleCard}>
+        <TouchableOpacity 
+          style={styles.collapsibleHeader}
+          onPress={() => {
+            Haptics.trigger('selection');
+            setShowActiveDeliveries(!showActiveDeliveries);
+          }}
+          activeOpacity={0.7}
+        >
+          <View style={styles.collapsibleHeaderLeft}>
+            <View style={styles.collapsibleHeaderIcon}>
+              <Ionicons name="car-outline" size={16} color="#10B981" />
+            </View>
+            <View style={styles.headerTextContainer}>
+              <Text style={styles.sectionTitle}>Active Deliveries</Text>
+              {!showActiveDeliveries && (
+                <Text style={styles.summaryText}>
+                  {activeOrders?.length || 0} active {activeOrders?.length === 1 ? 'delivery' : 'deliveries'}
+                </Text>
+              )}
+            </View>
+          </View>
+        </TouchableOpacity>
+        
+        {showActiveDeliveries && (
+          <View style={styles.collapsibleContent}>
+            {activeOrders && activeOrders.length > 0 ? (
+              <View style={styles.activeOrdersList}>
+                {activeOrders.slice(0, 3).map((order, index) => (
+                  <TouchableOpacity 
+                    key={order.id} 
+                    style={styles.activeOrderItem}
+                    onPress={() => navigation.navigate('OrderDetails', { orderId: order.id })}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.orderItemLeft}>
+                      <Text style={styles.orderItemNumber}>#{order.order_number || order.id}</Text>
+                      <Text style={styles.orderItemCustomer}>
+                        {order.customer?.name || 'Unknown Customer'}
+                      </Text>
+                    </View>
+                    <View style={styles.orderItemRight}>
+                      <View style={styles.orderItemInfo}>
+                        <Text style={styles.orderItemStatus}>{order.status}</Text>
+                        <Text style={styles.orderItemTime}>
+                          {new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
+                    </View>
+                  </TouchableOpacity>
+                ))}
+                {activeOrders.length > 3 && (
+                  <TouchableOpacity 
+                    style={styles.viewAllButton}
+                    onPress={() => navigation.navigate('AcceptedOrders')}
+                  >
+                    <Text style={styles.viewAllButtonText}>View all {activeOrders.length} orders</Text>
+                    <Ionicons name="arrow-forward" size={16} color="#3B82F6" />
+                  </TouchableOpacity>
+                )}
+              </View>
+            ) : (
+              <View style={styles.noActiveOrders}>
+                <Ionicons name="checkmark-circle-outline" size={32} color="#10B981" />
+                <Text style={styles.noActiveOrdersText}>No active deliveries</Text>
+                <Text style={styles.noActiveOrdersSubtext}>All deliveries completed</Text>
+              </View>
+            )}
+          </View>
+        )}
+        
+        <TouchableOpacity 
+          style={styles.collapseArrow}
+          onPress={() => {
+            Haptics.trigger('selection');
+            setShowActiveDeliveries(!showActiveDeliveries);
+          }}
+          activeOpacity={0.7}
+        >
+          <Ionicons 
+            name={showActiveDeliveries ? "chevron-up" : "chevron-down"} 
+            size={20} 
+            color="#6B7280" 
+          />
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -489,9 +657,10 @@ const DashboardScreen: React.FC = () => {
             />
           }
         >
+          {renderStatusCard()}
           {renderStats()}
           {renderPerformanceMetrics()}
-          {renderStatusCard()}
+          {renderActiveDeliveries()}
           {renderAvailableOrders()}
         </ScrollView>
       </SafeAreaView>
@@ -591,7 +760,7 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
   },
   statsContainer: {
-    marginTop: Design.spacing[5],
+    marginTop: Design.spacing[4],
   },
   statsScroll: {
     paddingHorizontal: Design.spacing[5],
@@ -622,7 +791,7 @@ const styles = StyleSheet.create({
   statusCard: {
     margin: Design.spacing[5],
     borderRadius: Design.borderRadius.lg,
-    padding: Design.spacing[6],
+    padding: Design.spacing[4],
     ...Design.shadows.medium,
   },
   statusContent: {
@@ -655,13 +824,15 @@ const styles = StyleSheet.create({
     color: Design.colors.textInverse,
   },
   sectionTitle: {
-    ...Design.typography.h4,
+    ...Design.typography.body,
+    fontSize: 16,
+    fontWeight: '600',
     color: Design.colors.text,
-    marginBottom: Design.spacing[4],
+    marginBottom: 0,
   },
   availableOrdersContainer: {
     paddingHorizontal: Design.spacing[5],
-    marginTop: Design.spacing[5],
+    marginTop: Design.spacing[4],
   },
   availableOrdersHeader: {
     flexDirection: 'row',
@@ -889,45 +1060,139 @@ const styles = StyleSheet.create({
   },
   performanceContainer: {
     marginHorizontal: Design.spacing[5],
-    marginTop: Design.spacing[5],
+    marginTop: Design.spacing[4],
   },
-  performanceHeader: {
-    flexDirection: 'row',
+  collapseArrow: {
     alignItems: 'center',
-    justifyContent: 'space-between',
+    paddingVertical: Design.spacing[2],
+  },
+  collapsibleCard: {
     backgroundColor: Design.colors.background,
     borderRadius: Design.borderRadius.lg,
-    paddingHorizontal: Design.spacing[4],
-    paddingVertical: Design.spacing[4],
-    marginBottom: Design.spacing[3],
     ...Design.shadows.small,
     borderWidth: 1,
     borderColor: Design.colors.border,
+    marginBottom: Design.spacing[3],
+    minHeight: 70,
   },
-  performanceHeaderLeft: {
+  collapsibleHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Design.spacing[4],
+    paddingVertical: Design.spacing[3],
+  },
+  collapsibleHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     flex: 1,
   },
-  performanceHeaderIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  headerTextContainer: {
+    flex: 1,
+  },
+  summaryText: {
+    ...Design.typography.caption,
+    color: Design.colors.textSecondary,
+    marginTop: Design.spacing[1],
+  },
+  collapsibleHeaderIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: '#EBF4FF',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: Design.spacing[3],
+    marginTop: 2,
   },
-  performanceHeaderRight: {
-    padding: Design.spacing[2],
+  collapsibleHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  performanceCard: {
-    backgroundColor: Design.colors.background,
-    borderRadius: Design.borderRadius.lg,
-    padding: Design.spacing[4],
-    ...Design.shadows.small,
+  collapsibleContent: {
+    paddingHorizontal: Design.spacing[4],
+    paddingBottom: Design.spacing[3],
+  },
+  activeDeliveriesContainer: {
+    marginHorizontal: Design.spacing[5],
+    marginTop: Design.spacing[4],
+  },
+  activeOrdersList: {
+    gap: Design.spacing[2],
+  },
+  activeOrderItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: Design.spacing[3],
+    paddingHorizontal: Design.spacing[3],
+    backgroundColor: Design.colors.backgroundSecondary,
+    borderRadius: Design.borderRadius.md,
     borderWidth: 1,
     borderColor: Design.colors.border,
+  },
+  orderItemLeft: {
+    flex: 1,
+  },
+  orderItemNumber: {
+    ...Design.typography.body,
+    fontWeight: '600',
+    color: Design.colors.text,
+    marginBottom: Design.spacing[1],
+  },
+  orderItemCustomer: {
+    ...Design.typography.caption,
+    color: Design.colors.textSecondary,
+  },
+  orderItemRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Design.spacing[2],
+  },
+  orderItemInfo: {
+    alignItems: 'flex-end',
+  },
+  orderItemStatus: {
+    ...Design.typography.caption,
+    color: Design.colors.success,
+    fontWeight: '600',
+    marginBottom: Design.spacing[1],
+  },
+  orderItemTime: {
+    ...Design.typography.caption,
+    color: Design.colors.textSecondary,
+  },
+  viewAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Design.spacing[3],
+    paddingHorizontal: Design.spacing[4],
+    backgroundColor: Design.colors.primaryLight,
+    borderRadius: Design.borderRadius.md,
+    marginTop: Design.spacing[2],
+    gap: Design.spacing[2],
+  },
+  viewAllButtonText: {
+    ...Design.typography.button,
+    color: Design.colors.primary,
+    fontWeight: '600',
+  },
+  noActiveOrders: {
+    alignItems: 'center',
+    paddingVertical: Design.spacing[6],
+  },
+  noActiveOrdersText: {
+    ...Design.typography.body,
+    fontWeight: '600',
+    color: Design.colors.textSecondary,
+    marginTop: Design.spacing[3],
+    marginBottom: Design.spacing[1],
+  },
+  noActiveOrdersSubtext: {
+    ...Design.typography.caption,
+    color: Design.colors.textTertiary,
+    textAlign: 'center',
   },
   performanceGrid: {
     flexDirection: 'row',
@@ -1046,6 +1311,36 @@ const styles = StyleSheet.create({
   deliveriesSubtext: {
     ...Design.typography.caption,
     color: Design.colors.textSecondary,
+  },
+  availableOrdersList: {
+    gap: Design.spacing[2],
+  },
+  availableOrderItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: Design.spacing[3],
+    paddingHorizontal: Design.spacing[3],
+    backgroundColor: Design.colors.backgroundSecondary,
+    borderRadius: Design.borderRadius.md,
+    borderWidth: 1,
+    borderColor: Design.colors.primary,
+  },
+  noAvailableOrders: {
+    alignItems: 'center',
+    paddingVertical: Design.spacing[6],
+  },
+  noAvailableOrdersText: {
+    ...Design.typography.body,
+    fontWeight: '600',
+    color: Design.colors.textSecondary,
+    marginTop: Design.spacing[3],
+    marginBottom: Design.spacing[1],
+  },
+  noAvailableOrdersSubtext: {
+    ...Design.typography.caption,
+    color: Design.colors.textTertiary,
+    textAlign: 'center',
   },
 });
 

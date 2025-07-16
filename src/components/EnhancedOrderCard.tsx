@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import LinearGradient from 'react-native-linear-gradient';
-import QRCodeScanner from 'react-native-qrcode-scanner';
+import { CameraScreen } from 'react-native-camera-kit';
 import { Design } from '../constants/designSystem';
 import { Order, BatchOrder, isBatchOrder, getBatchOrders } from '../types';
 import { orderActionService } from '../services/orderActionService';
@@ -117,7 +117,7 @@ const EnhancedOrderCard: React.FC<EnhancedOrderCardProps> = ({
     }
   };
 
-  const handleQRScan = async (e: any) => {
+  const handleQRScan = async (e: { data: string }) => {
     setShowQRScanner(false);
     
     // Verify the QR code matches the order
@@ -339,27 +339,30 @@ const EnhancedOrderCard: React.FC<EnhancedOrderCardProps> = ({
             <View style={{ width: 30 }} />
           </View>
           
-          <QRCodeScanner
-            onRead={handleQRScan}
-            topContent={
-              <Text style={styles.scannerInstruction}>
-                Scan the QR code on the package to confirm {getStatusButtonText().toLowerCase()}
-              </Text>
-            }
-            bottomContent={
-              <TouchableOpacity
-                style={styles.manualButton}
-                onPress={() => {
-                  setShowQRScanner(false);
-                  if (pendingStatus && onStatusUpdate) {
-                    onStatusUpdate(pendingStatus);
-                  }
-                }}
-              >
-                <Text style={styles.manualButtonText}>Update Without Scanning</Text>
-              </TouchableOpacity>
-            }
-          />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.scannerInstruction}>
+              Scan the QR code on the package to confirm {getStatusButtonText().toLowerCase()}
+            </Text>
+            <CameraScreen
+              scanBarcode={true}
+              onReadCode={(event: any) => handleQRScan({ data: event.nativeEvent.codeStringValue })}
+              showFrame={true}
+              frameColor="#FFF"
+              laserColor="red"
+              style={{ flex: 1 }}
+            />
+            <TouchableOpacity
+              style={styles.manualButton}
+              onPress={() => {
+                setShowQRScanner(false);
+                if (pendingStatus && onStatusUpdate) {
+                  onStatusUpdate(pendingStatus);
+                }
+              }}
+            >
+              <Text style={styles.manualButtonText}>Update Without Scanning</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </Modal>
     </>
@@ -590,10 +593,12 @@ const styles = StyleSheet.create({
   },
   scannerInstruction: {
     fontSize: 16,
-    color: '#333',
+    color: '#FFF',
     textAlign: 'center',
     paddingHorizontal: Design.spacing[6],
-    marginBottom: Design.spacing[6],
+    marginBottom: Design.spacing[3],
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    paddingVertical: Design.spacing[2],
   },
   manualButton: {
     backgroundColor: Design.colors.primary,

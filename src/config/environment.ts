@@ -177,12 +177,12 @@ const buildConfig = (): EnvironmentConfig => {
       OFFLINE_MODE: getBooleanEnv('ENABLE_OFFLINE_MODE', false),
     },
     
-    // Debug configuration (auto-disabled in production)
+    // Debug configuration - disabled in production
     DEBUG: {
-      API_CALLS: getBooleanEnv('DEBUG_API_CALLS', currentEnv !== 'production'),
-      REALTIME: getBooleanEnv('DEBUG_REALTIME', currentEnv !== 'production'),
-      LOCATION: getBooleanEnv('DEBUG_LOCATION', currentEnv !== 'production'),
-      PERFORMANCE: getBooleanEnv('DEBUG_PERFORMANCE', currentEnv === 'development'),
+      API_CALLS: false,
+      REALTIME: false,
+      LOCATION: false,
+      PERFORMANCE: false,
     },
   };
 };
@@ -192,13 +192,6 @@ let config: EnvironmentConfig;
 
 try {
   config = buildConfig();
-  if (__DEV__) {
-    /* eslint-disable no-console */
-    console.log('✅ Configuration loaded successfully');
-    console.log('🔧 API Base URL:', config.API_BASE_URL);
-    console.log('🔧 Tenant ID:', config.TENANT_ID);
-    /* eslint-enable no-console */
-  }
 } catch (error) {
   /* eslint-disable no-console */
   console.error('❌ Configuration Error:', error);
@@ -206,7 +199,7 @@ try {
   // Provide emergency fallback configuration to prevent app crash
   console.warn('🚨 Using emergency fallback configuration');
   /* eslint-enable no-console */
-  const fallbackIP = '192.168.1.163'; // Use existing IP from .env as fallback
+  const fallbackIP = '192.168.1.167'; // Fallback to current network IP
   
   config = {
     NODE_ENV: 'development',
@@ -239,10 +232,6 @@ try {
     },
   };
   
-  if (__DEV__) {
-    // eslint-disable-next-line no-console
-    console.log('🚨 Emergency config loaded with API URL:', config.API_BASE_URL);
-  }
 }
 
 // Export main configuration
@@ -266,32 +255,27 @@ export const getWebSocketUrl = (endpoint: string): string => {
   return `${ENV.WS_BASE_URL}${cleanEndpoint}`;
 };
 
-// Debug logging functions
-/* eslint-disable no-console */
-export const apiDebug = (...args: unknown[]): void => {
-  if (ENV.DEBUG.API_CALLS) {
-    console.log('[API]', ...args);
+// Debug logging functions - no-op in production
+export const apiDebug = (message: string, data?: any): void => {
+  if (ENV.DEBUG.API_CALLS && __DEV__) {
+    console.log(`[API] ${message}`, data);
   }
 };
-
-export const realtimeDebug = (...args: unknown[]): void => {
-  if (ENV.DEBUG.REALTIME) {
-    console.log('[REALTIME]', ...args);
+export const realtimeDebug = (message: string, data?: any): void => {
+  if (ENV.DEBUG.REALTIME && __DEV__) {
+    console.log(`[REALTIME] ${message}`, data);
   }
 };
-
-export const locationDebug = (...args: unknown[]): void => {
-  if (ENV.DEBUG.LOCATION) {
-    console.log('[LOCATION]', ...args);
+export const locationDebug = (message: string, data?: any): void => {
+  if (ENV.DEBUG.LOCATION && __DEV__) {
+    console.log(`[LOCATION] ${message}`, data);
   }
 };
-
-export const performanceDebug = (...args: unknown[]): void => {
-  if (ENV.DEBUG.PERFORMANCE) {
-    console.log('[PERFORMANCE]', ...args);
+export const performanceDebug = (message: string, data?: any): void => {
+  if (ENV.DEBUG.PERFORMANCE && __DEV__) {
+    console.log(`[PERFORMANCE] ${message}`, data);
   }
 };
-/* eslint-enable no-console */
 
 // Configuration validation function
 export const validateConfig = (): { valid: boolean; errors: string[] } => {
@@ -329,29 +313,7 @@ export const validateConfig = (): { valid: boolean; errors: string[] } => {
 };
 
 // Development helper to display configuration
-export const debugConfig = (): void => {
-  if (ENV.IS_DEVELOPMENT) {
-    // eslint-disable-next-line no-console
-    console.log('🔧 Configuration:', {
-      environment: ENV.NODE_ENV,
-      server: `${ENV.SERVER_PROTOCOL}://${ENV.SERVER_IP}:${ENV.SERVER_PORT}`,
-      api: ENV.API_BASE_URL,
-      websocket: ENV.WS_BASE_URL,
-      tenant: ENV.TENANT_ID,
-      features: ENV.FEATURES,
-      debug: ENV.DEBUG,
-    });
-    
-    const validation = validateConfig();
-    if (!validation.valid) {
-      // eslint-disable-next-line no-console
-      console.error('❌ Configuration errors:', validation.errors);
-    } else {
-      // eslint-disable-next-line no-console
-      console.log('✅ Configuration is valid');
-    }
-  }
-};
+export const debugConfig = (): void => {};
 
 // Auto-validate configuration on import (non-blocking)
 try {
@@ -369,10 +331,6 @@ try {
       console.warn('⚠️ Using configuration with warnings in development mode');
     }
   } else {
-    if (__DEV__) {
-      // eslint-disable-next-line no-console
-      console.log('✅ Configuration validation passed');
-    }
   }
 } catch (error) {
   // eslint-disable-next-line no-console

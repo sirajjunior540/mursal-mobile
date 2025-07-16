@@ -37,18 +37,11 @@ export const OrderActionButtons: React.FC<OrderActionButtonsProps> = ({
 }) => {
   const apiIds = extractOrderApiIds(order);
   const displayId = getOrderDisplayId(order);
-  
-  console.log(`🔍 OrderActionButtons for ${displayId}:`, {
-    deliveryId: apiIds.deliveryId,
-    orderId: apiIds.orderId,
-    orderNumber: apiIds.orderNumber
-  });
 
   const handleAccept = async () => {
     if (disabled) return;
     
     haptics.light();
-    console.log(`✅ Accepting order ${displayId} (using delivery ID: ${apiIds.deliveryId})`);
     
     const result = await orderActionService.acceptOrder(
       apiIds.deliveryId, // Use delivery ID for API call
@@ -78,8 +71,6 @@ export const OrderActionButtons: React.FC<OrderActionButtonsProps> = ({
           text: 'Decline',
           style: 'destructive',
           onPress: async () => {
-            console.log(`❌ Declining order ${displayId} (using delivery ID: ${apiIds.deliveryId})`);
-            
             const result = await orderActionService.declineOrder(
               apiIds.deliveryId, // Use delivery ID for API call
               { reason: 'Driver declined via mobile app' },
@@ -102,7 +93,6 @@ export const OrderActionButtons: React.FC<OrderActionButtonsProps> = ({
     if (disabled) return;
     
     haptics.light();
-    console.log(`⏭️ Skipping order ${displayId} (using delivery ID: ${apiIds.deliveryId})`);
     
     const result = await orderActionService.skipOrder(
       apiIds.deliveryId, // Use delivery ID for API call
@@ -183,7 +173,6 @@ export const OrderStatusUpdateButton: React.FC<OrderStatusUpdateButtonProps> = (
     if (disabled) return;
     
     haptics.light();
-    console.log(`🔄 Updating ${displayId} status to ${newStatus} (using delivery ID: ${apiIds.deliveryId})`);
     
     const result = await orderActionService.updateOrderStatus(
       apiIds.deliveryId, // Use delivery ID for API call
@@ -210,7 +199,7 @@ export const OrderStatusUpdateButton: React.FC<OrderStatusUpdateButtonProps> = (
       disabled={disabled}
       activeOpacity={0.8}
     >
-      <Ionicons name={icon} size={20} color={disabled ? "#999" : "#fff"} />
+      <Ionicons name={icon as keyof typeof Ionicons.glyphMap} size={20} color={disabled ? "#999" : "#fff"} />
       {label && <Text style={[styles.statusButtonText, disabled && styles.disabledText]}>{label}</Text>}
     </TouchableOpacity>
   );
@@ -222,31 +211,18 @@ interface OrderInfoDisplayProps {
 }
 
 /**
- * Debug component to show order ID information clearly
+ * Component to display order ID information
  */
 export const OrderInfoDisplay: React.FC<OrderInfoDisplayProps> = ({
   order,
   showIds = false
 }) => {
-  const apiIds = extractOrderApiIds(order);
   const displayId = getOrderDisplayId(order);
 
-  if (!showIds) {
-    return (
-      <Text style={styles.orderDisplayId}>
-        {displayId}
-      </Text>
-    );
-  }
-
   return (
-    <View style={styles.debugInfo}>
-      <Text style={styles.debugTitle}>Order Info (Debug)</Text>
-      <Text style={styles.debugText}>Display: {displayId}</Text>
-      <Text style={styles.debugText}>Delivery ID (for API): {apiIds.deliveryId}</Text>
-      {apiIds.orderId && <Text style={styles.debugText}>Order ID: {apiIds.orderId}</Text>}
-      {apiIds.orderNumber && <Text style={styles.debugText}>Order Number: {apiIds.orderNumber}</Text>}
-    </View>
+    <Text style={styles.orderDisplayId}>
+      {displayId}
+    </Text>
   );
 };
 
@@ -325,26 +301,9 @@ const styles = StyleSheet.create({
     color: "#999",
   },
   orderDisplayId: {
-    ...Design.typography.h6,
+    ...Design.typography.h5,
     color: Design.colors.text,
     fontWeight: '600',
-  },
-  debugInfo: {
-    backgroundColor: Design.colors.gray100,
-    padding: Design.spacing[3],
-    borderRadius: Design.borderRadius.md,
-    marginVertical: Design.spacing[2],
-  },
-  debugTitle: {
-    ...Design.typography.bodySmall,
-    fontWeight: '600',
-    color: Design.colors.text,
-    marginBottom: Design.spacing[2],
-  },
-  debugText: {
-    ...Design.typography.caption,
-    color: Design.colors.textSecondary,
-    fontFamily: 'monospace',
   },
 });
 

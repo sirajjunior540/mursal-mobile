@@ -372,6 +372,7 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
           <Animated.View 
             style={[
               styles.timerHeader,
+              isBatchOrder && styles.batchTimerHeader,
               { transform: [{ scale: pulseAnim }] }
             ]}
           >
@@ -382,7 +383,9 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
                 </Text>
               </View>
               <View style={styles.timerInfo}>
-                <Text style={styles.timerTitle}>New Order!</Text>
+                <Text style={styles.timerTitle}>
+                  {isBatchOrder ? '🚛 New Route!' : 'New Order!'}
+                </Text>
                 <Text style={styles.timerSubtitle}>
                   {timeRemaining > 0 ? `Auto-skip in ${timeRemaining}s` : 'Skipped'}
                 </Text>
@@ -631,6 +634,9 @@ const styles = StyleSheet.create({
     paddingVertical: Design.spacing[5],
     paddingHorizontal: Design.spacing[6],
   },
+  batchTimerHeader: {
+    backgroundColor: '#FF6B6B', // Match batch badge color
+  },
   timerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -805,7 +811,9 @@ const styles = StyleSheet.create({
     color: Design.colors.textInverse,
   },
   batchBadge: {
-    backgroundColor: Design.colors.warning,
+    backgroundColor: '#FF6B6B', // Distinct red-orange color for batch orders
+    borderWidth: 2,
+    borderColor: '#FF5252',
   },
   routeDetailsButton: {
     flexDirection: 'row',
@@ -827,9 +835,11 @@ const styles = StyleSheet.create({
   routeStats: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    paddingVertical: Design.spacing[3],
-    backgroundColor: Design.colors.backgroundTertiary,
-    borderRadius: Design.borderRadius.md,
+    paddingVertical: Design.spacing[4],
+    backgroundColor: '#FFF5F5', // Light red background for batch
+    borderRadius: Design.borderRadius.lg,
+    borderWidth: 1,
+    borderColor: '#FFE0E0',
   },
   routeStat: {
     alignItems: 'center',

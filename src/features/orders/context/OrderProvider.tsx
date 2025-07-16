@@ -7,6 +7,7 @@ import { Order, OrderContextType, OrderStatus } from '../../../types';
 import { apiService } from '../../../services/api';
 import { realtimeService } from '../../../services/realtimeService';
 import { useAuth } from '../../../contexts/AuthContext';
+import { orderActionService } from '../../../services/orderActionService';
 
 // Context
 const OrderContext = createContext<OrderContextType | undefined>(undefined);
@@ -35,26 +36,21 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
   
   // Actions - Define these before the effects that use them
   const refreshOrders = useCallback(async () => {
-    console.log('🔄 OrderProvider: refreshOrders called');
     setIsLoading(true);
     setError(null);
     
     try {
-      const response = await apiService.getActiveOrders();
-      console.log('📦 OrderProvider: Received orders response:', response);
+      const response = await apiService.getAvailableOrders();
       
       if (response.success) {
         setOrders(response.data);
         setLastUpdated(new Date().toISOString());
-        console.log(`✅ OrderProvider: Set ${response.data.length} orders`);
       } else {
         setError(response.error || 'Failed to fetch orders');
-        console.error('❌ OrderProvider: Failed to fetch orders:', response.error);
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Unknown error';
       setError(errorMsg);
-      console.error('❌ OrderProvider: Error fetching orders:', err);
     } finally {
       setIsLoading(false);
     }
@@ -64,24 +60,18 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
   useEffect(() => {
     // Only initialize when user is logged in and not still loading auth
     if (!isLoggedIn || authLoading) {
-      console.log('🔌 OrderProvider: Waiting for authentication...', { isLoggedIn, authLoading });
       return;
     }
 
     const initializeRealtimeService = async () => {
       try {
-        console.log('🔌 OrderProvider: Initializing realtime service after login...');
-        
         // Set up realtime service callbacks
         realtimeService.setCallbacks({
           onNewOrder: (order: Order) => {
-            console.log('🔔 OrderProvider: New order received from realtime service:', order.id);
-            
             // Add to orders if not already present
             setOrders(prev => {
               const exists = prev.some(o => o.id === order.id);
               if (!exists) {
-                console.log('📦 Adding new order to orders list:', order.id);
                 return [...prev, order];
               }
               return prev;
@@ -89,22 +79,23 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
             
             // Trigger notification callback for IncomingOrderModal
             if (notificationCallbackRef.current) {
-              console.log('🔔 Triggering notification callback for order:', order.id);
               notificationCallbackRef.current(order);
-            } else {
-              console.warn('⚠️ No notification callback set, order will not show modal');
             }
           },
           onOrderUpdate: (order: Order) => {
-            console.log('📝 OrderProvider: Order update received:', order.id);
             setOrders(prev => prev.map(o => o.id === order.id ? order : o));
           },
           onConnectionChange: (connected: boolean) => {
-            console.log('🔌 OrderProvider: Realtime connection status:', connected);
+            // Connection status changed
           },
           onError: (error: string) => {
-            console.error('❌ OrderProvider: Realtime service error:', error);
-            setError(error);
+            // Only set error if it's not a generic authentication error from realtime service
+            // The realtime service may fail to connect but API calls can still work
+            if (!error.toLowerCase().includes('authentication failed')) {
+              console.log('[OrderProvider] Realtime error:', error);
+              // Don't set error state for realtime connection issues
+              // as they don't affect the ability to fetch orders via API
+            }
           }
         });
         
@@ -116,10 +107,7 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
         
         // Start the service
         realtimeService.start();
-        
-        console.log('✅ OrderProvider: Realtime service initialized and started');
       } catch (error) {
-        console.error('❌ OrderProvider: Failed to initialize realtime service:', error);
         setError('Failed to initialize real-time updates');
       }
     };
@@ -128,7 +116,6 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
     
     // Cleanup on unmount or logout
     return () => {
-      console.log('🧹 OrderProvider: Cleaning up realtime service');
       realtimeService.stop();
     };
   }, [isLoggedIn, authLoading]);
@@ -136,47 +123,65 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
   // Load initial orders when user is logged in
   useEffect(() => {
     if (isLoggedIn && !authLoading) {
-      console.log('🔄 OrderProvider: Loading initial orders for logged in user...');
       refreshOrders();
     }
   }, [isLoggedIn, authLoading, refreshOrders]);
 
   const getOrderDetails = useCallback(async (orderId: string) => {
-    console.log('OrderProvider: getOrderDetails called:', orderId);
-    // For now, find from current orders
-    const order = orders.find(o => o.id === orderId);
-    if (order) return order;
+    // First check driver orders (accepted orders)
+    const driverOrder = driverOrders.find(o => o.id === orderId);
+    if (driverOrder) {
+      console.log('[OrderProvider] Found order in driverOrders:', {
+        orderId,
+        hasCoordinates: !!(driverOrder.pickup_latitude && driverOrder.delivery_latitude),
+        coordinates: {
+          pickup: { lat: driverOrder.pickup_latitude, lng: driverOrder.pickup_longitude },
+          delivery: { lat: driverOrder.delivery_latitude, lng: driverOrder.delivery_longitude }
+        }
+      });
+      return driverOrder;
+    }
     
-    // Could fetch from API if needed
+    // Then check available orders
+    const order = orders.find(o => o.id === orderId);
+    if (order) {
+      console.log('[OrderProvider] Found order in orders:', {
+        orderId,
+        hasCoordinates: !!(order.pickup_latitude && order.delivery_latitude),
+        coordinates: {
+          pickup: { lat: order.pickup_latitude, lng: order.pickup_longitude },
+          delivery: { lat: order.delivery_latitude, lng: order.delivery_longitude }
+        }
+      });
+      return order;
+    }
+    
+    // Fetch from API if needed
     try {
+      console.log('[OrderProvider] Fetching order details from API:', orderId);
       const response = await apiService.getOrderDetails(orderId);
-      if (response.success) {
+      if (response.success && response.data) {
+        console.log('[OrderProvider] API response:', {
+          orderId,
+          hasCoordinates: !!(response.data.pickup_latitude && response.data.delivery_latitude),
+          coordinates: {
+            pickup: { lat: response.data.pickup_latitude, lng: response.data.pickup_longitude },
+            delivery: { lat: response.data.delivery_latitude, lng: response.data.delivery_longitude }
+          }
+        });
         return response.data;
       }
     } catch (error) {
-      console.error('Failed to get order details:', error);
+      console.error('[OrderProvider] Error fetching order details:', error);
     }
     
     throw new Error('Order not found');
-  }, [orders]);
+  }, [orders, driverOrders]);
 
   const acceptOrder = useCallback(async (orderId: string): Promise<boolean> => {
-    console.log('🔥 OrderProvider: acceptOrder called with ID:', orderId);
-    
     // Find the order in our current orders to debug
     const order = orders.find(o => o.id === orderId);
-    if (order) {
-      console.log('🔍 Found order in state:', {
-        id: order.id,
-        deliveryId: order.deliveryId,
-        orderId: order.orderId,
-        orderNumber: order.orderNumber,
-        status: order.status
-      });
-    } else {
-      console.warn('⚠️ Order not found in current state with ID:', orderId);
-      console.log('📋 Current orders in state:', orders.map(o => ({ id: o.id, orderNumber: o.orderNumber })));
-      
+    if (!order) {
       // Don't try to accept an order that's not in our state
       Alert.alert(
         'Order Not Available',
@@ -187,28 +192,19 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
     }
     
     try {
-      console.log('🎯 Calling apiService.acceptOrder with ID:', orderId);
-      const response = await apiService.acceptOrder(orderId);
+      // Use the new unified order action service
+      const response = await orderActionService.acceptUnifiedOrder(order, orderId);
+      
       if (response.success) {
         // Remove the accepted order from available orders
         setOrders(prev => prev.filter(o => o.id !== orderId));
-        console.log('✅ Order accepted successfully');
         return true;
       } else {
-        console.error('❌ API returned error:', response.error);
         throw new Error(response.error || 'Failed to accept order');
       }
     } catch (error: any) {
-      console.error('❌ Failed to accept order:', error);
-      
       // Check if it's a 404 error (order not found)
       if (error.response?.status === 404 || error.message?.includes('404')) {
-        console.error('❌ Order not found in backend (404):', {
-          orderId,
-          orderExists: !!order,
-          message: 'Order may have been already accepted or no longer exists'
-        });
-        
         // Remove the order from local state since it doesn't exist in backend
         setOrders(prev => prev.filter(o => o.id !== orderId));
         
@@ -218,13 +214,6 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
           'This order is no longer available. It may have been accepted by another driver.',
           [{ text: 'OK' }]
         );
-      } else {
-        console.error('❌ Error details:', {
-          message: error instanceof Error ? error.message : String(error),
-          orderId,
-          orderExists: !!order,
-          status: error.response?.status
-        });
       }
       
       return false;
@@ -232,12 +221,9 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
   }, [orders]);
 
   const declineOrder = useCallback(async (orderId: string, reason?: string) => {
-    console.log('OrderProvider: declineOrder called:', orderId, reason);
-    
     // Check if order exists in state
     const order = orders.find(o => o.id === orderId);
     if (!order) {
-      console.warn('⚠️ Trying to decline order not in state:', orderId);
       Alert.alert(
         'Order Not Available',
         'This order is not available. Please refresh the order list.',
@@ -251,13 +237,10 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
       if (response.success) {
         // Remove the declined order from available orders
         setOrders(prev => prev.filter(o => o.id !== orderId));
-        console.log('✅ Order declined successfully');
       } else {
         throw new Error(response.error || 'Failed to decline order');
       }
     } catch (error: any) {
-      console.error('❌ Failed to decline order:', error);
-      
       // Handle 404 error
       if (error.response?.status === 404 || error.message?.includes('404')) {
         // Remove from local state since it doesn't exist in backend
@@ -274,7 +257,6 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
   }, [orders]);
 
   const updateOrderStatus = useCallback(async (deliveryId: string, status: OrderStatus): Promise<boolean> => {
-    console.log('OrderProvider: updateOrderStatus called with delivery ID:', deliveryId, status);
     try {
       const response = await apiService.updateOrderStatus(deliveryId, status);
       if (response.success) {
@@ -282,71 +264,71 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
         setOrders(prev => prev.map(o => 
           o.id === deliveryId ? { ...o, status } : o
         ));
-        console.log('✅ Order status updated successfully for delivery ID:', deliveryId);
         return true;
       } else {
-        console.error('❌ API returned failure for delivery ID:', deliveryId, response.error);
         return false;
       }
     } catch (error) {
-      console.error('❌ Failed to update order status for delivery ID:', deliveryId, error);
       return false;
     }
   }, []);
 
   const getOrderHistory = useCallback(async (filters?: any) => {
-    console.log('OrderProvider: getOrderHistory called:', filters);
     setIsLoading(true);
     try {
       const response = await apiService.getOrderHistory();
       if (response.success) {
         setOrderHistory(response.data);
-        console.log(`✅ Loaded ${response.data.length} historical orders`);
       }
     } catch (error) {
-      console.error('❌ Failed to get order history:', error);
+      // Failed to get order history
     } finally {
       setIsLoading(false);
     }
   }, []);
 
   const clearOrders = useCallback(() => {
-    console.log('OrderProvider: clearOrders called');
     setOrders([]);
     setOrderHistory([]);
     setLastUpdated(null);
   }, []);
 
   const setOrderNotificationCallback = useCallback((callback: ((order: Order) => void) | null) => {
-    console.log('OrderProvider: setOrderNotificationCallback called:', callback ? 'with callback' : 'with null');
     notificationCallbackRef.current = callback;
   }, []);
 
   const setOrderAcceptedCallback = useCallback((callback: ((orderId: string) => void) | null) => {
-    console.log('OrderProvider: setOrderAcceptedCallback called:', callback ? 'with callback' : 'with null');
     // Not implemented yet but required by interface
   }, []);
 
   const getDriverOrders = useCallback(async () => {
-    console.log('OrderProvider: getDriverOrders called');
     setIsLoading(true);
+    setError(null);
     try {
+      console.log('[OrderProvider] Fetching driver orders...');
       const response = await apiService.getDriverOrders();
-      if (response.success) {
+      console.log('[OrderProvider] Driver orders response:', response);
+      
+      if (response.success && response.data) {
+        console.log('[OrderProvider] Setting driver orders:', response.data.length, 'orders');
         setDriverOrders(response.data);
-        console.log(`✅ Loaded ${response.data.length} driver orders`);
+        setError(null);
       } else {
-        console.error('❌ Failed to get driver orders:', response.error);
+        console.error('[OrderProvider] Failed response:', response);
+        setError(response.error || 'Failed to load orders');
+        setDriverOrders([]);
       }
     } catch (error) {
-      console.error('❌ Failed to get driver orders:', error);
+      console.error('[OrderProvider] Exception caught:', error);
+      const errorMsg = error instanceof Error ? error.message : 'Failed to get driver orders';
+      setError(errorMsg);
+      setDriverOrders([]);
     } finally {
       setIsLoading(false);
     }
   }, []);
 
   const getRouteOptimization = useCallback(async () => {
-    console.log('OrderProvider: getRouteOptimization called');
     // Not implemented yet but required by interface
     return null;
   }, []);

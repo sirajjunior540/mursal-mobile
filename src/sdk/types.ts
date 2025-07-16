@@ -17,6 +17,7 @@ export interface RealtimeSDKConfig {
   // Base configuration
   baseUrl: string;
   authToken?: string;
+  tenantId?: string; // Tenant identifier for multi-tenant support
   
   // Communication modes
   enabledModes: CommunicationMode[];

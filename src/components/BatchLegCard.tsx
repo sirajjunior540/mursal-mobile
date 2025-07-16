@@ -7,7 +7,7 @@ import {
   Alert,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { BatchLeg, getBatchLegSummary, getBatchLegRequirements } from '../types/batchLeg';
+import { BatchLeg, getBatchLegRequirements } from '../types/batchLeg';
 import { Design } from '../constants/designSystem';
 
 interface BatchLegCardProps {
@@ -145,7 +145,7 @@ const BatchLegCard: React.FC<BatchLegCardProps> = ({
             style={[styles.actionButton, styles.declineButton]}
             onPress={handleDecline}
           >
-            <Ionicons name="close-circle-outline" size={22} color={Design.colors.danger} />
+            <Ionicons name="close-circle-outline" size={22} color={Design.colors.error} />
             <Text style={styles.declineButtonText}>Decline</Text>
           </TouchableOpacity>
         </View>
@@ -157,15 +157,15 @@ const BatchLegCard: React.FC<BatchLegCardProps> = ({
 const styles = StyleSheet.create({
   container: {
     backgroundColor: Design.colors.background,
-    borderRadius: Design.spacing.md,
-    marginBottom: Design.spacing.md,
+    borderRadius: Design.spacing[3],
+    marginBottom: Design.spacing[3],
     ...Design.shadows.medium,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    padding: Design.spacing.md,
+    padding: Design.spacing[3],
     borderBottomWidth: 1,
     borderBottomColor: Design.colors.border,
   },
@@ -173,7 +173,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerRight: {
-    marginLeft: Design.spacing.sm,
+    marginLeft: Design.spacing[2],
   },
   batchNumber: {
     ...Design.typography.body,
@@ -191,12 +191,12 @@ const styles = StyleSheet.create({
     color: Design.colors.success,
   },
   content: {
-    padding: Design.spacing.md,
+    padding: Design.spacing[3],
   },
   infoRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: Design.spacing.sm,
+    marginBottom: Design.spacing[2],
   },
   infoText: {
     ...Design.typography.caption,
@@ -208,12 +208,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     marginTop: Design.spacing.xs,
-    marginBottom: Design.spacing.sm,
+    marginBottom: Design.spacing[2],
   },
   stat: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginRight: Design.spacing.md,
+    marginRight: Design.spacing[3],
     marginBottom: Design.spacing.xs,
   },
   statText: {
@@ -224,11 +224,11 @@ const styles = StyleSheet.create({
   requirementsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginBottom: Design.spacing.md,
+    marginBottom: Design.spacing[3],
   },
   requirement: {
-    backgroundColor: Design.colors.warning + '20',
-    paddingHorizontal: Design.spacing.sm,
+    backgroundColor: `${Design.colors.warning}20`,
+    paddingHorizontal: Design.spacing[2],
     paddingVertical: Design.spacing.xs / 2,
     borderRadius: Design.spacing.xs,
     marginRight: Design.spacing.xs,
@@ -241,15 +241,15 @@ const styles = StyleSheet.create({
   },
   actions: {
     flexDirection: 'row',
-    gap: Design.spacing.sm,
+    gap: Design.spacing[2],
   },
   actionButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: Design.spacing.sm,
-    borderRadius: Design.spacing.sm,
+    paddingVertical: Design.spacing[2],
+    borderRadius: Design.spacing[2],
     gap: Design.spacing.xs,
   },
   acceptButton: {
@@ -262,11 +262,11 @@ const styles = StyleSheet.create({
   declineButton: {
     backgroundColor: Design.colors.backgroundSecondary,
     borderWidth: 1,
-    borderColor: Design.colors.danger,
+    borderColor: Design.colors.error,
   },
   declineButtonText: {
     ...Design.typography.button,
-    color: Design.colors.danger,
+    color: Design.colors.error,
   },
 });
 

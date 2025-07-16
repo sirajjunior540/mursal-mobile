@@ -152,6 +152,7 @@ export class RealtimeSDK {
         baseUrl: this.config.baseUrl,
         endpoint: this.config.websocketEndpoint,
         authToken: this.config.authToken,
+        tenantId: this.config.tenantId,
         reconnectInterval: this.config.websocketReconnectInterval,
         maxReconnectAttempts: this.config.websocketMaxReconnectAttempts
       });

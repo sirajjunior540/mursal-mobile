@@ -30,14 +30,32 @@ const BatchLegsScreen: React.FC = () => {
     if (showLoader) setLoading(true);
     
     try {
+      console.log('[BatchLegsScreen] Fetching available batch legs...');
       const response = await apiService.getAvailableBatchLegs();
+      console.log('[BatchLegsScreen] Batch legs response:', response);
       
       if (response.success && response.data) {
-        setLegs(response.data.legs);
-        setDriverInfo(response.data.driver_info);
+        console.log('[BatchLegsScreen] Response data structure:', JSON.stringify(response.data, null, 2));
+        
+        // Handle different response formats
+        let legsData = [];
+        if (Array.isArray(response.data)) {
+          legsData = response.data;
+        } else if (response.data.legs) {
+          legsData = response.data.legs;
+        } else if (response.data.results) {
+          legsData = response.data.results;
+        }
+        
+        console.log('[BatchLegsScreen] Received', legsData.length, 'batch legs');
+        setLegs(legsData);
+        setDriverInfo(response.data.driver_info || null);
       } else {
-        console.error('Failed to fetch batch legs:', response.error);
-        Alert.alert('Error', 'Failed to load available deliveries');
+        console.error('[BatchLegsScreen] Failed to fetch batch legs:', response.error);
+        // Don't show alert for empty results
+        if (response.error && response.error !== 'No data available') {
+          Alert.alert('Error', 'Failed to load available deliveries');
+        }
       }
     } catch (error) {
       console.error('Error fetching batch legs:', error);

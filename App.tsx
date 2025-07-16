@@ -23,16 +23,14 @@ import ContextErrorBoundary from './src/components/ContextErrorBoundary';
 import { NetworkStatus } from './src/components/NetworkStatus';
 import IncomingOrderModal from './src/components/IncomingOrderModal';
 
-// Import test utilities in development
-if (__DEV__) {
-  import('./src/utils/testLogin');
-}
 
 // Screens
 import { SplashScreen } from './src/screens/SplashScreen';
 import LoginScreen from './src/screens/auth/LoginScreen';
 import OrderDetailsScreen from './src/screens/OrderDetailsScreen';
 import AcceptedOrdersScreen from './src/screens/AcceptedOrdersScreen';
+import AvailableOrdersScreen from './src/screens/AvailableOrdersScreen';
+import RouteNavigationScreen from './src/screens/RouteNavigationScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
@@ -65,13 +63,13 @@ interface RootStackParamList extends Record<string, object | undefined> {
   Main: undefined;
   OrderDetails: { orderId: string; autoNavigate?: boolean };
   DriverProfileSettings: undefined;
+  AvailableOrders: undefined;
+  AcceptedOrders: undefined;
 }
 
 interface TabParamList extends Record<string, object | undefined> {
-  Dashboard: undefined;
-  AcceptedOrders: undefined;
-  OngoingDelivery: undefined;
-  RouteNavigation: undefined;
+  Home: undefined;
+  Navigation: undefined;
   History: undefined;
   Profile: undefined;
 }
@@ -90,17 +88,16 @@ interface AppInitState {
 const MainTabs = () => {
   return (
     <Tab.Navigator
+      initialRouteName="Home"
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarIcon: ({ focused, color, size }: { focused: boolean; color: string; size: number }) => {
           let iconName: string = 'home';
 
-          if (route.name === 'Dashboard') {
-            iconName = focused ? 'grid' : 'grid-outline';
-          } else if (route.name === 'RouteNavigation') {
+          if (route.name === 'Home') {
+            iconName = focused ? 'home' : 'home-outline';
+          } else if (route.name === 'Navigation') {
             iconName = focused ? 'navigate' : 'navigate-outline';
-          } else if (route.name === 'AcceptedOrders') {
-            iconName = focused ? 'list' : 'list-outline';
           } else if (route.name === 'History') {
             iconName = focused ? 'receipt' : 'receipt-outline';
           } else if (route.name === 'Profile') {
@@ -136,24 +133,19 @@ const MainTabs = () => {
       }}
     >
       <Tab.Screen 
-        name="Dashboard" 
+        name="Home" 
         component={DashboardScreen} 
         options={{ tabBarLabel: 'Home' }}
       />
       <Tab.Screen 
-        name="RouteNavigation" 
-        component={BatchLegsScreen} 
-        options={{ tabBarLabel: 'Available' }}
-      />
-      <Tab.Screen 
-        name="AcceptedOrders" 
-        component={AcceptedOrdersScreen} 
-        options={{ tabBarLabel: 'My Orders' }}
+        name="Navigation" 
+        component={RouteNavigationScreen} 
+        options={{ tabBarLabel: 'Navigation' }}
       />
       <Tab.Screen 
         name="History" 
         component={HistoryScreen} 
-        options={{ tabBarLabel: 'Earnings' }}
+        options={{ tabBarLabel: 'History' }}
       />
       <Tab.Screen 
         name="Profile" 
@@ -195,7 +187,7 @@ const IncomingOrderManager = () => {
         setIncomingOrder(null);
       }
     } catch (error) {
-      console.error('Error accepting order:', error);
+      // Error handled silently
     }
   };
   
@@ -223,7 +215,7 @@ const IncomingOrderManager = () => {
       setShowModal(false);
       setIncomingOrder(null);
     } catch (error) {
-      console.error('Error declining order:', error);
+      // Error handled silently
     }
   };
 
@@ -263,14 +255,12 @@ const AppNavigator = () => {
   const handleSplashComplete = () => {
     try {
       logger.info('Splash screen animation completed');
-      console.log('🎬 Splash animation complete, transitioning to main app');
       
       setAppInitState({
         showSplash: false,
         isInitialized: true,
       });
     } catch (error) {
-      console.error('❌ Error during splash completion:', error);
       // Force completion anyway to prevent freeze
       setAppInitState({
         showSplash: false,
@@ -284,7 +274,6 @@ const AppNavigator = () => {
 
   // Show splash screen first
   if (appInitState.showSplash) {
-    console.log('🎬 Rendering splash screen...');
     return <SplashScreen onAnimationComplete={handleSplashComplete} />;
   }
 
@@ -328,6 +317,24 @@ const AppNavigator = () => {
               options={{ 
                 headerShown: false,
                 presentation: 'modal',
+                animation: 'slide_from_right'
+              }}
+            />
+            <Stack.Screen 
+              name="AvailableOrders" 
+              component={AvailableOrdersScreen} 
+              options={{ 
+                headerShown: false,
+                presentation: 'card',
+                animation: 'slide_from_right'
+              }}
+            />
+            <Stack.Screen 
+              name="AcceptedOrders" 
+              component={AcceptedOrdersScreen} 
+              options={{ 
+                headerShown: false,
+                presentation: 'card',
                 animation: 'slide_from_right'
               }}
             />
