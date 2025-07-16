@@ -35,7 +35,7 @@ python manage.py runserver 0.0.0.0:8000
 ```
 
 #### B. Verify IP Address
-- The app is configured to use: `192.168.1.167:8000`
+- The app is configured to use: `192.168.1.170:8000`
 - Make sure this is your server's actual IP
 - Update `.env` file if needed:
 ```
@@ -65,7 +65,7 @@ Add network security config for Android 9+:
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
     <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="true">192.168.1.167</domain>
+        <domain includeSubdomains="true">192.168.1.170</domain>
         <!-- Add your server IP here -->
     </domain-config>
 </network-security-config>
@@ -188,7 +188,7 @@ path('api/v1/auth/token/', YourTokenView.as_view(), name='token'),
 
 5. **Authentication works:**
 ```bash
-curl -X POST http://192.168.1.167:8000/api/v1/auth/token/ \
+curl -X POST http://192.168.1.170:8000/api/v1/auth/token/ \
   -H "Content-Type: application/json" \
   -d '{"username":"testuser","password":"testpass","tenant_id":"sirajjunior"}'
 ```

@@ -9,11 +9,12 @@ import {
   Linking,
   SafeAreaView,
   ActivityIndicator,
+  FlatList,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import UniversalMapView from './UniversalMapView';
 import { mapProviderService } from '../services/mapProviderService';
-import { Order } from '../types';
+import { Order, isBatchOrder, getBatchProperties } from '../types';
 
 interface OrderDetailsModalProps {
   visible: boolean;
@@ -43,6 +44,22 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
     duration: number;
   } | null>(null);
   const [showMap, setShowMap] = useState(true);
+  const [selectedBatchOrder, setSelectedBatchOrder] = useState<Order | null>(null);
+  const [showBatchOrdersList, setShowBatchOrdersList] = useState(true);
+  
+  // Check if this is a batch order
+  const batchOrder = order && isBatchOrder(order);
+  const batchProperties = order ? getBatchProperties(order) : null;
+  const hasMultipleOrders = (batchProperties?.orders?.length || 0) > 1;
+  
+  // Determine batch type
+  const isDistributionBatch = React.useMemo(() => {
+    if (!batchOrder || !batchProperties?.orders) return false;
+    const uniqueDeliveryAddresses = new Set(
+      batchProperties.orders.map(o => o.delivery_address).filter(Boolean)
+    );
+    return uniqueDeliveryAddresses.size > 1;
+  }, [batchOrder, batchProperties]);
 
   const safeCoordinate = (value: string | number | null | undefined): number | null => {
     if (value === null || value === undefined) return null;
@@ -129,12 +146,49 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
     return `${hours}h ${remainingMinutes}m`;
   };
 
+  const renderBatchOrderItem = ({ item }: { item: Order }) => (
+    <TouchableOpacity
+      style={styles.batchOrderItem}
+      onPress={() => {
+        setSelectedBatchOrder(item);
+        setShowBatchOrdersList(false);
+      }}
+    >
+      <View style={styles.batchOrderItemHeader}>
+        <Text style={styles.batchOrderNumber}>#{item.order_number}</Text>
+        <Ionicons name="chevron-forward" size={16} color="#666" />
+      </View>
+      <Text style={styles.batchOrderCustomer}>
+        {item.customer_details?.name || 'Customer'}
+      </Text>
+      <Text style={styles.batchOrderAddress} numberOfLines={1}>
+        {item.delivery_address}
+      </Text>
+      <View style={styles.batchOrderMetrics}>
+        <Text style={styles.batchOrderTotal}>${item.total || '0.00'}</Text>
+        {item.delivery_type && (
+          <View style={[styles.batchOrderTypeBadge, 
+            item.delivery_type === 'food' && styles.foodBadge,
+            item.delivery_type === 'fast' && styles.fastBadge
+          ]}>
+            <Text style={styles.batchOrderTypeText}>
+              {item.delivery_type.toUpperCase()}
+            </Text>
+          </View>
+        )}
+      </View>
+    </TouchableOpacity>
+  );
+
   if (!order) return null;
 
-  const pickupLat = safeCoordinate(order.pickup_latitude);
-  const pickupLng = safeCoordinate(order.pickup_longitude);
-  const deliveryLat = safeCoordinate(order.delivery_latitude);
-  const deliveryLng = safeCoordinate(order.delivery_longitude);
+  // Use selected batch order if viewing individual order in batch
+  const displayOrder = selectedBatchOrder || order;
+  
+  const pickupLat = safeCoordinate(displayOrder.pickup_latitude);
+  const pickupLng = safeCoordinate(displayOrder.pickup_longitude);
+  const deliveryLat = safeCoordinate(displayOrder.delivery_latitude);
+  const deliveryLng = safeCoordinate(displayOrder.delivery_longitude);
 
   const hasValidCoordinates = pickupLat && pickupLng && deliveryLat && deliveryLng;
 
@@ -148,10 +202,19 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
       <SafeAreaView style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-            <Ionicons name="close" size={24} color="#333" />
+          <TouchableOpacity onPress={() => {
+            if (selectedBatchOrder && hasMultipleOrders) {
+              setSelectedBatchOrder(null);
+              setShowBatchOrdersList(true);
+            } else {
+              onClose();
+            }
+          }} style={styles.closeButton}>
+            <Ionicons name={selectedBatchOrder && hasMultipleOrders ? "arrow-back" : "close"} size={24} color="#333" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>{title}</Text>
+          <Text style={styles.headerTitle}>
+            {selectedBatchOrder ? `Order #${selectedBatchOrder.order_number}` : title}
+          </Text>
           <View style={styles.headerSpacer} />
         </View>
 
@@ -222,14 +285,60 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
           </View>
         )}
 
-        {/* Order Details */}
-        <ScrollView style={styles.detailsContainer} showsVerticalScrollIndicator={false}>
-          {/* Order Info */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Order Information</Text>
-            <Text style={styles.orderNumber}>#{order.order_number}</Text>
-            <Text style={styles.orderStatus}>{order.status}</Text>
+        {/* Content based on batch or single order */}
+        {hasMultipleOrders && showBatchOrdersList && !selectedBatchOrder ? (
+          <View style={styles.batchOrdersContainer}>
+            {/* Batch Summary */}
+            <View style={styles.batchSummary}>
+              <View style={styles.batchHeader}>
+                <Text style={styles.batchTitle}>Batch #{batchProperties?.batchNumber || order.id}</Text>
+                <View style={[styles.batchTypeBadge, isDistributionBatch ? styles.distributionBadge : styles.consolidatedBadge]}>
+                  <Ionicons name={isDistributionBatch ? "git-branch" : "layers"} size={14} color="#fff" />
+                  <Text style={styles.batchTypeText}>
+                    {isDistributionBatch ? 'DISTRIBUTION' : 'CONSOLIDATED'}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.batchStats}>
+                <View style={styles.batchStat}>
+                  <Text style={styles.batchStatValue}>{batchProperties?.orders?.length || 0}</Text>
+                  <Text style={styles.batchStatLabel}>Orders</Text>
+                </View>
+                <View style={styles.batchStat}>
+                  <Text style={styles.batchStatValue}>
+                    ${batchProperties?.orders?.reduce((sum, o) => sum + (Number(o.total) || 0), 0).toFixed(2) || '0.00'}
+                  </Text>
+                  <Text style={styles.batchStatLabel}>Total Value</Text>
+                </View>
+                {isDistributionBatch && (
+                  <View style={styles.batchStat}>
+                    <Text style={styles.batchStatValue}>
+                      {new Set(batchProperties?.orders?.map(o => o.delivery_address)).size}
+                    </Text>
+                    <Text style={styles.batchStatLabel}>Destinations</Text>
+                  </View>
+                )}
+              </View>
+            </View>
+            
+            {/* Orders List */}
+            <Text style={styles.ordersListTitle}>Orders in this batch:</Text>
+            <FlatList
+              data={batchProperties?.orders || []}
+              renderItem={renderBatchOrderItem}
+              keyExtractor={(item) => item.id}
+              style={styles.batchOrdersList}
+              showsVerticalScrollIndicator={false}
+            />
           </View>
+        ) : (
+          <ScrollView style={styles.detailsContainer} showsVerticalScrollIndicator={false}>
+            {/* Order Info */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Order Information</Text>
+              <Text style={styles.orderNumber}>#{displayOrder.order_number}</Text>
+              <Text style={styles.orderStatus}>{displayOrder.status}</Text>
+            </View>
 
           {/* Pickup Details */}
           <View style={styles.section}>
@@ -239,7 +348,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
               </View>
               <Text style={styles.sectionTitle}>Pickup</Text>
             </View>
-            <Text style={styles.address}>{order.pickup_address}</Text>
+            <Text style={styles.address}>{displayOrder.pickup_address}</Text>
             {hasValidCoordinates && !readonly && (
               <TouchableOpacity
                 style={styles.actionButton}
@@ -259,9 +368,9 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
               </View>
               <Text style={styles.sectionTitle}>Delivery</Text>
             </View>
-            <Text style={styles.address}>{order.delivery_address}</Text>
-            {order.delivery_notes && (
-              <Text style={styles.notes}>Note: {order.delivery_notes}</Text>
+            <Text style={styles.address}>{displayOrder.delivery_address}</Text>
+            {displayOrder.delivery_notes && (
+              <Text style={styles.notes}>Note: {displayOrder.delivery_notes}</Text>
             )}
             {hasValidCoordinates && !readonly && (
               <TouchableOpacity
@@ -277,14 +386,14 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
           {/* Customer Details */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Customer</Text>
-            <Text style={styles.customerName}>{order.customer?.name || order.customer_details?.name || 'N/A'}</Text>
-            {(order.customer?.phone || order.customer_details?.phone) && !readonly && (
+            <Text style={styles.customerName}>{displayOrder.customer?.name || displayOrder.customer_details?.name || 'N/A'}</Text>
+            {(displayOrder.customer?.phone || displayOrder.customer_details?.phone) && !readonly && (
               <TouchableOpacity
                 style={styles.actionButton}
-                onPress={() => handleCall(order.customer?.phone || order.customer_details?.phone || '')}
+                onPress={() => handleCall(displayOrder.customer?.phone || displayOrder.customer_details?.phone || '')}
               >
                 <Ionicons name="call" size={16} color="#007AFF" />
-                <Text style={styles.actionButtonText}>{order.customer?.phone || order.customer_details?.phone}</Text>
+                <Text style={styles.actionButtonText}>{displayOrder.customer?.phone || displayOrder.customer_details?.phone}</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -293,7 +402,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
           {showStatusButton && !readonly && onStatusUpdate && (
             <TouchableOpacity
               style={[styles.statusButton, loading && styles.disabledButton]}
-              onPress={() => !loading && onStatusUpdate(order.id, getNextStatus(order.status || 'pending'))}
+              onPress={() => !loading && onStatusUpdate(displayOrder.id, getNextStatus(displayOrder.status || 'pending'))}
               disabled={loading}
             >
               {loading ? (
@@ -302,13 +411,14 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
                 <>
                   <Ionicons name="checkmark-circle" size={20} color="white" />
                   <Text style={styles.statusButtonText}>
-                    Mark as {getNextStatus(order.status || 'pending')}
+                    {displayOrder.status === 'pending' || displayOrder.status === 'assigned' ? 'Accept Order' : `Mark as ${getNextStatus(displayOrder.status || 'pending')}`}
                   </Text>
                 </>
               )}
             </TouchableOpacity>
           )}
-        </ScrollView>
+          </ScrollView>
+        )}
       </SafeAreaView>
     </Modal>
   );
@@ -328,6 +438,125 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff',
+  },
+  batchOrdersContainer: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
+  batchSummary: {
+    backgroundColor: '#fff',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  batchHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  batchTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+  },
+  batchTypeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    gap: 5,
+  },
+  distributionBadge: {
+    backgroundColor: '#FF6B6B',
+  },
+  consolidatedBadge: {
+    backgroundColor: '#4ECDC4',
+  },
+  batchTypeText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
+  batchStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  batchStat: {
+    alignItems: 'center',
+  },
+  batchStatValue: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#333',
+  },
+  batchStatLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
+  },
+  ordersListTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+    padding: 20,
+    paddingBottom: 10,
+  },
+  batchOrdersList: {
+    flex: 1,
+    paddingHorizontal: 20,
+  },
+  batchOrderItem: {
+    backgroundColor: '#fff',
+    padding: 15,
+    borderRadius: 8,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  batchOrderItemHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  batchOrderNumber: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  batchOrderCustomer: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 4,
+  },
+  batchOrderAddress: {
+    fontSize: 12,
+    color: '#999',
+    marginBottom: 8,
+  },
+  batchOrderMetrics: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  batchOrderTotal: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#4CAF50',
+  },
+  batchOrderTypeBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+    backgroundColor: '#007AFF',
+  },
+  batchOrderTypeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '600',
   },
   header: {
     flexDirection: 'row',

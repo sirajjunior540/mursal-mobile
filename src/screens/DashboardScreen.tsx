@@ -17,6 +17,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import Haptics from 'react-native-haptic-feedback';
 
 import IncomingOrderModal from '../components/IncomingOrderModal';
+import OrderDetailsModal from '../components/OrderDetailsModal';
 import AppLogo from '../components/AppLogo';
 import FloatingQRButton from '../components/FloatingQRButton';
 
@@ -54,6 +55,8 @@ const DashboardScreen: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [incomingOrder, setIncomingOrder] = useState<Order | null>(null);
   const [showIncomingModal, setShowIncomingModal] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [showOrderDetailsModal, setShowOrderDetailsModal] = useState(false);
   const [showPerformanceMetrics, setShowPerformanceMetrics] = useState(true);
   const [showAvailableOrders, setShowAvailableOrders] = useState(true);
   const [showActiveDeliveries, setShowActiveDeliveries] = useState(true);
@@ -203,6 +206,35 @@ const DashboardScreen: React.FC = () => {
       Alert.alert('Error', 'Failed to skip order');
     }
   }, [refreshOrders]);
+
+  const handleShowOrderDetails = useCallback((order: Order) => {
+    setSelectedOrder(order);
+    setShowOrderDetailsModal(true);
+    Haptics.trigger('selection');
+  }, []);
+
+  const handleCloseOrderDetails = useCallback(() => {
+    setShowOrderDetailsModal(false);
+    setSelectedOrder(null);
+  }, []);
+
+  const handleOrderDetailsAccept = useCallback(async (orderId: string, newStatus: string) => {
+    // For available orders, accept the order
+    if (selectedOrder && !activeOrders?.some(o => o.id === selectedOrder.id)) {
+      handleCloseOrderDetails();
+      await handleAcceptOrder(orderId);
+    } else {
+      // For active orders, update status
+      // This would need to be implemented based on your status update logic
+      console.log('Update order status to:', newStatus);
+      handleCloseOrderDetails();
+    }
+  }, [handleAcceptOrder, handleCloseOrderDetails, selectedOrder, activeOrders]);
+
+  const handleOrderDetailsNavigate = useCallback(() => {
+    handleCloseOrderDetails();
+    navigation.navigate('Navigation');
+  }, [navigation, handleCloseOrderDetails]);
 
   const handleQRScanResult = useCallback((result: QRScanResult) => {
     if (result.success) {
@@ -455,7 +487,7 @@ const DashboardScreen: React.FC = () => {
                   <TouchableOpacity 
                     key={order.id} 
                     style={styles.availableOrderItem}
-                    onPress={() => handleAcceptOrder(order.id)}
+                    onPress={() => handleShowOrderDetails(order)}
                     activeOpacity={0.7}
                   >
                     <View style={styles.orderItemLeft}>
@@ -581,7 +613,7 @@ const DashboardScreen: React.FC = () => {
                   <TouchableOpacity 
                     key={order.id} 
                     style={styles.activeOrderItem}
-                    onPress={() => navigation.navigate('OrderDetails', { orderId: order.id })}
+                    onPress={() => handleShowOrderDetails(order)}
                     activeOpacity={0.7}
                   >
                     <View style={styles.orderItemLeft}>
@@ -673,6 +705,17 @@ const DashboardScreen: React.FC = () => {
         onSkip={handleSkipOrder}
         onClose={() => setShowIncomingModal(false)}
         onAcceptRoute={handleAcceptRoute}
+      />
+
+      <OrderDetailsModal
+        visible={showOrderDetailsModal}
+        order={selectedOrder}
+        onClose={handleCloseOrderDetails}
+        onStatusUpdate={handleOrderDetailsAccept}
+        onNavigate={handleOrderDetailsNavigate}
+        showStatusButton={selectedOrder && !activeOrders?.some(o => o.id === selectedOrder.id)}
+        readonly={selectedOrder && !activeOrders?.some(o => o.id === selectedOrder.id)}
+        title={selectedOrder && activeOrders?.some(o => o.id === selectedOrder.id) ? 'Active Delivery Details' : 'Order Details'}
       />
 
       <FloatingQRButton

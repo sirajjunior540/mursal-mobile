@@ -110,6 +110,7 @@ export interface Customer {
   id: string;
   name: string;
   phone: string;
+  phone_number?: string; // Alias for phone, used in some backend responses
   email?: string;
 }
 
@@ -155,6 +156,7 @@ export interface Order {
   order_number?: string; // Match backend snake_case
   customer?: Customer; // Added for compatibility
   customer_details?: Customer; // Match backend field name
+  customer_name?: string; // Direct customer name field used in some responses
   items?: OrderItem[];
   delivery_address?: string; // Match backend field name (string)
   pickup_latitude?: number;

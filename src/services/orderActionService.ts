@@ -106,6 +106,71 @@ class OrderActionService {
   }
   
   /**
+   * Skip order (mark as viewed) - for incoming order modal
+   */
+  async skipOrder(deliveryId: string, options?: {
+    showConfirmation?: boolean;
+    onSuccess?: () => void;
+    onError?: (error: string) => void;
+  }): Promise<ApiResponse<void>> {
+    try {
+      // Skip is implemented as mark_viewed in the backend
+      const response = await apiService.getClient().post<void>(
+        `/api/v1/delivery/deliveries/${deliveryId}/mark_viewed/`
+      );
+      
+      if (options?.onSuccess) {
+        options.onSuccess();
+      }
+      
+      return response;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to skip order';
+      if (options?.onError) {
+        options.onError(errorMessage);
+      }
+      return {
+        success: false,
+        data: undefined,
+        error: errorMessage
+      };
+    }
+  }
+
+  /**
+   * Accept route (for batch orders)
+   */
+  async acceptRoute(routeId: string, data?: any, options?: {
+    showConfirmation?: boolean;
+    onSuccess?: () => void;
+    onError?: (error: string) => void;
+  }): Promise<ApiResponse<void>> {
+    try {
+      // For now, treat route acceptance as regular order acceptance
+      // Backend should handle batch order logic
+      const response = await apiService.getClient().post<void>(
+        `/api/v1/delivery/deliveries/${routeId}/accept/`
+      );
+      
+      if (options?.onSuccess) {
+        options.onSuccess();
+      }
+      
+      return response;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to accept route';
+      if (options?.onError) {
+        options.onError(errorMessage);
+      }
+      return {
+        success: false,
+        data: undefined,
+        error: errorMessage
+      };
+    }
+  }
+
+  /**
    * Get the next action for an order based on its status
    */
   getNextAction(status?: string): { label: string; status: string; action: string } | null {

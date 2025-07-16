@@ -67,6 +67,18 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
   // Check if this is a batch order
   const isBatchOrder = order && checkIsBatchOrder(order);
   const batchProperties = order ? getBatchProperties(order) : null;
+  
+  // Determine batch type
+  const isDistributionBatch = React.useMemo(() => {
+    if (!isBatchOrder || !batchProperties?.orders) return false;
+    // Distribution batch has multiple unique delivery addresses
+    const uniqueDeliveryAddresses = new Set(
+      batchProperties.orders.map(o => o.delivery_address).filter(Boolean)
+    );
+    return uniqueDeliveryAddresses.size > 1;
+  }, [isBatchOrder, batchProperties]);
+  
+  const isConsolidatedBatch = isBatchOrder && !isDistributionBatch && (batchProperties?.orders?.length || 0) > 1;
 
   // Generate route stops for batch orders
   const routeStops = React.useMemo(() => {
@@ -372,22 +384,28 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
           <Animated.View 
             style={[
               styles.timerHeader,
-              isBatchOrder && styles.batchTimerHeader,
               { transform: [{ scale: pulseAnim }] }
             ]}
           >
             <View style={styles.timerContainer}>
-              <View style={[styles.timerCircle, { borderColor: progressColor }]}>
-                <Text style={[styles.timerText, { color: progressColor }]}>
-                  {timeRemaining}
-                </Text>
+              <View style={[styles.timerIconContainer, isBatchOrder && styles.batchTimerIcon]}>
+                <Ionicons 
+                  name={isBatchOrder ? "map" : "cube"} 
+                  size={20} 
+                  color={isBatchOrder ? "#FF6B6B" : Design.colors.primary} 
+                />
               </View>
               <View style={styles.timerInfo}>
                 <Text style={styles.timerTitle}>
-                  {isBatchOrder ? '🚛 New Route!' : 'New Order!'}
+                  {isBatchOrder ? 'New Route Available' : 'New Order Available'}
                 </Text>
                 <Text style={styles.timerSubtitle}>
                   {timeRemaining > 0 ? `Auto-skip in ${timeRemaining}s` : 'Skipped'}
+                </Text>
+              </View>
+              <View style={[styles.timerCircle, { borderColor: progressColor }]}>
+                <Text style={[styles.timerText, { color: progressColor }]}>
+                  {timeRemaining}
                 </Text>
               </View>
             </View>
@@ -397,9 +415,9 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
           <View style={styles.orderTypeContainer}>
             {isBatchOrder ? (
               <View style={[styles.orderTypeBadge, styles.batchBadge]}>
-                <Ionicons name="map" size={16} color="#fff" />
-                <Text style={styles.orderTypeText}>
-                  ROUTE ({totalPickupStops + totalDeliveryStops} STOPS)
+                <Ionicons name={isDistributionBatch ? "git-branch" : "layers"} size={16} color="#FF6B6B" />
+                <Text style={[styles.orderTypeText, styles.batchOrderTypeText]}>
+                  {isDistributionBatch ? 'DISTRIBUTION' : 'CONSOLIDATED'} ({batchTotalOrders} ORDERS)
                 </Text>
               </View>
             ) : (
@@ -448,9 +466,9 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
               {isBatchOrder ? `Route #${batchProperties?.batchId || getOrderDisplayId(order)}` : getOrderDisplayId(order)}
             </Text>
             
-            {!isBatchOrder ? (
+            {!isBatchOrder || (batchProperties?.orders?.length || 0) <= 1 ? (
               <>
-                {/* Single Order - Pickup Info */}
+                {/* Single Order or Single-Order Batch - Pickup Info */}
                 <View style={styles.locationSection}>
                   <View style={styles.locationIcon}>
                     <Ionicons name="bag-outline" size={20} color={Design.colors.primary} />
@@ -463,7 +481,7 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
                   </View>
                 </View>
 
-                {/* Single Order - Drop-off Info */}
+                {/* Single Order or Single-Order Batch - Drop-off Info */}
                 <View style={styles.locationSection}>
                   <View style={styles.locationIcon}>
                     <Ionicons name="home-outline" size={20} color={Design.colors.success} />
@@ -558,16 +576,16 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
               </View>
               {isBatchOrder && (
                 <View style={styles.metric}>
-                  <Ionicons name="layers-outline" size={16} color="#4CAF50" />
-                  <Text style={[styles.metricText, { color: '#4CAF50' }]}>
+                  <Ionicons name="layers-outline" size={16} color={Design.colors.success} />
+                  <Text style={[styles.metricText, styles.successMetricText]}>
                     {batchTotalOrders} orders
                   </Text>
                 </View>
               )}
               {!isBatchOrder && order.delivery_fee && (
                 <View style={styles.metric}>
-                  <Ionicons name="car-outline" size={16} color="#4CAF50" />
-                  <Text style={[styles.metricText, { color: '#4CAF50' }]}>
+                  <Ionicons name="car-outline" size={16} color={Design.colors.success} />
+                  <Text style={[styles.metricText, styles.successMetricText]}>
                     +${parseFloat(String(order.delivery_fee)).toFixed(2)}
                   </Text>
                 </View>
@@ -616,120 +634,146 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: Design.spacing[5],
   },
   container: {
     backgroundColor: Design.colors.background,
-    borderRadius: Design.borderRadius['2xl'],
+    borderRadius: Design.borderRadius.lg,
     width: '100%',
     maxWidth: 380,
     overflow: 'hidden',
     ...Design.shadows.large,
+    borderWidth: 1,
+    borderColor: Design.colors.border,
   },
   timerHeader: {
-    backgroundColor: Design.colors.primary,
-    paddingVertical: Design.spacing[5],
-    paddingHorizontal: Design.spacing[6],
-  },
-  batchTimerHeader: {
-    backgroundColor: '#FF6B6B', // Match batch badge color
+    backgroundColor: Design.colors.backgroundSecondary,
+    paddingVertical: Design.spacing[4],
+    paddingHorizontal: Design.spacing[5],
+    borderBottomWidth: 1,
+    borderBottomColor: Design.colors.border,
   },
   timerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Design.spacing[4],
+    gap: Design.spacing[3],
   },
   timerCircle: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    borderWidth: 4,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 3,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: Design.colors.background,
   },
   timerText: {
-    ...Design.typography.h4,
-    fontWeight: 'bold',
+    ...Design.typography.h5,
+    fontWeight: '700',
   },
   timerInfo: {
     flex: 1,
   },
   timerTitle: {
-    ...Design.typography.h4,
-    color: Design.colors.textInverse,
+    ...Design.typography.body,
+    fontSize: 16,
+    fontWeight: '600',
+    color: Design.colors.text,
   },
   timerSubtitle: {
-    ...Design.typography.label,
-    color: 'rgba(255, 255, 255, 0.8)',
+    ...Design.typography.caption,
+    color: Design.colors.textSecondary,
+    marginTop: Design.spacing[1],
+  },
+  timerIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Design.colors.primaryLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  batchTimerIcon: {
+    backgroundColor: '#FFE5E5',
   },
   orderTypeContainer: {
     flexDirection: 'row',
     gap: Design.spacing[2],
-    paddingHorizontal: Design.spacing[6],
-    paddingVertical: Design.spacing[4],
-    backgroundColor: Design.colors.backgroundTertiary,
+    paddingHorizontal: Design.spacing[5],
+    paddingTop: Design.spacing[3],
+    paddingBottom: Design.spacing[2],
   },
   orderTypeBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Design.colors.primary,
+    backgroundColor: Design.colors.primaryLight,
     paddingHorizontal: Design.spacing[3],
     paddingVertical: Design.spacing[2],
-    borderRadius: Design.borderRadius.lg,
+    borderRadius: Design.borderRadius.md,
     gap: Design.spacing[2],
+    borderWidth: 1,
+    borderColor: Design.colors.primary,
   },
   foodBadge: {
-    backgroundColor: Design.colors.error,
+    backgroundColor: Design.colors.errorBackground,
+    borderColor: Design.colors.error,
   },
   fastBadge: {
-    backgroundColor: Design.colors.warning,
+    backgroundColor: Design.colors.warningBackground,
+    borderColor: Design.colors.warning,
   },
   orderTypeText: {
     ...Design.typography.caption,
-    fontWeight: 'bold',
-    color: Design.colors.textInverse,
+    fontWeight: '600',
+    color: Design.colors.primary,
   },
   priorityBadge: {
     paddingHorizontal: Design.spacing[3],
     paddingVertical: Design.spacing[2],
-    borderRadius: Design.borderRadius.lg,
-    backgroundColor: Design.colors.warning,
+    borderRadius: Design.borderRadius.md,
+    backgroundColor: Design.colors.warningBackground,
+    borderWidth: 1,
+    borderColor: Design.colors.warning,
   },
   urgentBadge: {
-    backgroundColor: Design.colors.error,
+    backgroundColor: Design.colors.errorBackground,
+    borderColor: Design.colors.error,
   },
   priorityText: {
     ...Design.typography.caption,
-    fontWeight: 'bold',
-    color: Design.colors.textInverse,
+    fontWeight: '600',
+    color: Design.colors.text,
   },
   orderSummary: {
-    paddingHorizontal: Design.spacing[6],
-    paddingVertical: Design.spacing[5],
+    paddingHorizontal: Design.spacing[5],
+    paddingVertical: Design.spacing[4],
   },
   orderNumber: {
-    ...Design.typography.h5,
+    ...Design.typography.body,
+    fontSize: 16,
+    fontWeight: '700',
     color: Design.colors.text,
-    marginBottom: Design.spacing[5],
+    marginBottom: Design.spacing[4],
     textAlign: 'center',
   },
   locationSection: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: Design.spacing[4],
+    marginBottom: Design.spacing[3],
     gap: Design.spacing[3],
   },
   locationIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Design.colors.backgroundTertiary,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Design.colors.backgroundSecondary,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Design.colors.border,
   },
   locationInfo: {
     flex: 1,
@@ -747,8 +791,8 @@ const styles = StyleSheet.create({
   metricsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: Design.spacing[5],
-    paddingTop: Design.spacing[4],
+    marginTop: Design.spacing[4],
+    paddingTop: Design.spacing[3],
     borderTopWidth: 1,
     borderTopColor: Design.colors.border,
   },
@@ -759,70 +803,88 @@ const styles = StyleSheet.create({
   metricText: {
     ...Design.typography.caption,
     color: Design.colors.textSecondary,
+    fontWeight: '500',
+  },
+  successMetricText: {
+    color: Design.colors.success,
   },
   actionButtons: {
     flexDirection: 'row',
-    gap: Design.spacing[3],
-    padding: Design.spacing[6],
-    backgroundColor: Design.colors.backgroundTertiary,
+    gap: Design.spacing[2],
+    padding: Design.spacing[5],
+    backgroundColor: Design.colors.backgroundSecondary,
+    borderTopWidth: 1,
+    borderTopColor: Design.colors.border,
   },
   declineButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Design.colors.background,
-    borderRadius: Design.borderRadius.lg,
-    paddingVertical: Design.spacing[4],
-    gap: Design.spacing[2],
-    borderWidth: 2,
-    borderColor: Design.colors.error,
+    backgroundColor: Design.colors.errorBackground,
+    borderRadius: Design.borderRadius.md,
+    paddingVertical: Design.spacing[3],
+    gap: Design.spacing[1],
+    borderWidth: 1,
+    borderColor: Design.colors.errorBorder,
   },
   declineButtonText: {
     ...Design.typography.button,
     color: Design.colors.error,
+    fontSize: 14,
+    fontWeight: '600',
   },
   skipButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Design.colors.gray100,
-    borderRadius: Design.borderRadius.lg,
-    paddingVertical: Design.spacing[4],
-    gap: Design.spacing[2],
+    backgroundColor: Design.colors.backgroundTertiary,
+    borderRadius: Design.borderRadius.md,
+    paddingVertical: Design.spacing[3],
+    gap: Design.spacing[1],
+    borderWidth: 1,
+    borderColor: Design.colors.border,
   },
   skipButtonText: {
     ...Design.typography.button,
     color: Design.colors.textSecondary,
+    fontSize: 14,
+    fontWeight: '600',
   },
   acceptButton: {
-    flex: 1,
+    flex: 2,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: Design.colors.success,
-    borderRadius: Design.borderRadius.lg,
-    paddingVertical: Design.spacing[4],
-    gap: Design.spacing[2],
+    borderRadius: Design.borderRadius.md,
+    paddingVertical: Design.spacing[3],
+    gap: Design.spacing[1],
   },
   acceptButtonText: {
     ...Design.typography.button,
     color: Design.colors.textInverse,
+    fontSize: 14,
+    fontWeight: '600',
   },
   batchBadge: {
-    backgroundColor: '#FF6B6B', // Distinct red-orange color for batch orders
-    borderWidth: 2,
-    borderColor: '#FF5252',
+    backgroundColor: '#FFF5F5',
+    borderColor: '#FF6B6B',
+  },
+  batchOrderTypeText: {
+    color: '#FF6B6B',
   },
   routeDetailsButton: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Design.spacing[3],
     paddingVertical: Design.spacing[2],
-    borderRadius: Design.borderRadius.lg,
+    borderRadius: Design.borderRadius.md,
     backgroundColor: Design.colors.background,
     gap: Design.spacing[1],
+    borderWidth: 1,
+    borderColor: Design.colors.border,
   },
   routeDetailsText: {
     ...Design.typography.caption,

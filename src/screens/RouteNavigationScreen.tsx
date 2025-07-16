@@ -65,10 +65,12 @@ interface BackendDeliveryData {
     pickup_address?: string;
     delivery_address?: string;
     customer?: {
+      id?: string;
       name?: string;
       phone?: string;
     };
     customer_details?: {
+      id?: string;
       name?: string;
       phone?: string;
     };
@@ -118,6 +120,7 @@ interface BackendRouteData {
   optimized_route?: {
     success?: boolean;
     optimized_route?: BackendOptimizedRoute;
+    reason?: string;
   };
   warehouse_batches_processing?: Array<{
     batch_number: string;
@@ -132,13 +135,13 @@ interface QRScanResult {
 }
 
 const RouteNavigationScreen: React.FC = () => {
-  const { user } = useAuth();
+  const { user: _user } = useAuth();
   const { 
     orders: availableOrders, 
     driverOrders,
     refreshOrders, 
     getDriverOrders,
-    isLoading, 
+    isLoading: _isLoading, 
     updateOrderStatus
   } = useOrders();
   const { driver } = useDriver();
@@ -316,12 +319,7 @@ const RouteNavigationScreen: React.FC = () => {
 
   // Use orders from backend route optimization response
   const routeOrders = useMemo(() => {
-    console.log('[RouteNavigationScreen] Computing routeOrders:', {
-      hasBackendRoute: !!backendRoute,
-      assignedDeliveries: backendRoute?.assigned_deliveries?.length || 0,
-      driverOrdersCount: driverOrders?.length || 0,
-      backendRoute
-    });
+    // Computing routeOrders
     
     if (backendRoute && backendRoute.assigned_deliveries) {
       const assignedArray = Array.isArray(backendRoute.assigned_deliveries) ? backendRoute.assigned_deliveries : [];
@@ -330,7 +328,17 @@ const RouteNavigationScreen: React.FC = () => {
         ...delivery.order,
         id: delivery.id,
         delivery_id: delivery.id,
-        status: delivery.status || 'assigned'
+        status: delivery.status || 'assigned',
+        customer: delivery.order.customer ? {
+          id: delivery.order.customer.id || 'unknown',
+          name: delivery.order.customer.name || '',
+          phone: delivery.order.customer.phone || ''
+        } : undefined,
+        customer_details: delivery.order.customer_details ? {
+          id: delivery.order.customer_details.id || 'unknown',
+          name: delivery.order.customer_details.name || '',
+          phone: delivery.order.customer_details.phone || ''
+        } : undefined
       }));
       
       // Filter for active orders that can be navigated to
@@ -339,7 +347,7 @@ const RouteNavigationScreen: React.FC = () => {
         const hasDeliveryLocation = !!(order.delivery_latitude && order.delivery_longitude);
         const hasLocation = hasPickupLocation || hasDeliveryLocation;
         
-        const routeStatuses = ['assigned', 'accepted', 'picked_up', 'in_transit', 'delivered'];
+        const routeStatuses = ['assigned', 'confirmed', 'picked_up', 'in_transit', 'delivered'];
         const isActive = routeStatuses.includes(order.status);
         
         return isActive && hasLocation;
@@ -354,7 +362,7 @@ const RouteNavigationScreen: React.FC = () => {
         const hasDeliveryLocation = !!(order.delivery_latitude && order.delivery_longitude);
         const hasLocation = hasPickupLocation || hasDeliveryLocation;
         
-        const routeStatuses = ['assigned', 'accepted', 'picked_up', 'in_transit', 'delivered'];
+        const routeStatuses = ['assigned', 'confirmed', 'picked_up', 'in_transit', 'delivered'];
         const isActive = routeStatuses.includes(order.status);
         
         return isActive && hasLocation;
@@ -366,21 +374,12 @@ const RouteNavigationScreen: React.FC = () => {
 
   // Create optimized route from backend route steps or available deliveries
   const optimizedRoute = useMemo((): OptimizedRoute | null => {
-    console.log('[RouteNavigationScreen] Creating optimizedRoute:', {
-      hasBackendRoute: !!backendRoute,
-      hasOptimizedRoute: !!backendRoute?.optimized_route?.optimized_route,
-      assignedDeliveries: backendRoute?.assigned_deliveries?.length || 0
-    });
+    // Creating optimizedRoute
     
     // First check if we have an optimized route from backend
     if (backendRoute?.optimized_route?.success && backendRoute?.optimized_route?.optimized_route) {
       const backendOptRoute = backendRoute.optimized_route.optimized_route;
-      console.log('[RouteNavigationScreen] Processing backend optimized route:', {
-        routeId: backendOptRoute.id,
-        deliveryCount: backendOptRoute.delivery_count,
-        totalDistance: backendOptRoute.total_distance_km,
-        routeDeliveries: backendOptRoute.route_deliveries?.length
-      });
+      // Processing backend optimized route
       
       // Handle new route structure with route_deliveries
       if (backendOptRoute.route_deliveries && backendOptRoute.route_deliveries.length > 0) {
@@ -397,7 +396,7 @@ const RouteNavigationScreen: React.FC = () => {
         
         // Process deliveries in the optimized route first
         sortedDeliveries.forEach((routeDelivery) => {
-          const deliveryId = routeDelivery.delivery;
+          const deliveryId = String(routeDelivery.delivery);
           
           // Find the full delivery data from assigned_deliveries
           const fullDelivery = backendRoute.assigned_deliveries?.find(d => d.id === deliveryId);
@@ -458,7 +457,7 @@ const RouteNavigationScreen: React.FC = () => {
         // Add any assigned deliveries that weren't included in the optimized route
         backendRoute.assigned_deliveries?.forEach((delivery) => {
           if (!routeDeliveryIds.has(delivery.id)) {
-            console.log('[RouteNavigationScreen] Adding delivery not in optimized route:', delivery.id);
+            // Adding delivery not in optimized route
             const order = delivery.order;
             
             // Add pickup point if not already added and not already picked up
@@ -567,9 +566,9 @@ const RouteNavigationScreen: React.FC = () => {
       
       return {
         points,
-        totalDistance: backendOptRoute.total_distance,
-        totalTime: backendOptRoute.total_time,
-        estimatedCompletion: backendOptRoute.estimated_completion,
+        totalDistance: backendOptRoute.total_distance || 0,
+        totalTime: backendOptRoute.total_time || 0,
+        estimatedCompletion: backendOptRoute.estimated_completion || '',
       };
     }
     
@@ -579,14 +578,10 @@ const RouteNavigationScreen: React.FC = () => {
       ? backendRoute.assigned_deliveries 
       : backendRoute?.available_deliveries || [];
     
-    console.log('[RouteNavigationScreen] Backend optimization failed, creating local route:', {
-      reason: backendRoute?.optimized_route?.reason,
-      assignedCount: backendRoute?.assigned_deliveries?.length || 0,
-      availableCount: backendRoute?.available_deliveries?.length || 0
-    });
+    // Backend optimization failed, creating local route
       
     if (deliveriesToProcess.length > 0) {
-      console.log('[RouteNavigationScreen] Creating optimized route locally with deliveries:', deliveriesToProcess.length);
+      // Creating optimized route locally with deliveries
       const points: RoutePoint[] = [];
       const processedPickups = new Set<string>();
       let sequenceNumber = 1;
@@ -601,14 +596,7 @@ const RouteNavigationScreen: React.FC = () => {
                                  delivery.status !== 'in_transit' && 
                                  delivery.status !== 'delivered';
         
-        console.log('[RouteNavigationScreen] Processing delivery for grouping:', {
-          deliveryId: delivery.id,
-          hasOrder: !!order,
-          pickupLat: order?.pickup_latitude,
-          pickupLng: order?.pickup_longitude,
-          status: delivery.status,
-          shouldShowPickup
-        });
+        // Processing delivery for grouping
         
         if (shouldShowPickup && order && order.pickup_latitude && order.pickup_longitude) {
           const pickupKey = `${order.pickup_latitude}-${order.pickup_longitude}`;
@@ -620,15 +608,11 @@ const RouteNavigationScreen: React.FC = () => {
       });
       
       // Add pickup points (one per location)
-      console.log('[RouteNavigationScreen] Pickup groups:', pickupGroups.size);
+      // Processing pickup groups
       pickupGroups.forEach((deliveries, pickupKey) => {
         const firstDelivery = deliveries[0];
         const order = firstDelivery.order;
-        console.log('[RouteNavigationScreen] Creating pickup point:', {
-          pickupKey,
-          deliveriesCount: deliveries.length,
-          order: order?.order_number
-        });
+        // Creating pickup point
         
         points.push({
           id: `pickup-${pickupKey}`,
@@ -638,8 +622,8 @@ const RouteNavigationScreen: React.FC = () => {
             delivery_id: firstDelivery.id,
             status: firstDelivery.status || 'assigned'
           } as Order,
-          latitude: parseFloat(order.pickup_latitude!),
-          longitude: parseFloat(order.pickup_longitude!),
+          latitude: Number(order.pickup_latitude),
+          longitude: Number(order.pickup_longitude),
           address: order.pickup_address || 'Pickup Location',
           type: 'pickup',
           sequenceNumber: sequenceNumber++,
@@ -666,8 +650,8 @@ const RouteNavigationScreen: React.FC = () => {
               delivery_id: delivery.id,
               status: delivery.status || 'assigned'
             } as Order,
-            latitude: parseFloat(order.delivery_latitude),
-            longitude: parseFloat(order.delivery_longitude),
+            latitude: Number(order.delivery_latitude),
+            longitude: Number(order.delivery_longitude),
             address: order.delivery_address || 'Delivery Location',
             type: 'delivery',
             sequenceNumber: sequenceNumber++,
@@ -708,16 +692,12 @@ const RouteNavigationScreen: React.FC = () => {
         estimatedCompletion: new Date(Date.now() + totalTime * 60 * 1000).toISOString(),
       };
       
-      console.log('[RouteNavigationScreen] Created route:', {
-        pointsCount: result.points.length,
-        totalDistance: result.totalDistance,
-        points: result.points
-      });
+      // Created route
       
       return result;
     }
     
-    console.log('[RouteNavigationScreen] No route created');
+    // No route created
     return null;
   }, [backendRoute]);
 
@@ -762,21 +742,20 @@ const RouteNavigationScreen: React.FC = () => {
     const hasPickupLocation = !!(order.pickup_latitude && order.pickup_longitude);
     const hasDeliveryLocation = !!(order.delivery_latitude && order.delivery_longitude);
     
-    let destination = '';
     let lat: number | null = null;
     let lng: number | null = null;
     
-    if (order.status === 'assigned' || order.status === 'accepted') {
+    if (order.status === 'assigned' || order.status === 'confirmed') {
       // Navigate to pickup
       if (hasPickupLocation) {
-        destination = order.pickup_address;
+        // Pickup address: order.pickup_address
         lat = safeCoordinate(order.pickup_latitude);
         lng = safeCoordinate(order.pickup_longitude);
       }
     } else if (order.status === 'picked_up' || order.status === 'in_transit') {
       // Navigate to delivery
       if (hasDeliveryLocation) {
-        destination = order.delivery_address;
+        // Delivery address: order.delivery_address
         lat = safeCoordinate(order.delivery_latitude);
         lng = safeCoordinate(order.delivery_longitude);
       }
@@ -784,7 +763,7 @@ const RouteNavigationScreen: React.FC = () => {
     
     if (lat && lng) {
       const url = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
-      Linking.openURL(url).catch(err => {
+      Linking.openURL(url).catch(_err => {
         Alert.alert('Error', 'Unable to open navigation app');
       });
     } else {
@@ -814,7 +793,7 @@ const RouteNavigationScreen: React.FC = () => {
   const handleCallCustomer = (phoneNumber: string) => {
     if (phoneNumber && phoneNumber.trim()) {
       const url = `tel:${phoneNumber.trim()}`;
-      Linking.openURL(url).catch(err => {
+      Linking.openURL(url).catch(_err => {
         Alert.alert('Error', 'Unable to make phone call');
       });
     } else {
@@ -832,7 +811,7 @@ const RouteNavigationScreen: React.FC = () => {
   const handleCallSupport = () => {
     // You can configure this with actual support number
     const supportNumber = '+1234567890'; // Replace with actual support number
-    Linking.openURL(`tel:${supportNumber}`).catch(err => {
+    Linking.openURL(`tel:${supportNumber}`).catch(_err => {
       Alert.alert('Error', 'Unable to make phone call');
     });
   };
@@ -855,23 +834,38 @@ const RouteNavigationScreen: React.FC = () => {
     );
   };
 
+  const filterUpcomingStops = (points: RoutePoint[]) => {
+    return points.filter(p => {
+      const isCompleted = p.order.status === 'delivered';
+      if (isCompleted) return true;
+      
+      const currentStopIndex = optimizedRoute?.points?.findIndex(point => {
+        const completed = point.order.status === 'delivered';
+        return !completed;
+      });
+      
+      const currentStopId = currentStopIndex >= 0 && optimizedRoute?.points?.[currentStopIndex] ? optimizedRoute.points[currentStopIndex].id : null;
+      return p.id !== currentStopId;
+    });
+  };
+
   const getStatusUpdateOptions = (item: RoutePoint) => {
     if (item.type === 'pickup') {
       return [
-        { status: 'picked_up', label: 'Mark as Picked Up', color: '#F59E0B' },
+        { status: 'picked_up', label: 'Mark as Picked Up', color: '#F59E0B', icon: 'checkmark-circle' as const },
       ];
     } else {
       return [
-        { status: 'delivered', label: 'Mark as Delivered', color: '#10B981' },
-        { status: 'failed', label: 'Mark as Failed', color: '#EF4444' },
+        { status: 'delivered', label: 'Mark as Delivered', color: '#10B981', icon: 'checkmark-circle' as const },
+        { status: 'failed', label: 'Mark as Failed', color: '#EF4444', icon: 'close-circle' as const },
       ];
     }
   };
 
-  const renderRouteCard = ({ item, index, forceRegular = false }: { item: RoutePoint; index: number; forceRegular?: boolean }) => {
+  const _renderRouteCard = ({ item, index, forceRegular = false }: { item: RoutePoint; index: number; forceRegular?: boolean }) => {
     const order = item.order;
     const isCompleted = order.status === 'delivered';
-    const isInProgress = order.status === 'picked_up' || order.status === 'in_transit';
+    const _isInProgress = order.status === 'picked_up' || order.status === 'in_transit';
     const isCurrent = !isCompleted && (index === 0 || optimizedRoute?.points?.slice(0, index).every(p => 
       p.order.status === 'delivered'
     ));
@@ -1047,7 +1041,6 @@ const RouteNavigationScreen: React.FC = () => {
         <BatchOrderCard
           batch={item}
           onPress={() => {/* Handle batch order */}}
-          style={styles.orderCard}
         />
       );
     }
@@ -1056,9 +1049,7 @@ const RouteNavigationScreen: React.FC = () => {
       <EnhancedOrderCard
         order={item}
         onPress={() => handleViewOrderDetails(item)}
-        onNavigate={() => handleNavigateToOrder(item)}
         onStatusUpdate={(newStatus) => handleStatusUpdate(item.id, newStatus)}
-        style={styles.orderCard}
       />
     );
   };
@@ -1093,7 +1084,7 @@ const RouteNavigationScreen: React.FC = () => {
   }, [optimizedRoute]);
 
   // Combine all route segments into a single polyline
-  const routePolyline = useMemo(() => {
+  const _routePolyline = useMemo(() => {
     const allCoordinates: {latitude: number, longitude: number}[] = [];
     routeSegments.forEach(segment => {
       allCoordinates.push(...segment.coordinates);
@@ -1102,7 +1093,7 @@ const RouteNavigationScreen: React.FC = () => {
   }, [routeSegments]);
 
   // Calculate map region to fit all points
-  const mapRegion = useMemo(() => {
+  const _mapRegion = useMemo(() => {
     if (mapMarkers.length === 0) {
       return {
         latitude: 37.78825,
@@ -1191,14 +1182,7 @@ const RouteNavigationScreen: React.FC = () => {
               });
               const currentStop = currentStopIndex >= 0 ? optimizedRoute?.points?.[currentStopIndex] : null;
               
-              console.log('[RouteNavigationScreen] Current stop data:', {
-                hasCurrentStop: !!currentStop,
-                currentStopIndex,
-                order: currentStop?.order,
-                type: currentStop?.type,
-                address: currentStop?.address,
-                sequenceNumber: currentStop?.sequenceNumber
-              });
+              // Current stop data
               
               return currentStop ? (
                 <View style={styles.currentStopContainer}>
@@ -1387,33 +1371,10 @@ const RouteNavigationScreen: React.FC = () => {
             )}
 
             {/* Upcoming Stops Card */}
-            {optimizedRoute?.points?.filter(p => {
-              const isCompleted = p.order.status === 'delivered';
-              if (isCompleted) return true;
-              
-              const currentStopIndex = optimizedRoute?.points?.findIndex(point => {
-                const completed = point.order.status === 'delivered';
-                return !completed;
-              });
-              
-              const currentStopId = currentStopIndex >= 0 && optimizedRoute?.points?.[currentStopIndex] ? optimizedRoute.points[currentStopIndex].id : null;
-              return p.id !== currentStopId;
-            }).length > 0 && (
+            {optimizedRoute?.points && filterUpcomingStops(optimizedRoute.points).length > 0 && (
               <Card style={styles.upcomingStopsCard}>
                 <Text style={styles.upcomingStopsTitle}>Upcoming Stops</Text>
-                {optimizedRoute.points
-                  ?.filter(p => {
-                    const isCompleted = p.order.status === 'delivered';
-                    if (isCompleted) return true;
-                    
-                    const currentStopIndex = optimizedRoute?.points?.findIndex(point => {
-                      const completed = point.order.status === 'delivered';
-                      return !completed;
-                    });
-                    
-                    const currentStopId = currentStopIndex >= 0 && optimizedRoute?.points?.[currentStopIndex] ? optimizedRoute.points[currentStopIndex].id : null;
-                    return p.id !== currentStopId;
-                  })
+                {filterUpcomingStops(optimizedRoute.points)
                   .map((item, _index) => (
                     <TouchableOpacity
                       key={item.id}
@@ -1422,13 +1383,13 @@ const RouteNavigationScreen: React.FC = () => {
                     >
                       <View style={styles.upcomingStopNumber}>
                         <Text style={styles.upcomingStopNumberText}>
-                          {item.order.status === 'delivered' || item.order.status === 'completed' ? '✓' : item.sequenceNumber}
+                          {item.order.status === 'delivered' ? '✓' : item.sequenceNumber}
                         </Text>
                       </View>
                       <View style={styles.upcomingStopInfo}>
                         <Text style={[
                           styles.upcomingStopTitle,
-                          (item.order.status === 'delivered' || item.order.status === 'completed') && styles.upcomingStopTitleCompleted
+                          item.order.status === 'delivered' && styles.upcomingStopTitleCompleted
                         ]}>
                           {item.type === 'pickup' ? 'Pickup' : 'Delivery'} - {item.order.order_number}
                         </Text>
@@ -1436,7 +1397,7 @@ const RouteNavigationScreen: React.FC = () => {
                           {item.address}
                         </Text>
                       </View>
-                      {item.order.status !== 'delivered' && item.order.status !== 'completed' && (
+                      {item.order.status !== 'delivered' && (
                         <TouchableOpacity
                           style={styles.upcomingStopNavigate}
                           onPress={(e) => {
@@ -1533,7 +1494,7 @@ const RouteNavigationScreen: React.FC = () => {
       )}
 
       {/* Floating QR Button */}
-      <FloatingQRButton onQRScanResult={handleQRScanResult} />
+      <FloatingQRButton onScanResult={handleQRScanResult} />
     </SafeAreaView>
   );
 };
@@ -1823,9 +1784,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#FFFFFF',
     fontWeight: '600',
-  },
-  orderCard: {
-    marginVertical: 6,
   },
   emptyContainer: {
     flex: 1,
