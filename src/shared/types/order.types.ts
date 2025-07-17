@@ -2,6 +2,8 @@
  * Order-related TypeScript types and interfaces
  */
 
+import { SpecialHandling } from '../../types';
+
 export interface OrderCustomer {
   id: string;
   name: string;
@@ -283,6 +285,7 @@ export interface BatchOrder {
   requires_id_verification: boolean;
   cash_on_delivery: boolean;
   cod_amount: number;
+  special_handling?: SpecialHandling;
   
   // Financial
   subtotal: number;

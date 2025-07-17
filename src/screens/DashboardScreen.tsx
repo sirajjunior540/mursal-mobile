@@ -139,13 +139,13 @@ const DashboardScreen: React.FC = () => {
     }
   }, [acceptOrder, navigation]);
 
-  const handleAcceptRoute = useCallback(async (routeId: string) => {
+  const handleAcceptRoute = useCallback(async (routeId: string, orderData?: any) => {
     
     Haptics.trigger('notificationSuccess');
     setShowIncomingModal(false);
     
     try {
-      const result = await orderActionService.acceptRoute(routeId, {}, {
+      const result = await orderActionService.acceptRoute(routeId, orderData || incomingOrder, {
         showConfirmation: false,
         onSuccess: () => {
           // Navigate directly to route screen
@@ -163,7 +163,7 @@ const DashboardScreen: React.FC = () => {
       const errorMessage = error instanceof Error ? error.message : 'Failed to accept route';
       Alert.alert('Error', errorMessage);
     }
-  }, [orderActionService, navigation]);
+  }, [orderActionService, navigation, incomingOrder]);
 
   const handleDeclineOrder = useCallback(async (deliveryId: string) => {
     Haptics.trigger('impactLight');
@@ -636,7 +636,7 @@ const DashboardScreen: React.FC = () => {
                 {activeOrders.length > 3 && (
                   <TouchableOpacity 
                     style={styles.viewAllButton}
-                    onPress={() => navigation.navigate('AcceptedOrders')}
+                    onPress={() => navigation.navigate('Navigation')}
                   >
                     <Text style={styles.viewAllButtonText}>View all {activeOrders.length} orders</Text>
                     <Ionicons name="arrow-forward" size={16} color="#3B82F6" />

@@ -12,6 +12,7 @@ import Card from './Card';
 import StatusBadge from './StatusBadge';
 import Button from './Button';
 import { BatchOrderInfo, BatchStatus } from '../../shared/types/order.types';
+import { SpecialHandling } from '../../types';
 
 interface BatchOrderCardProps {
   batch: BatchOrderInfo;
@@ -55,6 +56,19 @@ const BatchOrderCard: React.FC<BatchOrderCardProps> = ({
   
   // Calculate total estimated value for display
   const totalValue = batch.orders.reduce((sum, order) => sum + order.total, 0);
+  
+  // Calculate COD information
+  const codOrders = batch.orders.filter(order => order.cash_on_delivery);
+  const totalCOD = codOrders.reduce((sum, order) => sum + order.cod_amount, 0);
+  const hasCOD = codOrders.length > 0;
+  
+  // Calculate special handling requirements
+  const specialHandlingTypes = new Set(
+    batch.orders
+      .filter(order => order.special_handling && order.special_handling !== 'none')
+      .map(order => order.special_handling)
+  );
+  const hasSpecialHandling = specialHandlingTypes.size > 0;
   
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.7} accessible={true}>

@@ -1,201 +1,224 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   FlatList,
-  RefreshControl,
-  ActivityIndicator,
-  Alert,
   TouchableOpacity,
+  Alert,
+  RefreshControl,
+  StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { apiService } from '../services/api';
-import { Order } from '../types';
+import { useNavigation } from '@react-navigation/native';
+
+import EnhancedOrderCard from '../components/EnhancedOrderCard';
+import BatchOrderCard from '../components/BatchOrderCard';
+
 import { useOrders } from '../features/orders/context/OrderProvider';
+import { Order, isBatchOrder } from '../types';
 import { Design } from '../constants/designSystem';
-import EmptyState from '../components/EmptyState';
-import LinearGradient from 'react-native-linear-gradient';
 
 const AvailableOrdersScreen: React.FC = () => {
   const navigation = useNavigation();
-  const { acceptOrder } = useOrders();
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { 
+    orders: availableOrders, 
+    refreshOrders, 
+    isLoading,
+    acceptOrder,
+    updateOrderStatus 
+  } = useOrders();
   const [refreshing, setRefreshing] = useState(false);
 
-  const fetchAvailableOrders = useCallback(async (showLoader = true) => {
-    if (showLoader) setLoading(true);
-    
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
     try {
-      console.log('[AvailableOrders] Fetching available orders...');
-      const response = await apiService.getAvailableOrders();
-      console.log('[AvailableOrders] Response:', response);
-      
-      if (response.success && response.data) {
-        console.log('[AvailableOrders] Received', response.data.length, 'available orders');
-        setOrders(response.data);
-      } else {
-        console.error('[AvailableOrders] Failed to fetch orders:', response.error);
-        setOrders([]);
-      }
+      await refreshOrders();
     } catch (error) {
-      console.error('[AvailableOrders] Error fetching orders:', error);
-      Alert.alert('Error', 'Failed to load available orders');
-      setOrders([]);
+      console.error('Error refreshing:', error);
     } finally {
-      setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [refreshOrders]);
 
-  useEffect(() => {
-    fetchAvailableOrders();
-    
-    // Refresh every 30 seconds
-    const interval = setInterval(() => {
-      fetchAvailableOrders(false);
-    }, 30000);
-    
-    return () => clearInterval(interval);
-  }, [fetchAvailableOrders]);
+  const handleViewOrderDetails = (order: Order) => {
+    navigation.navigate('OrderDetails' as never, { orderId: order.id } as never);
+  };
 
-  const handleAcceptOrder = async (orderId: string) => {
-    try {
-      const success = await acceptOrder(orderId);
-      
-      if (success) {
-        Alert.alert(
-          'Success!',
-          'Order accepted successfully',
-          [
-            {
-              text: 'View My Orders',
-              onPress: () => navigation.navigate('AcceptedOrders' as never)
-            }
-          ]
-        );
-        
-        // Remove accepted order from list
-        setOrders(prev => prev.filter(order => order.id !== orderId));
-      } else {
-        Alert.alert('Error', 'Failed to accept order');
+  // Group available orders by pickup location
+  const groupedAvailableOrders = useMemo(() => {
+    const groups = new Map<string, Order[]>();
+    
+    availableOrders.forEach((order) => {
+      if (order.pickup_latitude && order.pickup_longitude) {
+        const pickupKey = `${order.pickup_latitude}-${order.pickup_longitude}`;
+        if (!groups.has(pickupKey)) {
+          groups.set(pickupKey, []);
+        }
+        groups.get(pickupKey)!.push(order);
       }
-    } catch (error) {
-      console.error('Error accepting order:', error);
-      Alert.alert('Error', 'Failed to accept order');
-    }
-  };
+    });
+    
+    // Convert to array of grouped orders
+    const groupedArray: (Order | { isBatchGroup: true; orders: Order[]; pickupAddress: string })[] = [];
+    
+    groups.forEach((orders, pickupKey) => {
+      if (orders.length > 1) {
+        // Create a batch group for multiple orders at same pickup
+        groupedArray.push({
+          isBatchGroup: true,
+          orders: orders,
+          pickupAddress: orders[0].pickup_address || 'Pickup Location'
+        });
+      } else {
+        // Single order, add as is
+        groupedArray.push(orders[0]);
+      }
+    });
+    
+    // Add orders without pickup coordinates
+    availableOrders.forEach((order) => {
+      if (!order.pickup_latitude || !order.pickup_longitude) {
+        groupedArray.push(order);
+      }
+    });
+    
+    return groupedArray;
+  }, [availableOrders]);
 
-  const renderOrderCard = ({ item: order }: { item: Order }) => {
-    const distance = order.distance || 0;
+  const renderAvailableOrderCard = ({ item }: { item: any }) => {
+    // Check if it's a grouped batch
+    if (item.isBatchGroup) {
+      const totalValue = item.orders.reduce((sum: number, order: Order) => 
+        sum + (order.total || 0), 0
+      );
+      
+      return (
+        <View style={styles.batchGroupCard}>
+          <View style={styles.batchGroupHeader}>
+            <View style={styles.batchGroupIconContainer}>
+              <Ionicons name="layers" size={24} color="#FFFFFF" />
+            </View>
+            <View style={styles.batchGroupInfo}>
+              <Text style={styles.batchGroupTitle}>Batch Pickup</Text>
+              <Text style={styles.batchGroupSubtitle}>{item.orders.length} orders • ${totalValue.toFixed(2)}</Text>
+            </View>
+            <View style={styles.batchGroupBadge}>
+              <Text style={styles.batchGroupBadgeText}>SAME PICKUP</Text>
+            </View>
+          </View>
+          
+          <View style={styles.batchGroupContent}>
+            <View style={styles.batchGroupAddress}>
+              <Ionicons name="location" size={16} color="#10B981" />
+              <Text style={styles.batchGroupAddressText} numberOfLines={2}>
+                {item.pickupAddress}
+              </Text>
+            </View>
+            
+            <View style={styles.batchGroupOrders}>
+              {item.orders.map((order: Order, index: number) => (
+                <View key={order.id} style={styles.batchGroupOrderItem}>
+                  <Text style={styles.batchGroupOrderNumber}>#{order.order_number || order.id}</Text>
+                  <Text style={styles.batchGroupOrderCustomer} numberOfLines={1}>
+                    {order.customer?.name || order.customer_details?.name || 'Customer'}
+                  </Text>
+                  <Text style={styles.batchGroupOrderAddress} numberOfLines={1}>
+                    → {order.delivery_address}
+                  </Text>
+                </View>
+              ))}
+            </View>
+            
+            <TouchableOpacity
+              style={styles.batchGroupAcceptButton}
+              onPress={() => {
+                // Handle batch acceptance - could accept all orders or show selection
+                Alert.alert(
+                  'Accept Batch Orders',
+                  `Accept all ${item.orders.length} orders from this pickup location?`,
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    { 
+                      text: 'Accept All', 
+                      onPress: async () => {
+                        // Accept all orders in the batch
+                        for (const order of item.orders) {
+                          await acceptOrder(order.id);
+                        }
+                        handleRefresh();
+                      }
+                    }
+                  ]
+                );
+              }}
+            >
+              <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" />
+              <Text style={styles.batchGroupAcceptText}>Accept All Orders</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      );
+    }
+    
+    // Regular order or actual batch order
+    if (isBatchOrder(item)) {
+      return (
+        <BatchOrderCard
+          batch={item}
+          onPress={() => {/* Handle batch order */}}
+        />
+      );
+    }
     
     return (
-      <TouchableOpacity
-        style={styles.orderCard}
-        onPress={() => navigation.navigate('OrderDetails' as never, { orderId: order.id } as never)}
-        activeOpacity={0.7}
-      >
-        <LinearGradient
-          colors={['#FFFFFF', '#F8FAFC']}
-          style={styles.orderCardGradient}
-        >
-          {/* Header */}
-          <View style={styles.orderHeader}>
-            <View>
-              <Text style={styles.orderNumber}>Order #{order.order_number}</Text>
-              <Text style={styles.orderTime}>
-                {distance > 0 ? `${distance.toFixed(1)} km away` : 'Distance unknown'}
-              </Text>
-            </View>
-            <View style={styles.priceContainer}>
-              <Text style={styles.priceLabel}>Total</Text>
-              <Text style={styles.priceValue}>${order.total?.toFixed(2) || '0.00'}</Text>
-            </View>
-          </View>
-
-          {/* Locations */}
-          <View style={styles.locationsContainer}>
-            <View style={styles.locationRow}>
-              <View style={styles.locationIcon}>
-                <Ionicons name="location" size={16} color="#10B981" />
-              </View>
-              <Text style={styles.locationText} numberOfLines={1}>
-                {order.pickup_address || 'Pickup location'}
-              </Text>
-            </View>
-            
-            <View style={styles.locationDivider} />
-            
-            <View style={styles.locationRow}>
-              <View style={styles.locationIcon}>
-                <Ionicons name="location" size={16} color="#3B82F6" />
-              </View>
-              <Text style={styles.locationText} numberOfLines={1}>
-                {order.delivery_address || 'Delivery location'}
-              </Text>
-            </View>
-          </View>
-
-          {/* Action Button */}
-          <TouchableOpacity
-            style={styles.acceptButton}
-            onPress={() => handleAcceptOrder(order.id)}
-          >
-            <Text style={styles.acceptButtonText}>Accept Order</Text>
-            <Ionicons name="checkmark-circle" size={20} color="white" />
-          </TouchableOpacity>
-        </LinearGradient>
-      </TouchableOpacity>
+      <EnhancedOrderCard
+        order={item}
+        onPress={() => handleViewOrderDetails(item)}
+        onStatusUpdate={(newStatus) => updateOrderStatus(item.id, newStatus)}
+      />
     );
   };
 
-  const renderEmptyState = () => (
-    <EmptyState
-      icon="cart-outline"
-      title="No Available Orders"
-      description="New orders will appear here when they become available"
-      onRefresh={fetchAvailableOrders}
-    />
+  const renderEmptyAvailable = () => (
+    <View style={styles.emptyContainer}>
+      <Ionicons name="cube-outline" size={64} color="#ccc" />
+      <Text style={styles.emptyText}>No available orders</Text>
+      <Text style={styles.emptySubtext}>Pull down to refresh</Text>
+    </View>
   );
-
-  if (loading) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={Design.colors.primary} />
-          <Text style={styles.loadingText}>Loading available orders...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
 
   return (
     <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor="#F5F5F5" />
+      
+      {/* Header */}
       <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <Ionicons name="chevron-back" size={24} color={Design.colors.textPrimary} />
+        </TouchableOpacity>
         <Text style={styles.headerTitle}>Available Orders</Text>
-        <Text style={styles.headerSubtitle}>
-          {orders.length} {orders.length === 1 ? 'order' : 'orders'} available
-        </Text>
+        <View style={styles.headerCount}>
+          <Text style={styles.headerCountText}>{availableOrders.length}</Text>
+        </View>
       </View>
 
+      {/* Orders List */}
       <FlatList
-        data={orders}
-        keyExtractor={(item) => item.id}
-        renderItem={renderOrderCard}
-        ListEmptyComponent={renderEmptyState}
+        data={groupedAvailableOrders}
+        renderItem={renderAvailableOrderCard}
+        keyExtractor={(item) => item.isBatchGroup ? `batch-${item.pickupAddress}` : item.id}
+        contentContainerStyle={styles.listContent}
         refreshControl={
           <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => {
-              setRefreshing(true);
-              fetchAvailableOrders();
-            }}
+            refreshing={refreshing || isLoading}
+            onRefresh={handleRefresh}
+            colors={['#4F46E5']}
+            tintColor="#4F46E5"
           />
         }
-        contentContainerStyle={styles.listContainer}
+        ListEmptyComponent={renderEmptyAvailable}
         showsVerticalScrollIndicator={false}
       />
     </SafeAreaView>
@@ -205,126 +228,157 @@ const AvailableOrdersScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: '#6B7280',
+    backgroundColor: Design.colors.backgroundSecondary,
   },
   header: {
-    backgroundColor: 'white',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Design.spacing[4],
+    paddingBottom: Design.spacing[3],
+  },
+  backButton: {
+    padding: Design.spacing[2],
+    marginLeft: -Design.spacing[2],
   },
   headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1F2937',
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginTop: 4,
-  },
-  listContainer: {
-    flexGrow: 1,
-    paddingVertical: 8,
-  },
-  orderCard: {
-    marginHorizontal: 16,
-    marginVertical: 6,
-    borderRadius: 16,
-    overflow: 'hidden',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-  },
-  orderCardGradient: {
-    padding: 16,
-  },
-  orderHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 16,
-  },
-  orderNumber: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#1F2937',
-  },
-  orderTime: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginTop: 4,
-  },
-  priceContainer: {
-    alignItems: 'flex-end',
-  },
-  priceLabel: {
-    fontSize: 12,
-    color: '#6B7280',
-  },
-  priceValue: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1F2937',
-  },
-  locationsContainer: {
-    backgroundColor: '#F3F4F6',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 16,
-  },
-  locationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  locationIcon: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: 'white',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  locationText: {
     flex: 1,
+    fontSize: Design.typography.title2.fontSize,
+    fontWeight: Design.typography.title2.fontWeight,
+    color: Design.colors.textPrimary,
+    marginLeft: Design.spacing[2],
+  },
+  headerCount: {
+    backgroundColor: Design.colors.primary,
+    paddingHorizontal: Design.spacing[3],
+    paddingVertical: Design.spacing[1],
+    borderRadius: Design.borderRadius.md,
+  },
+  headerCountText: {
+    fontSize: Design.typography.footnote.fontSize,
+    fontWeight: Design.typography.headline.fontWeight,
+    color: Design.colors.textInverse,
+  },
+  listContent: {
+    paddingVertical: Design.spacing[2],
+    paddingHorizontal: Design.spacing[4],
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#666',
+    marginTop: 12,
+    fontWeight: '500',
+  },
+  emptySubtext: {
     fontSize: 14,
-    color: '#374151',
+    color: '#999',
+    marginTop: 4,
   },
-  locationDivider: {
-    height: 20,
-    width: 1,
-    backgroundColor: '#D1D5DB',
-    marginLeft: 12,
-    marginVertical: 4,
+  
+  // Batch Group Card Styles
+  batchGroupCard: {
+    backgroundColor: Design.colors.background,
+    borderRadius: Design.borderRadius.md,
+    marginVertical: Design.spacing[2],
+    overflow: 'hidden',
+    ...Design.shadows.small,
   },
-  acceptButton: {
+  batchGroupHeader: {
     flexDirection: 'row',
-    backgroundColor: '#10B981',
-    borderRadius: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
+    alignItems: 'center',
+    backgroundColor: Design.colors.primary,
+    padding: Design.spacing[3],
+  },
+  batchGroupIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: Design.spacing[3],
+  },
+  batchGroupInfo: {
+    flex: 1,
+  },
+  batchGroupTitle: {
+    fontSize: Design.typography.callout.fontSize,
+    fontWeight: Design.typography.headline.fontWeight,
+    color: Design.colors.textInverse,
+  },
+  batchGroupSubtitle: {
+    fontSize: Design.typography.footnote.fontSize,
+    color: 'rgba(255, 255, 255, 0.8)',
+    marginTop: 2,
+  },
+  batchGroupBadge: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: Design.spacing[2],
+    paddingVertical: Design.spacing[1],
+    borderRadius: Design.borderRadius.sm,
+  },
+  batchGroupBadgeText: {
+    fontSize: Design.typography.caption2.fontSize,
+    fontWeight: Design.typography.overline.fontWeight,
+    color: Design.colors.textInverse,
+    letterSpacing: 0.5,
+  },
+  batchGroupContent: {
+    padding: Design.spacing[3],
+  },
+  batchGroupAddress: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: Design.spacing[3],
+  },
+  batchGroupAddressText: {
+    flex: 1,
+    fontSize: Design.typography.footnote.fontSize,
+    color: Design.colors.textPrimary,
+    lineHeight: Design.typography.footnote.lineHeight * 1.3,
+    marginLeft: Design.spacing[2],
+  },
+  batchGroupOrders: {
+    marginBottom: Design.spacing[3],
+  },
+  batchGroupOrderItem: {
+    paddingVertical: Design.spacing[2],
+    borderBottomWidth: 1,
+    borderBottomColor: Design.colors.border,
+  },
+  batchGroupOrderNumber: {
+    fontSize: Design.typography.footnote.fontSize,
+    fontWeight: Design.typography.label.fontWeight,
+    color: Design.colors.textPrimary,
+    marginBottom: 2,
+  },
+  batchGroupOrderCustomer: {
+    fontSize: Design.typography.caption1.fontSize,
+    color: Design.colors.textSecondary,
+    marginBottom: 2,
+  },
+  batchGroupOrderAddress: {
+    fontSize: Design.typography.caption1.fontSize,
+    color: Design.colors.textSecondary,
+  },
+  batchGroupAcceptButton: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: Design.colors.success,
+    paddingVertical: Design.spacing[3],
+    borderRadius: Design.borderRadius.md,
+    gap: Design.spacing[2],
   },
-  acceptButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-    marginRight: 8,
+  batchGroupAcceptText: {
+    fontSize: Design.typography.callout.fontSize,
+    fontWeight: Design.typography.headline.fontWeight,
+    color: Design.colors.textInverse,
   },
 });
 

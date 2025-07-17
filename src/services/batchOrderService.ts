@@ -4,7 +4,7 @@
  * Handles batch operations, driver assignments, and status updates
  */
 
-import { ApiResponse } from '../types';
+import { ApiResponse, SpecialHandling } from '../types';
 import { 
   BatchOrderInfo, 
   BatchOrderResponse, 
@@ -121,6 +121,7 @@ class BatchOrderTransformerImpl implements BatchOrderTransformer {
       requires_id_verification: backendOrder.requires_id_verification || false,
       cash_on_delivery: backendOrder.cash_on_delivery || false,
       cod_amount: backendOrder.cod_amount || 0,
+      special_handling: backendOrder.special_handling || 'none',
       subtotal: backendOrder.subtotal || 0,
       delivery_fee: backendOrder.delivery_fee || 0,
       tax: backendOrder.tax || 0,

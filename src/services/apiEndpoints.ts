@@ -917,9 +917,53 @@ export class ApiEndpoints {
         };
       }
       
-      // Fallback to regular ongoing deliveries if optimization fails
+      // Fallback to driver orders formatted as route data
+      console.log('[API] Route optimization failed, falling back to driver orders');
+      const driverOrdersResponse = await this.getDriverOrders();
+      
+      if (driverOrdersResponse.success && driverOrdersResponse.data) {
+        // Format driver orders as route optimization response
+        const routeData = {
+          assigned_deliveries: driverOrdersResponse.data.map(order => ({
+            id: order.id,
+            status: order.status,
+            order: order
+          })),
+          available_deliveries: [],
+          optimized_route: null
+        };
+        
+        return {
+          success: true,
+          data: routeData,
+          message: 'Using driver orders as route data'
+        };
+      }
+      
       return this.getOngoingDeliveries();
     } catch (error) {
+      console.log('[API] Route optimization error, falling back to driver orders', error);
+      // Same fallback logic
+      const driverOrdersResponse = await this.getDriverOrders();
+      
+      if (driverOrdersResponse.success && driverOrdersResponse.data) {
+        const routeData = {
+          assigned_deliveries: driverOrdersResponse.data.map(order => ({
+            id: order.id,
+            status: order.status,
+            order: order
+          })),
+          available_deliveries: [],
+          optimized_route: null
+        };
+        
+        return {
+          success: true,
+          data: routeData,
+          message: 'Using driver orders as route data'
+        };
+      }
+      
       return this.getOngoingDeliveries();
     }
   }

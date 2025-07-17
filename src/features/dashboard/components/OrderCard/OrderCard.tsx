@@ -175,6 +175,55 @@ const OrderCard: React.FC<OrderCardProps> = memo(({
           </View>
         </View>
 
+        {/* Special Handling Indicators */}
+        {(order.special_handling && order.special_handling !== 'none' || 
+          order.cash_on_delivery || 
+          order.requires_signature || 
+          order.requires_id_verification) && (
+          <View style={styles.specialHandlingContainer}>
+            {order.special_handling && order.special_handling !== 'none' && (
+              <View style={[
+                styles.specialHandlingBadge,
+                order.special_handling === 'fragile' && styles.fragileBadge,
+                order.special_handling === 'temperature_controlled' && styles.temperatureBadge,
+              ]}>
+                <Ionicons 
+                  name={
+                    order.special_handling === 'fragile' ? 'warning' :
+                    order.special_handling === 'temperature_controlled' ? 'thermometer' :
+                    order.special_handling === 'liquid' ? 'water' : 'alert-circle'
+                  } 
+                  size={12} 
+                  color="#fff" 
+                />
+                <Text style={styles.specialHandlingText}>
+                  {order.special_handling.replace(/_/g, ' ').toUpperCase()}
+                </Text>
+              </View>
+            )}
+            {order.cash_on_delivery && (
+              <View style={[styles.specialHandlingBadge, styles.codBadge]}>
+                <Ionicons name="cash" size={12} color="#fff" />
+                <Text style={styles.specialHandlingText}>
+                  COD ${order.cod_amount?.toFixed(2) || order.total?.toFixed(2) || '0.00'}
+                </Text>
+              </View>
+            )}
+            {order.requires_signature && (
+              <View style={[styles.specialHandlingBadge, styles.signatureBadge]}>
+                <Ionicons name="create" size={12} color="#fff" />
+                <Text style={styles.specialHandlingText}>SIGNATURE</Text>
+              </View>
+            )}
+            {order.requires_id_verification && (
+              <View style={[styles.specialHandlingBadge, styles.idBadge]}>
+                <Ionicons name="card" size={12} color="#fff" />
+                <Text style={styles.specialHandlingText}>ID CHECK</Text>
+              </View>
+            )}
+          </View>
+        )}
+
         {/* Order Metrics */}
         <View 
           style={styles.metricsRow}

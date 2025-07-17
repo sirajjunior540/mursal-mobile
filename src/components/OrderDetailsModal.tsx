@@ -338,6 +338,58 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
               <Text style={styles.sectionTitle}>Order Information</Text>
               <Text style={styles.orderNumber}>#{displayOrder.order_number}</Text>
               <Text style={styles.orderStatus}>{displayOrder.status}</Text>
+              
+              {/* Special Handling Indicators */}
+              {(displayOrder.special_handling && displayOrder.special_handling !== 'none' || 
+                displayOrder.cash_on_delivery || 
+                displayOrder.requires_signature || 
+                displayOrder.requires_id_verification) && (
+                <View style={styles.specialHandlingContainer}>
+                  {displayOrder.special_handling && displayOrder.special_handling !== 'none' && (
+                    <View style={[
+                      styles.specialHandlingBadge,
+                      displayOrder.special_handling === 'fragile' && styles.fragileBadge,
+                      displayOrder.special_handling === 'temperature_controlled' && styles.temperatureBadge,
+                      displayOrder.special_handling === 'hazardous' && styles.hazardousBadge,
+                    ]}>
+                      <Ionicons 
+                        name={
+                          displayOrder.special_handling === 'fragile' ? 'warning' :
+                          displayOrder.special_handling === 'temperature_controlled' ? 'thermometer' :
+                          displayOrder.special_handling === 'liquid' ? 'water' :
+                          displayOrder.special_handling === 'hazardous' ? 'nuclear' :
+                          displayOrder.special_handling === 'perishable' ? 'time' : 'alert-circle'
+                        } 
+                        size={14} 
+                        color="#fff" 
+                      />
+                      <Text style={styles.specialHandlingText}>
+                        {displayOrder.special_handling.replace(/_/g, ' ').toUpperCase()}
+                      </Text>
+                    </View>
+                  )}
+                  {displayOrder.cash_on_delivery && (
+                    <View style={[styles.specialHandlingBadge, styles.codBadge]}>
+                      <Ionicons name="cash" size={14} color="#fff" />
+                      <Text style={styles.specialHandlingText}>
+                        COD ${displayOrder.cod_amount?.toFixed(2) || displayOrder.total?.toFixed(2) || '0.00'}
+                      </Text>
+                    </View>
+                  )}
+                  {displayOrder.requires_signature && (
+                    <View style={[styles.specialHandlingBadge, styles.signatureBadge]}>
+                      <Ionicons name="create" size={14} color="#fff" />
+                      <Text style={styles.specialHandlingText}>SIGNATURE</Text>
+                    </View>
+                  )}
+                  {displayOrder.requires_id_verification && (
+                    <View style={[styles.specialHandlingBadge, styles.idBadge]}>
+                      <Ionicons name="card" size={14} color="#fff" />
+                      <Text style={styles.specialHandlingText}>ID CHECK</Text>
+                    </View>
+                  )}
+                </View>
+              )}
             </View>
 
           {/* Pickup Details */}
@@ -692,6 +744,45 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
+  },
+  // Special handling styles
+  specialHandlingContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 12,
+  },
+  specialHandlingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    gap: 4,
+    backgroundColor: '#FFA726',
+  },
+  specialHandlingText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  fragileBadge: {
+    backgroundColor: '#FF6B6B',
+  },
+  temperatureBadge: {
+    backgroundColor: '#4ECDC4',
+  },
+  hazardousBadge: {
+    backgroundColor: '#FF4757',
+  },
+  codBadge: {
+    backgroundColor: '#00D2D3',
+  },
+  signatureBadge: {
+    backgroundColor: '#8B78E6',
+  },
+  idBadge: {
+    backgroundColor: '#5F3DC4',
   },
 });
 

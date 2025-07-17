@@ -146,11 +146,22 @@ class OrderActionService {
     onError?: (error: string) => void;
   }): Promise<ApiResponse<void>> {
     try {
-      // For now, treat route acceptance as regular order acceptance
-      // Backend should handle batch order logic
-      const response = await apiService.getClient().post<void>(
-        `/api/v1/delivery/deliveries/${routeId}/accept/`
-      );
+      // Check if the data contains batch information
+      const isBatchOrder = data?.current_batch?.id || data?.isBatch;
+      let response: ApiResponse<void>;
+      
+      if (isBatchOrder) {
+        // For batch orders, use the batch accept endpoint with the batch ID
+        const batchId = data?.current_batch?.id || routeId;
+        response = await apiService.getClient().post<void>(
+          `/api/v1/delivery/batches/${batchId}/accept/`
+        );
+      } else {
+        // For regular orders, use the delivery accept endpoint
+        response = await apiService.getClient().post<void>(
+          `/api/v1/delivery/deliveries/${routeId}/accept/`
+        );
+      }
       
       if (options?.onSuccess) {
         options.onSuccess();

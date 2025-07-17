@@ -18,13 +18,11 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 
 import Card from '../components/ui/Card';
 import FloatingQRButton from '../components/FloatingQRButton';
-import EnhancedOrderCard from '../components/EnhancedOrderCard';
-import BatchOrderCard from '../components/BatchOrderCard';
-
+import OrderDetailsModal from '../components/OrderDetailsModal';
 import { useOrders } from '../features/orders/context/OrderProvider';
 import { useDriver } from '../contexts/DriverContext';
 import { useAuth } from '../contexts/AuthContext';
-import { Order, BatchOrder, isBatchOrder } from '../types';
+import { Order } from '../types';
 import { locationService } from '../services/locationService';
 import { apiService } from '../services/api';
 import { mapProviderService } from '../services/mapProviderService';
@@ -142,11 +140,12 @@ const RouteNavigationScreen: React.FC = () => {
     refreshOrders, 
     getDriverOrders,
     isLoading: _isLoading, 
-    updateOrderStatus
+    updateOrderStatus,
+    acceptOrder
   } = useOrders();
   const { driver } = useDriver();
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedTab, setSelectedTab] = useState<'route' | 'available'>('route');
+  // Removed selectedTab state - no longer needed without tabs
   const [optimizingRoute, setOptimizingRoute] = useState(false);
   const [backendRoute, setBackendRoute] = useState<BackendRouteData | null>(null);
   const [updatingStatus, setUpdatingStatus] = useState(false);
@@ -158,6 +157,8 @@ const RouteNavigationScreen: React.FC = () => {
     distance: number;
     duration: number;
   }>>([]);
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [showOrderDetailsModal, setShowOrderDetailsModal] = useState(false);
 
   // QR Scanner integration
   const handleQRScanResult = useCallback((result: QRScanResult) => {
@@ -196,7 +197,9 @@ const RouteNavigationScreen: React.FC = () => {
   // Load backend route optimization
   const loadDriverOrders = useCallback(async () => {
     try {
+      console.log('Loading driver orders...');
       await getDriverOrders();
+      console.log('Driver orders loaded');
     } catch (error) {
       console.error('Error loading driver orders:', error);
     }
@@ -210,8 +213,14 @@ const RouteNavigationScreen: React.FC = () => {
         const location = await locationService.getCurrentLocation();
         if (location) {
           const response = await apiService.getRouteOptimization(location.latitude, location.longitude);
+          console.log('Route optimization response:', response);
           const routeData = response.success ? response.data : null;
           if (routeData) {
+            console.log('Backend route data:', {
+              assignedDeliveries: routeData.assigned_deliveries?.length || 0,
+              availableDeliveries: routeData.available_deliveries?.length || 0,
+              optimizedRoute: routeData.optimized_route
+            });
             setBackendRoute(routeData);
             
             // Extract available orders from route optimization response
@@ -229,15 +238,27 @@ const RouteNavigationScreen: React.FC = () => {
           }
         } else {
           const response = await apiService.getRouteOptimization();
+          console.log('Route optimization response (no location):', response);
           const routeData = response.success ? response.data : null;
           if (routeData) {
+            console.log('Backend route data (no location):', {
+              assignedDeliveries: routeData.assigned_deliveries?.length || 0,
+              availableDeliveries: routeData.available_deliveries?.length || 0,
+              optimizedRoute: routeData.optimized_route
+            });
             setBackendRoute(routeData);
           }
         }
       } catch (locationError) {
         const response = await apiService.getRouteOptimization();
+        console.log('Route optimization response (location error):', response);
         const routeData = response.success ? response.data : null;
         if (routeData) {
+          console.log('Backend route data (location error):', {
+            assignedDeliveries: routeData.assigned_deliveries?.length || 0,
+            availableDeliveries: routeData.available_deliveries?.length || 0,
+            optimizedRoute: routeData.optimized_route
+          });
           setBackendRoute(routeData);
         }
       }
@@ -317,9 +338,27 @@ const RouteNavigationScreen: React.FC = () => {
     ]).start();
   }, [fadeAnim, slideAnim]);
 
+  // Debug driver orders
+  useEffect(() => {
+    console.log('Driver orders updated:', {
+      count: driverOrders.length,
+      orders: driverOrders.map(o => ({
+        id: o.id,
+        status: o.status,
+        hasPickupCoords: !!(o.pickup_latitude && o.pickup_longitude),
+        hasDeliveryCoords: !!(o.delivery_latitude && o.delivery_longitude)
+      }))
+    });
+  }, [driverOrders]);
+
   // Use orders from backend route optimization response
   const routeOrders = useMemo(() => {
     // Computing routeOrders
+    console.log('Computing routeOrders:', {
+      hasBackendRoute: !!backendRoute,
+      assignedDeliveries: backendRoute?.assigned_deliveries?.length || 0,
+      driverOrders: driverOrders.length
+    });
     
     if (backendRoute && backendRoute.assigned_deliveries) {
       const assignedArray = Array.isArray(backendRoute.assigned_deliveries) ? backendRoute.assigned_deliveries : [];
@@ -375,6 +414,11 @@ const RouteNavigationScreen: React.FC = () => {
   // Create optimized route from backend route steps or available deliveries
   const optimizedRoute = useMemo((): OptimizedRoute | null => {
     // Creating optimizedRoute
+    console.log('Creating optimized route with:', {
+      hasBackendRoute: !!backendRoute,
+      hasOptimizedRoute: !!backendRoute?.optimized_route?.success,
+      routeOrdersLength: routeOrders.length
+    });
     
     // First check if we have an optimized route from backend
     if (backendRoute?.optimized_route?.success && backendRoute?.optimized_route?.optimized_route) {
@@ -576,9 +620,18 @@ const RouteNavigationScreen: React.FC = () => {
     // Check both assigned and available deliveries
     const deliveriesToProcess = backendRoute?.assigned_deliveries?.length > 0 
       ? backendRoute.assigned_deliveries 
-      : backendRoute?.available_deliveries || [];
+      : backendRoute?.available_deliveries?.length > 0
+      ? backendRoute.available_deliveries
+      : routeOrders.length > 0
+      ? routeOrders.map(order => ({
+          id: order.id,
+          order: order,
+          status: order.status
+        }))
+      : [];
     
     // Backend optimization failed, creating local route
+    console.log('Deliveries to process:', deliveriesToProcess.length);
       
     if (deliveriesToProcess.length > 0) {
       // Creating optimized route locally with deliveries
@@ -587,14 +640,15 @@ const RouteNavigationScreen: React.FC = () => {
       let sequenceNumber = 1;
       
       // Group deliveries by pickup location to avoid duplicate pickup stops
-      const pickupGroups = new Map<string, BackendDeliveryData[]>();
+      const pickupGroups = new Map<string, any[]>();
       deliveriesToProcess.forEach((delivery) => {
-        const order = delivery.order;
+        const order = delivery.order || delivery;
+        const status = delivery.status || order.status;
         
         // Skip if already picked up
-        const shouldShowPickup = delivery.status !== 'picked_up' && 
-                                 delivery.status !== 'in_transit' && 
-                                 delivery.status !== 'delivered';
+        const shouldShowPickup = status !== 'picked_up' && 
+                                 status !== 'in_transit' && 
+                                 status !== 'delivered';
         
         // Processing delivery for grouping
         
@@ -611,44 +665,51 @@ const RouteNavigationScreen: React.FC = () => {
       // Processing pickup groups
       pickupGroups.forEach((deliveries, pickupKey) => {
         const firstDelivery = deliveries[0];
-        const order = firstDelivery.order;
+        const order = firstDelivery.order || firstDelivery;
+        const deliveryId = firstDelivery.id || order.id;
+        const status = firstDelivery.status || order.status;
         // Creating pickup point
         
         points.push({
           id: `pickup-${pickupKey}`,
           order: {
             ...order,
-            id: firstDelivery.id,
-            delivery_id: firstDelivery.id,
-            status: firstDelivery.status || 'assigned'
+            id: deliveryId,
+            delivery_id: deliveryId,
+            status: status || 'assigned'
           } as Order,
           latitude: Number(order.pickup_latitude),
           longitude: Number(order.pickup_longitude),
           address: order.pickup_address || 'Pickup Location',
           type: 'pickup',
           sequenceNumber: sequenceNumber++,
-          batchOrders: deliveries.length > 1 ? deliveries.map(d => ({
-            ...d.order,
-            id: d.id,
-            delivery_id: d.id,
-            status: d.status || 'assigned'
-          } as Order)) : undefined,
+          batchOrders: deliveries.length > 1 ? deliveries.map(d => {
+            const dOrder = d.order || d;
+            return {
+              ...dOrder,
+              id: d.id || dOrder.id,
+              delivery_id: d.id || dOrder.id,
+              status: d.status || dOrder.status || 'assigned'
+            } as Order;
+          }) : undefined,
         });
       });
       
       // Add delivery points for each order
       deliveriesToProcess.forEach((delivery) => {
-        const order = delivery.order;
+        const order = delivery.order || delivery;
+        const deliveryId = delivery.id || order.id;
+        const status = delivery.status || order.status;
         
         // Add delivery point if coordinates exist
         if (order.delivery_latitude && order.delivery_longitude) {
           points.push({
-            id: `${delivery.id}-delivery`,
+            id: `${deliveryId}-delivery`,
             order: {
               ...order,
-              id: delivery.id,
-              delivery_id: delivery.id,
-              status: delivery.status || 'assigned'
+              id: deliveryId,
+              delivery_id: deliveryId,
+              status: status || 'assigned'
             } as Order,
             latitude: Number(order.delivery_latitude),
             longitude: Number(order.delivery_longitude),
@@ -784,11 +845,22 @@ const RouteNavigationScreen: React.FC = () => {
     }
   };
 
-  const navigation = useNavigation();
+  // Navigation not needed as we're using modal for order details
 
   const handleViewOrderDetails = (order: Order) => {
-    navigation.navigate('OrderDetails' as never, { orderId: order.id } as never);
+    setSelectedOrder(order);
+    setShowOrderDetailsModal(true);
   };
+
+  const handleCloseOrderDetails = useCallback(() => {
+    setShowOrderDetailsModal(false);
+    setSelectedOrder(null);
+  }, []);
+
+  const handleOrderDetailsNavigate = useCallback(() => {
+    handleCloseOrderDetails();
+    // Navigate action already handled by the main navigation function
+  }, [handleCloseOrderDetails]);
 
   const handleCallCustomer = (phoneNumber: string) => {
     if (phoneNumber && phoneNumber.trim()) {
@@ -1035,38 +1107,13 @@ const RouteNavigationScreen: React.FC = () => {
     );
   };
 
-  const renderAvailableOrderCard = ({ item }: { item: Order | BatchOrder }) => {
-    if (isBatchOrder(item)) {
-      return (
-        <BatchOrderCard
-          batch={item}
-          onPress={() => {/* Handle batch order */}}
-        />
-      );
-    }
-    
-    return (
-      <EnhancedOrderCard
-        order={item}
-        onPress={() => handleViewOrderDetails(item)}
-        onStatusUpdate={(newStatus) => handleStatusUpdate(item.id, newStatus)}
-      />
-    );
-  };
+  // Removed groupedAvailableOrders and renderAvailableOrderCard - moved to AvailableOrdersScreen
 
   const renderEmptyRoute = () => (
     <View style={styles.emptyContainer}>
       <Ionicons name="map-outline" size={64} color="#ccc" />
       <Text style={styles.emptyText}>No orders in your route</Text>
       <Text style={styles.emptySubtext}>Check available orders to get started</Text>
-    </View>
-  );
-
-  const renderEmptyAvailable = () => (
-    <View style={styles.emptyContainer}>
-      <Ionicons name="cube-outline" size={64} color="#ccc" />
-      <Text style={styles.emptyText}>No available orders</Text>
-      <Text style={styles.emptySubtext}>Pull down to refresh</Text>
     </View>
   );
 
@@ -1134,24 +1181,11 @@ const RouteNavigationScreen: React.FC = () => {
         )}
       </View>
 
-      {/* Tab Selector - Dashboard Style */}
-      <View style={styles.tabContainer}>
-        <TouchableOpacity
-          style={[styles.tab, selectedTab === 'route' && styles.activeTab]}
-          onPress={() => setSelectedTab('route')}
-        >
-          <Text style={[styles.tabText, selectedTab === 'route' && styles.activeTabText]}>
-            My Route ({routeOrders.length})
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, selectedTab === 'available' && styles.activeTab]}
-          onPress={() => setSelectedTab('available')}
-        >
-          <Text style={[styles.tabText, selectedTab === 'available' && styles.activeTabText]}>
-            Available ({availableOrders.length})
-          </Text>
-        </TouchableOpacity>
+      {/* Route Header - Dashboard Style */}
+      <View style={styles.routeHeaderContainer}>
+        <Text style={styles.routeHeaderTitle}>
+          My Route ({optimizedRoute?.points?.length || 0} stops)
+        </Text>
       </View>
 
       {/* Content - Dashboard Style */}
@@ -1168,11 +1202,9 @@ const RouteNavigationScreen: React.FC = () => {
         }
         showsVerticalScrollIndicator={false}
       >
-        {selectedTab === 'route' ? (
-          <>
-            {!optimizedRoute || !optimizedRoute.points || optimizedRoute.points.length === 0 ? (
-              renderEmptyRoute()
-            ) : (
+        {!optimizedRoute || !optimizedRoute.points || optimizedRoute.points.length === 0 ? (
+          renderEmptyRoute()
+        ) : (
               <>
                 {/* Current Stop Card - Dashboard Style */}
                 {(() => {
@@ -1412,26 +1444,7 @@ const RouteNavigationScreen: React.FC = () => {
                   ))}
               </Card>
             )}
-              </>
-            )}
           </>
-        ) : (
-          <FlatList
-            data={availableOrders}
-            renderItem={renderAvailableOrderCard}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.listContent}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={handleRefresh}
-                colors={['#4F46E5']}
-                tintColor="#4F46E5"
-              />
-            }
-            ListEmptyComponent={renderEmptyAvailable}
-            showsVerticalScrollIndicator={false}
-          />
         )}
       </ScrollView>
 
@@ -1495,6 +1508,18 @@ const RouteNavigationScreen: React.FC = () => {
 
       {/* Floating QR Button */}
       <FloatingQRButton onScanResult={handleQRScanResult} />
+
+      {/* Order Details Modal */}
+      <OrderDetailsModal
+        visible={showOrderDetailsModal}
+        order={selectedOrder}
+        onClose={handleCloseOrderDetails}
+        onStatusUpdate={handleStatusUpdate}
+        onNavigate={handleOrderDetailsNavigate}
+        showStatusButton={true}
+        readonly={false}
+        title="Delivery Details"
+      />
     </SafeAreaView>
   );
 };
@@ -1523,32 +1548,14 @@ const styles = StyleSheet.create({
     color: Design.colors.textSecondary,
     fontWeight: Design.typography.footnote.fontWeight,
   },
-  tabContainer: {
-    flexDirection: 'row',
-    backgroundColor: Design.colors.backgroundTertiary,
-    borderRadius: Design.borderRadius.md,
-    marginHorizontal: Design.spacing[4],
-    marginBottom: Design.spacing[4],
-    padding: Design.spacing[1],
+  routeHeaderContainer: {
+    paddingHorizontal: Design.spacing[4],
+    paddingBottom: Design.spacing[3],
   },
-  tab: {
-    flex: 1,
-    paddingVertical: Design.spacing[2],
-    alignItems: 'center',
-    borderRadius: Design.borderRadius.sm,
-  },
-  activeTab: {
-    backgroundColor: Design.colors.background,
-    ...Design.shadows.small,
-  },
-  tabText: {
-    fontSize: Design.typography.footnote.fontSize,
-    color: Design.colors.textSecondary,
-    fontWeight: Design.typography.footnote.fontWeight,
-  },
-  activeTabText: {
+  routeHeaderTitle: {
+    fontSize: Design.typography.title3.fontSize,
+    fontWeight: Design.typography.title3.fontWeight,
     color: Design.colors.textPrimary,
-    fontWeight: Design.typography.subheadline.fontWeight,
   },
   currentStopContainer: {
     paddingHorizontal: Design.spacing[4],

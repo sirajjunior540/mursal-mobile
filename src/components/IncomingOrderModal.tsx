@@ -30,7 +30,7 @@ interface IncomingOrderModalProps {
   onClose: () => void;
   timerDuration?: number; // in seconds
   onBatchAccept?: (batchId: string, selectedOrders: string[]) => void;
-  onAcceptRoute?: (routeId: string) => void;
+  onAcceptRoute?: (routeId: string, orderData?: any) => void;
 }
 
 const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
@@ -199,7 +199,7 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
     if (isBatchOrder && onAcceptRoute) {
       // For batch orders, accept the entire route
       console.log('✅ Driver accepted batch/route:', batchProperties?.batchId || order.id);
-      onAcceptRoute(batchProperties?.batchId || order.id);
+      onAcceptRoute(batchProperties?.batchId || order.id, order);
     } else {
       const apiIds = extractOrderApiIds(order);
       console.log('✅ Driver accepted order:', getOrderDisplayId(order));
@@ -459,6 +459,58 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
               </TouchableOpacity>
             )}
           </View>
+
+          {/* Special Handling Indicators */}
+          {(order.special_handling && order.special_handling !== 'none' || 
+            order.cash_on_delivery || 
+            order.requires_signature || 
+            order.requires_id_verification) && (
+            <View style={styles.specialHandlingContainer}>
+              {order.special_handling && order.special_handling !== 'none' && (
+                <View style={[
+                  styles.specialHandlingBadge,
+                  order.special_handling === 'fragile' && styles.fragileBadge,
+                  order.special_handling === 'temperature_controlled' && styles.temperatureBadge,
+                  order.special_handling === 'hazardous' && styles.hazardousBadge,
+                ]}>
+                  <Ionicons 
+                    name={
+                      order.special_handling === 'fragile' ? 'warning' :
+                      order.special_handling === 'temperature_controlled' ? 'thermometer' :
+                      order.special_handling === 'liquid' ? 'water' :
+                      order.special_handling === 'hazardous' ? 'nuclear' :
+                      order.special_handling === 'perishable' ? 'time' : 'alert-circle'
+                    } 
+                    size={14} 
+                    color="#fff" 
+                  />
+                  <Text style={styles.specialHandlingText}>
+                    {order.special_handling.replace(/_/g, ' ').toUpperCase()}
+                  </Text>
+                </View>
+              )}
+              {order.cash_on_delivery && (
+                <View style={[styles.specialHandlingBadge, styles.codBadge]}>
+                  <Ionicons name="cash" size={14} color="#fff" />
+                  <Text style={styles.specialHandlingText}>
+                    COD ${order.cod_amount?.toFixed(2) || order.total?.toFixed(2) || '0.00'}
+                  </Text>
+                </View>
+              )}
+              {order.requires_signature && (
+                <View style={[styles.specialHandlingBadge, styles.signatureBadge]}>
+                  <Ionicons name="create" size={14} color="#fff" />
+                  <Text style={styles.specialHandlingText}>SIGNATURE</Text>
+                </View>
+              )}
+              {order.requires_id_verification && (
+                <View style={[styles.specialHandlingBadge, styles.idBadge]}>
+                  <Ionicons name="card" size={14} color="#fff" />
+                  <Text style={styles.specialHandlingText}>ID CHECK</Text>
+                </View>
+              )}
+            </View>
+          )}
 
           {/* Order Summary */}
           <ScrollView style={styles.orderSummary} showsVerticalScrollIndicator={false}>
@@ -979,6 +1031,47 @@ const styles = StyleSheet.create({
     ...Design.typography.caption,
     color: Design.colors.primary,
     fontWeight: '600',
+  },
+  // Special handling styles
+  specialHandlingContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Design.spacing[2],
+    paddingHorizontal: Design.spacing[5],
+    paddingBottom: Design.spacing[3],
+  },
+  specialHandlingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Design.spacing[2],
+    paddingVertical: Design.spacing[1],
+    borderRadius: Design.borderRadius.sm,
+    gap: Design.spacing[1],
+    backgroundColor: Design.colors.warning,
+  },
+  specialHandlingText: {
+    ...Design.typography.caption,
+    fontWeight: '600',
+    color: '#fff',
+    fontSize: 11,
+  },
+  fragileBadge: {
+    backgroundColor: '#FF6B6B',
+  },
+  temperatureBadge: {
+    backgroundColor: '#4ECDC4',
+  },
+  hazardousBadge: {
+    backgroundColor: '#FF4757',
+  },
+  codBadge: {
+    backgroundColor: '#00D2D3',
+  },
+  signatureBadge: {
+    backgroundColor: '#8B78E6',
+  },
+  idBadge: {
+    backgroundColor: '#5F3DC4',
   },
   // Unused styles removed for ESLint compliance
   // batchOrdersList, batchListTitle, batchOrderItem, etc.

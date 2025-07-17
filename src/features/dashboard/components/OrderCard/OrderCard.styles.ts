@@ -116,4 +116,49 @@ export const createOrderCardStyles = (theme: Theme) => StyleSheet.create({
   acceptButton: {
     flex: 2,
   },
+  
+  // Special handling styles
+  specialHandlingContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: theme.spacing.xs,
+    marginBottom: theme.spacing.sm,
+  },
+  
+  specialHandlingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: theme.spacing.xs,
+    paddingVertical: 2,
+    borderRadius: theme.borderRadius.sm,
+    gap: 3,
+    backgroundColor: theme.colors.warning,
+  },
+  
+  specialHandlingText: {
+    ...theme.typography.caption,
+    fontWeight: '600',
+    color: '#fff',
+    fontSize: 10,
+  },
+  
+  fragileBadge: {
+    backgroundColor: '#FF6B6B',
+  },
+  
+  temperatureBadge: {
+    backgroundColor: '#4ECDC4',
+  },
+  
+  codBadge: {
+    backgroundColor: '#00D2D3',
+  },
+  
+  signatureBadge: {
+    backgroundColor: '#8B78E6',
+  },
+  
+  idBadge: {
+    backgroundColor: '#5F3DC4',
+  },
 });
