@@ -2,13 +2,14 @@
  * UniversalMapView Component
  * Renders the appropriate map component based on tenant configuration
  */
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   StyleSheet,
   ActivityIndicator,
   Text,
   Dimensions,
+  Platform,
 } from 'react-native';
 import MapView, { PROVIDER_GOOGLE, Marker, Polyline, MapViewProps } from 'react-native-maps';
 import { mapProviderService, MapProviderConfig, RoutePoint } from '../services/mapProviderService';
@@ -43,9 +44,16 @@ const UniversalMapView: React.FC<UniversalMapViewProps> = ({
   const [loading, setLoading] = useState(true);
   const [config, setConfig] = useState<MapProviderConfig | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const mapRef = useRef<MapView>(null);
+  const [mapKey, setMapKey] = useState(0);
 
   useEffect(() => {
-    loadMapConfig();
+    // Add small delay to prevent duplicate registration on iOS
+    const timer = setTimeout(() => {
+      loadMapConfig();
+    }, Platform.OS === 'ios' ? 100 : 0);
+    
+    return () => clearTimeout(timer);
   }, []);
 
   const loadMapConfig = async () => {
@@ -91,6 +99,8 @@ const UniversalMapView: React.FC<UniversalMapViewProps> = ({
   // Mapbox will require @rnmapbox/maps package to be installed
   const renderGoogleMap = () => (
     <MapView
+      key={`google-map-${mapKey}`}
+      ref={mapRef}
       provider={PROVIDER_GOOGLE}
       style={[styles.map, style]}
       onMapReady={onMapReady}
