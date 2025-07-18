@@ -108,12 +108,6 @@ export const FlatOrderActions: React.FC<FlatOrderActionsProps> = ({
           color: flatColors.accent.green,
           icon: 'checkmark-circle',
         });
-        actions.push({
-          key: 'failed',
-          label: 'Mark as Failed',
-          color: flatColors.accent.red,
-          icon: 'close-circle',
-        });
         break;
     }
     

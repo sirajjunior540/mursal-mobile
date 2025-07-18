@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Modal, View, ScrollView, TouchableOpacity } from 'react-native';
+import { Modal, View, ScrollView, TouchableOpacity, Text } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Order } from '../../types';
 import { flatModalStyles } from '../../design/orderDetails/flatModalStyles';
@@ -77,23 +77,23 @@ export const FlatOrderDetailsModal: React.FC<FlatOrderDetailsModalProps> = ({
       presentationStyle="fullScreen"
     >
       <View style={flatModalStyles.modalOverlay}>
-        <View style={flatModalStyles.modalContent}>
-          
-          {/* Back button for individual order view in batch */}
-          {selectedOrder && (
-            <TouchableOpacity 
-              style={flatModalStyles.backButton} 
-              onPress={handleBackToBatch}
-            >
-              <Ionicons name="chevron-back" size={20} color="#007AFF" />
-              <Text style={flatModalStyles.backButtonText}>Back to Batch</Text>
-            </TouchableOpacity>
-          )}
-
-          <ScrollView 
-            showsVerticalScrollIndicator={false}
-            bounces={false}
+        {/* Back button for individual order view in batch */}
+        {selectedOrder && (
+          <TouchableOpacity 
+            style={flatModalStyles.backButton} 
+            onPress={handleBackToBatch}
           >
+            <Ionicons name="chevron-back" size={20} color="#007AFF" />
+            <Text style={flatModalStyles.backButtonText}>Back to Batch</Text>
+          </TouchableOpacity>
+        )}
+
+        <ScrollView 
+          style={{ flex: 1 }}
+          showsVerticalScrollIndicator={false}
+          bounces={true}
+          contentContainerStyle={flatModalStyles.scrollViewContent}
+        >
             {/* Header */}
             <FlatOrderHeader
               order={currentOrder}
@@ -107,6 +107,12 @@ export const FlatOrderDetailsModal: React.FC<FlatOrderDetailsModalProps> = ({
               isBatchView={isShowingBatchList}
               batchType={batchType}
               orderCount={batchOrders.length}
+              onMarkAsFailed={
+                currentOrder && onStatusUpdate && !readonly && 
+                (currentOrder.status === 'picked_up' || currentOrder.status === 'in_transit')
+                  ? () => onStatusUpdate(currentOrder.id, 'failed')
+                  : undefined
+              }
             />
 
             {/* Batch Orders List */}
@@ -148,8 +154,8 @@ export const FlatOrderDetailsModal: React.FC<FlatOrderDetailsModalProps> = ({
                 />
               </>
             )}
-          </ScrollView>
-        </View>
+        </ScrollView>
+      </View>
     </Modal>
   );
 };
@@ -221,7 +227,7 @@ const BatchOrdersList: React.FC<BatchOrdersListProps> = ({
   );
 };
 
-import { StyleSheet, Text } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { flatColors } from '../../design/dashboard/flatColors';
 import { premiumTypography } from '../../design/dashboard/premiumTypography';
 

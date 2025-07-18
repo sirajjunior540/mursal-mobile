@@ -17,7 +17,7 @@ import {
   UpcomingStops,
   RouteMap,
 } from '../components/RouteNavigation';
-import OrderDetailsModal from '../components/OrderDetailsModal';
+import { FlatOrderDetailsModal } from '../components/OrderDetails/FlatOrderDetailsModal';
 import FloatingQRButton from '../components/FloatingQRButton';
 
 import { useOrders } from '../features/orders/context/OrderProvider';
@@ -462,7 +462,7 @@ const RouteNavigationScreen: React.FC = () => {
       <FloatingQRButton onScanResult={handleQRScanResult} />
 
       {/* Order Details Modal */}
-      <OrderDetailsModal
+      <FlatOrderDetailsModal
         visible={showOrderDetailsModal}
         order={selectedOrder}
         onClose={() => {
@@ -470,15 +470,19 @@ const RouteNavigationScreen: React.FC = () => {
           setSelectedOrder(null);
         }}
         onStatusUpdate={handleStatusUpdate}
-        onNavigate={() => {
+        onNavigate={(order) => {
           setShowOrderDetailsModal(false);
-          if (selectedOrder) {
-            handleNavigateToOrder(selectedOrder);
+          if (order) {
+            handleNavigateToOrder(order);
+          }
+        }}
+        onCall={(phone) => {
+          if (phone) {
+            handleCallCustomer(phone);
           }
         }}
         showStatusButton={true}
         readonly={false}
-        title="Delivery Details"
       />
     </SafeAreaView>
   );

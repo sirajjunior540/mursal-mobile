@@ -34,4 +34,7 @@ export const flatModalStyles = StyleSheet.create({
     lineHeight: premiumTypography.callout.lineHeight,
     color: flatColors.accent.blue,
   },
+  scrollViewContent: {
+    paddingBottom: 40,
+  },
 });

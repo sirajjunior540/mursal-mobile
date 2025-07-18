@@ -143,7 +143,7 @@ export const FlatOrderInfoSection: React.FC<FlatOrderInfoSectionProps> = ({
             </View>
           </View>
 
-          {order.delivery_fee && (
+          {order.delivery_fee !== undefined && order.delivery_fee !== null && (
             <View style={styles.infoRow}>
               <View style={styles.iconContainer}>
                 <Ionicons name="car" size={20} color={flatColors.neutral[500]} />

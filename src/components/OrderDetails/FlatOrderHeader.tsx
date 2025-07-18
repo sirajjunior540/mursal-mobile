@@ -5,6 +5,7 @@ import { OrderHeaderProps } from '../../types/orderDetails.types';
 import { flatColors } from '../../design/dashboard/flatColors';
 import { premiumTypography } from '../../design/dashboard/premiumTypography';
 import { premiumShadows } from '../../design/dashboard/premiumShadows';
+import { OrderActionMenu } from '../shared/OrderActionMenu';
 
 interface StatusBadgeProps {
   status?: string;
@@ -70,13 +71,14 @@ const BatchTypeBadge: React.FC<BatchTypeBadgeProps> = ({ type }) => {
   );
 };
 
-export const FlatOrderHeader: React.FC<OrderHeaderProps> = ({
+export const FlatOrderHeader: React.FC<OrderHeaderProps & { onMarkAsFailed?: () => void }> = ({
   order,
   onClose,
   title = 'Order Details',
   isBatchView = false,
   batchType = null,
   orderCount = 1,
+  onMarkAsFailed,
 }) => {
   if (!order) return null;
   
@@ -110,13 +112,22 @@ export const FlatOrderHeader: React.FC<OrderHeaderProps> = ({
           </View>
         </View>
         
-        <TouchableOpacity 
-          onPress={onClose} 
-          style={styles.closeButton}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="close" size={20} color={flatColors.neutral[600]} />
-        </TouchableOpacity>
+        <View style={styles.headerRight}>
+          {onMarkAsFailed && (
+            <OrderActionMenu 
+              onMarkAsFailed={onMarkAsFailed}
+              buttonStyle={styles.actionMenuButton}
+            />
+          )}
+          
+          <TouchableOpacity 
+            onPress={onClose} 
+            style={styles.closeButton}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="close" size={20} color={flatColors.neutral[600]} />
+          </TouchableOpacity>
+        </View>
       </View>
       
       {/* Status and Badges */}
@@ -180,6 +191,16 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     lineHeight: premiumTypography.caption.large.lineHeight,
     color: flatColors.neutral[600],
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  actionMenuButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
   },
   closeButton: {
     width: 32,

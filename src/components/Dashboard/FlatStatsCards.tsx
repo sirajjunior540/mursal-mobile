@@ -169,7 +169,6 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    ...premiumShadows.subtle,
   },
   trendContainer: {
     flexDirection: 'row',

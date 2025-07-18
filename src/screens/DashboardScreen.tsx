@@ -14,7 +14,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import Haptics from 'react-native-haptic-feedback';
 
 import IncomingOrderModal from '../components/IncomingOrderModal';
-import OrderDetailsModal from '../components/OrderDetailsModal';
+import { FlatOrderDetailsModal } from '../components/OrderDetails/FlatOrderDetailsModal';
 import FloatingQRButton from '../components/FloatingQRButton';
 import {
   FlatDashboardHeader,
@@ -370,14 +370,26 @@ const DashboardScreen: React.FC = () => {
         onAcceptRoute={handleAcceptRoute}
       />
 
-      <OrderDetailsModal
+      <FlatOrderDetailsModal
         visible={showOrderDetailsModal}
         order={selectedOrder}
         onClose={handleCloseOrderDetails}
         onStatusUpdate={handleOrderDetailsAccept}
+        onAccept={async (order) => {
+          handleCloseOrderDetails();
+          await handleAcceptOrder(order.id);
+        }}
+        onDecline={async (order) => {
+          handleCloseOrderDetails();
+          await handleDeclineOrder(order.id);
+        }}
         onNavigate={handleOrderDetailsNavigate}
+        onCall={(phone) => {
+          // Handle phone call
+          console.log('Call:', phone);
+        }}
         showStatusButton={true}
-        readonly={false}
+        readonly={!activeOrders?.some(o => o.id === selectedOrder?.id)}
         title="Delivery Details"
       />
 

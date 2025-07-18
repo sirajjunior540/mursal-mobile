@@ -100,17 +100,42 @@ export const FlatActiveDeliveriesCard: React.FC<ActiveDeliveriesCardProps> = ({
     );
   };
 
-  const getActiveOrdersCount = () => {
+  const getActiveOrdersSummary = () => {
     const inTransitCount = orders.filter(o => o.status === 'in_transit').length;
     const pickedUpCount = orders.filter(o => o.status === 'picked_up').length;
     const acceptedCount = orders.filter(o => o.status === 'accepted' || o.status === 'assigned').length;
     
-    const statusCounts = [];
-    if (inTransitCount > 0) statusCounts.push(`${inTransitCount} in transit`);
-    if (pickedUpCount > 0) statusCounts.push(`${pickedUpCount} picked up`);
-    if (acceptedCount > 0) statusCounts.push(`${acceptedCount} accepted`);
+    // Calculate total value
+    const totalValue = orders.reduce((sum, order) => sum + (order.total_amount || 0), 0);
     
-    return statusCounts.length > 0 ? statusCounts.join(', ') : `${orders.length} active`;
+    // Get next delivery location
+    const nextDelivery = orders.find(o => o.status === 'in_transit' || o.status === 'picked_up');
+    const nextLocation = nextDelivery ? 
+      (nextDelivery.delivery_address?.split(',')[0] || 'Unknown location') : 
+      null;
+    
+    // Build status summary
+    const statusParts = [];
+    if (inTransitCount > 0) statusParts.push(`${inTransitCount} in transit`);
+    if (pickedUpCount > 0) statusParts.push(`${pickedUpCount} picked up`);
+    if (acceptedCount > 0) statusParts.push(`${acceptedCount} accepted`);
+    
+    const statusSummary = statusParts.length > 0 ? statusParts.join(', ') : `${orders.length} active`;
+    
+    // Build complete summary
+    const summaryParts = [statusSummary];
+    
+    // Add total value if meaningful
+    if (totalValue > 0) {
+      summaryParts.push(`$${totalValue.toFixed(2)} total`);
+    }
+    
+    // Add next location if available
+    if (nextLocation && orders.length <= 3) {
+      summaryParts.push(`Next: ${nextLocation}`);
+    }
+    
+    return summaryParts.join(' • ');
   };
 
   return (
@@ -122,7 +147,7 @@ export const FlatActiveDeliveriesCard: React.FC<ActiveDeliveriesCardProps> = ({
       onToggle={onToggle}
       summaryText={
         orders.length > 0 
-          ? getActiveOrdersCount()
+          ? getActiveOrdersSummary()
           : 'No active deliveries'
       }
     >
