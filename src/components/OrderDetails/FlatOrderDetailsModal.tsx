@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Modal, View, ScrollView, TouchableOpacity, Text } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Order } from '../../types';
 import { flatModalStyles } from '../../design/orderDetails/flatModalStyles';
@@ -76,7 +77,28 @@ export const FlatOrderDetailsModal: React.FC<FlatOrderDetailsModalProps> = ({
       onRequestClose={onClose}
       presentationStyle="fullScreen"
     >
-      <View style={flatModalStyles.modalOverlay}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: flatColors.backgrounds.primary }}>
+        {/* Header - Fixed at top */}
+        <FlatOrderHeader
+          order={currentOrder}
+          onClose={onClose}
+          title={
+            isShowingBatchList ? 'Batch Orders' :
+            selectedOrder ? 'Order Details' :
+            isBatchView ? 'Batch Details' :
+            'Order Details'
+          }
+          isBatchView={isShowingBatchList}
+          batchType={batchType}
+          orderCount={batchOrders.length}
+          onMarkAsFailed={
+            currentOrder && onStatusUpdate && !readonly && 
+            (currentOrder.status === 'picked_up' || currentOrder.status === 'in_transit')
+              ? () => onStatusUpdate(currentOrder.id, 'failed')
+              : undefined
+          }
+        />
+
         {/* Back button for individual order view in batch */}
         {selectedOrder && (
           <TouchableOpacity 
@@ -90,30 +112,16 @@ export const FlatOrderDetailsModal: React.FC<FlatOrderDetailsModalProps> = ({
 
         <ScrollView 
           style={{ flex: 1 }}
-          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ 
+            minHeight: '100%',
+            paddingBottom: 100,
+          }}
+          showsVerticalScrollIndicator={true}
           bounces={true}
-          contentContainerStyle={flatModalStyles.scrollViewContent}
+          scrollEnabled={true}
+          nestedScrollEnabled={true}
+          keyboardShouldPersistTaps="handled"
         >
-            {/* Header */}
-            <FlatOrderHeader
-              order={currentOrder}
-              onClose={onClose}
-              title={
-                isShowingBatchList ? 'Batch Orders' :
-                selectedOrder ? 'Order Details' :
-                isBatchView ? 'Batch Details' :
-                'Order Details'
-              }
-              isBatchView={isShowingBatchList}
-              batchType={batchType}
-              orderCount={batchOrders.length}
-              onMarkAsFailed={
-                currentOrder && onStatusUpdate && !readonly && 
-                (currentOrder.status === 'picked_up' || currentOrder.status === 'in_transit')
-                  ? () => onStatusUpdate(currentOrder.id, 'failed')
-                  : undefined
-              }
-            />
 
             {/* Batch Orders List */}
             {isShowingBatchList && (
@@ -155,7 +163,7 @@ export const FlatOrderDetailsModal: React.FC<FlatOrderDetailsModalProps> = ({
               </>
             )}
         </ScrollView>
-      </View>
+      </SafeAreaView>
     </Modal>
   );
 };

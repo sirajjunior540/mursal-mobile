@@ -123,7 +123,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    ...premiumShadows.soft,
   },
   pulseRing: {
     position: 'absolute',
@@ -178,7 +177,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.3)',
-    ...premiumShadows.soft,
   },
   
   // Offline Styles

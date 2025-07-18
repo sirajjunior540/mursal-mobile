@@ -1,7 +1,6 @@
-export { OrderHeader } from './OrderHeader';
-export { OrderInfoSection } from './OrderInfoSection';
-export { SpecialHandlingBadges } from './SpecialHandlingBadges';
-export { BatchOrdersList } from './BatchOrdersList';
-export { OrderActions } from './OrderActions';
-export { MapSection } from './MapSection';
+export { FlatOrderHeader } from './FlatOrderHeader';
+export { FlatOrderInfoSection } from './FlatOrderInfoSection';
+export { FlatSpecialHandlingBadges } from './FlatSpecialHandlingBadges';
+export { FlatOrderActions } from './FlatOrderActions';
+export { FlatOrderDetailsModal } from './FlatOrderDetailsModal';
 export { SafeMapView } from './SafeMapView';

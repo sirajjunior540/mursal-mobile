@@ -15,6 +15,24 @@ export interface StatsData {
   rating: number;
   todayEarnings: number;
   averageDeliveryTime: number | null;
+  trends?: {
+    totalDeliveries?: {
+      percentage: number;
+      direction: 'up' | 'down' | 'neutral';
+    };
+    todayEarnings?: {
+      percentage: number;
+      direction: 'up' | 'down' | 'neutral';
+    };
+    averageDeliveryTime?: {
+      percentage: number;
+      direction: 'up' | 'down' | 'neutral';
+    };
+    rating?: {
+      percentage: number;
+      direction: 'up' | 'down' | 'neutral';
+    };
+  };
 }
 
 export interface StatsCardsProps {

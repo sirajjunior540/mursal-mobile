@@ -58,6 +58,11 @@ export const FlatStatsCards: React.FC<StatsCardsProps> = ({ stats }) => {
   const formatCurrency = (amount: number) => `$${amount.toFixed(2)}`;
   const formatTime = (minutes: number | null) => minutes ? `${minutes}m` : 'N/A';
   const formatRating = (rating: number) => rating > 0 ? rating.toFixed(1) : '0.0';
+  const formatTrendValue = (percentage: number | undefined) => {
+    if (!percentage || percentage === 0) return undefined;
+    const sign = percentage > 0 ? '+' : '';
+    return `${sign}${percentage.toFixed(1)}%`;
+  };
 
   const cards = [
     {
@@ -67,7 +72,6 @@ export const FlatStatsCards: React.FC<StatsCardsProps> = ({ stats }) => {
       cardColor: flatColors.statsCards.deliveries.primary,
       iconBackground: 'rgba(255, 255, 255, 0.2)',
       trend: 'up' as const,
-      trendValue: '+12%',
     },
     {
       icon: 'checkmark-circle',
@@ -75,8 +79,8 @@ export const FlatStatsCards: React.FC<StatsCardsProps> = ({ stats }) => {
       label: 'Total Orders',
       cardColor: flatColors.statsCards.orders.primary,
       iconBackground: 'rgba(255, 255, 255, 0.2)',
-      trend: 'up' as const,
-      trendValue: '+5%',
+      trend: stats.trends?.totalDeliveries?.direction || 'stable',
+      trendValue: formatTrendValue(stats.trends?.totalDeliveries?.percentage),
     },
     {
       icon: 'star',
@@ -84,7 +88,8 @@ export const FlatStatsCards: React.FC<StatsCardsProps> = ({ stats }) => {
       label: 'Rating',
       cardColor: flatColors.statsCards.rating.primary,
       iconBackground: 'rgba(255, 255, 255, 0.2)',
-      trend: 'stable' as const,
+      trend: stats.trends?.rating?.direction || 'stable',
+      trendValue: formatTrendValue(stats.trends?.rating?.percentage),
     },
     {
       icon: 'wallet',
@@ -92,8 +97,8 @@ export const FlatStatsCards: React.FC<StatsCardsProps> = ({ stats }) => {
       label: "Today's Earnings",
       cardColor: flatColors.statsCards.earnings.primary,
       iconBackground: 'rgba(255, 255, 255, 0.2)',
-      trend: 'up' as const,
-      trendValue: '+8%',
+      trend: stats.trends?.todayEarnings?.direction || 'stable',
+      trendValue: formatTrendValue(stats.trends?.todayEarnings?.percentage),
     },
     {
       icon: 'time',
@@ -101,8 +106,8 @@ export const FlatStatsCards: React.FC<StatsCardsProps> = ({ stats }) => {
       label: 'Avg Time',
       cardColor: flatColors.statsCards.time.primary,
       iconBackground: 'rgba(255, 255, 255, 0.2)',
-      trend: 'down' as const,
-      trendValue: '-2m',
+      trend: stats.trends?.averageDeliveryTime?.direction || 'stable',
+      trendValue: formatTrendValue(stats.trends?.averageDeliveryTime?.percentage),
     },
   ];
 

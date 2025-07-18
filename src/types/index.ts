@@ -59,6 +59,14 @@ export interface Driver {
   lastLocationUpdate?: Date; // When location was last updated
 }
 
+export interface TrendData {
+  current: number;
+  previous: number;
+  percentage: number;
+  direction: 'up' | 'down' | 'neutral';
+  comparisonPeriod: string;
+}
+
 export interface DriverBalance {
   // Financial data
   cashOnHand: number;
@@ -95,6 +103,14 @@ export interface DriverBalance {
   period?: {
     start_date?: string;
     end_date?: string;
+  };
+  
+  // Trend data
+  trends?: {
+    totalDeliveries?: TrendData;
+    todayEarnings?: TrendData;
+    averageDeliveryTime?: TrendData;
+    rating?: TrendData;
   };
 }
 
@@ -169,6 +185,8 @@ export interface Order {
   delivery_fee?: number;
   tax?: number;
   total?: number;
+  total_amount?: number; // Backend field name for total
+  currency?: string; // Currency code (e.g., 'SAR', 'USD')
   estimated_delivery_time?: string;
   delivery_notes?: string;
   created_at?: Date;

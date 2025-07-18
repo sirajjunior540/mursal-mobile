@@ -35,6 +35,17 @@ export const flatModalStyles = StyleSheet.create({
     color: flatColors.accent.blue,
   },
   scrollViewContent: {
-    paddingBottom: 40,
+    flexGrow: 1,
+    paddingBottom: 100,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  safeArea: {
+    flex: 1,
+    backgroundColor: flatColors.backgrounds.primary,
+  },
+  modalContainer: {
+    flex: 1,
   },
 });

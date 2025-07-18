@@ -285,6 +285,7 @@ const DashboardScreen: React.FC = () => {
     rating: balance?.averageRating || driver?.rating || 0,
     todayEarnings: balance?.todayEarnings || 0,
     averageDeliveryTime: balance?.averageDeliveryTime || null,
+    trends: balance?.trends,
   };
 
   // Prepare performance data for PerformanceMetrics component
