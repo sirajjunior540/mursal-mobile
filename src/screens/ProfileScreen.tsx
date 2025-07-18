@@ -55,10 +55,11 @@ const ProfileItem: React.FC<ProfileItemProps> = ({ icon, label, value, onPress, 
 
 interface BalanceCardProps {
   balance: any;
+  onPress?: () => void;
 }
 
-const BalanceCard: React.FC<BalanceCardProps> = ({ balance }) => (
-  <View style={styles.balanceCard}>
+const BalanceCard: React.FC<BalanceCardProps> = ({ balance, onPress }) => (
+  <TouchableOpacity style={styles.balanceCard} onPress={onPress} activeOpacity={0.7}>
     <View style={styles.balanceHeader}>
       <View style={styles.balanceHeaderIcon}>
         <Ionicons name="wallet-outline" size={24} color="#3B82F6" />
@@ -101,7 +102,13 @@ const BalanceCard: React.FC<BalanceCardProps> = ({ balance }) => (
         <Text style={styles.balanceLoadingText}>Balance information not available</Text>
       </View>
     )}
-  </View>
+    
+    {/* Tap indicator */}
+    <View style={styles.balanceFooter}>
+      <Text style={styles.balanceFooterText}>Tap to view earnings details</Text>
+      <Ionicons name="chevron-forward" size={16} color="#6B7280" />
+    </View>
+  </TouchableOpacity>
 );
 
 type ProfileStackParamList = {
@@ -337,7 +344,10 @@ const ProfileScreen: React.FC = () => {
         {settings?.show_driver_balance && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Balance</Text>
-            <BalanceCard balance={balance} />
+            <BalanceCard 
+              balance={balance} 
+              onPress={() => navigation.navigate('History' as any, { tab: 'earnings' })}
+            />
           </View>
         )}
 
@@ -699,6 +709,21 @@ const styles = StyleSheet.create({
   balanceLoadingText: {
     color: '#6B7280',
     fontSize: 14,
+  },
+  balanceFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 12,
+    marginTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+    gap: 4,
+  },
+  balanceFooterText: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontWeight: '500',
   },
   logoutButton: {
     marginHorizontal: 24,

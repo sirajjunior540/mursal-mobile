@@ -693,48 +693,25 @@ export class ApiEndpoints {
   }
 
   async getOrderHistory(filter?: 'today' | 'week' | 'month' | 'all'): Promise<ApiResponse<Order[]>> {
-    
     try {
-      // Calculate date range based on filter
-      const now = new Date();
-      let startDate: string | undefined;
-      
-      switch (filter) {
-        case 'today':
-          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
-          break;
-        case 'week':
-          const weekAgo = new Date(now);
-          weekAgo.setDate(weekAgo.getDate() - 7);
-          startDate = weekAgo.toISOString();
-          break;
-        case 'month':
-          const monthAgo = new Date(now);
-          monthAgo.setMonth(monthAgo.getMonth() - 1);
-          startDate = monthAgo.toISOString();
-          break;
-        default:
-          // 'all' or undefined - no date filter
-          break;
-      }
-      
-      // Build query params
+      // Use the new dedicated order_history endpoint
       const params = new URLSearchParams();
-      if (startDate) {
-        params.append('start_date', startDate);
-        params.append('end_date', now.toISOString());
+      if (filter) {
+        params.append('filter', filter);
       }
-      params.append('status', 'delivered');
-      params.append('driver', 'me'); // Current driver's orders
       
-      const endpoint = `/api/v1/delivery/deliveries/by_driver/?${params.toString()}`;
-      const response = await this.client.get<BackendDelivery[]>(endpoint);
+      const endpoint = `/api/v1/delivery/deliveries/order_history/?${params.toString()}`;
+      const response = await this.client.get<{
+        orders: BackendDelivery[],
+        count: number,
+        filter: string,
+        driver_id: number
+      }>(endpoint);
       
       if (response.success && response.data) {
-        // Transform and filter to only delivered orders
-        const orders = (response.data || [])
+        // Transform orders from the new endpoint format
+        const orders = (response.data.orders || [])
           .map(ApiTransformers.transformOrder)
-          .filter(order => order.status === 'delivered')
           .sort((a, b) => {
             // Sort by delivery time, most recent first
             const dateA = a.delivery_time || a.updated_at || a.created_at;
@@ -742,11 +719,15 @@ export class ApiEndpoints {
             return dateB.getTime() - dateA.getTime();
           });
           
-        
         return {
           success: true,
           data: orders,
-          message: 'Order history fetched successfully'
+          message: `Found ${response.data.count} completed orders`,
+          metadata: {
+            count: response.data.count,
+            filter: response.data.filter,
+            driverId: response.data.driver_id
+          }
         };
       }
       
@@ -1055,6 +1036,68 @@ export class ApiEndpoints {
         success: false,
         data: [],
         error: error instanceof Error ? error.message : 'Failed to fetch transactions'
+      };
+    }
+  }
+
+  /**
+   * Get driver balance and performance metrics
+   */
+  async getDriverBalance(): Promise<ApiResponse<DriverBalance>> {
+    try {
+      const response = await this.client.get<Record<string, unknown>>('/api/v1/auth/drivers/balance/');
+      
+      if (response.success && response.data) {
+        const data = response.data as BackendTransactionResponse;
+        
+        const balance: DriverBalance = {
+          // Financial data
+          cashOnHand: data.cashOnHand || 0,
+          depositBalance: data.depositBalance || 0,
+          totalEarnings: data.totalEarnings || 0,
+          pendingEarnings: data.pendingPayouts || 0,
+          totalWithdrawals: data.totalWithdrawals || 0,
+          availableBalance: data.availableBalance || data.cashOnHand || 0,
+          pendingPayouts: data.pendingPayouts || 0,
+          todayEarnings: data.todayEarnings || 0,
+          weekEarnings: data.weekEarnings || 0,
+          monthEarnings: data.monthEarnings || 0,
+          
+          // Performance metrics (these need to be added to the backend API)
+          averageDeliveryTime: data.averageDeliveryTime,
+          availableOrders: data.availableOrders || 0,
+          completedOrders: data.completedOrders || 0,
+          todayCompletedOrders: data.todayCompletedOrders || 0,
+          totalDeliveries: data.totalDeliveries || 0,
+          successfulDeliveries: data.successfulDeliveries || 0,
+          successRate: data.successRate || 0,
+          averageRating: data.averageRating || 0,
+          
+          lastUpdated: new Date().toISOString(),
+          breakdown: {
+            today: data.todayEarnings || 0,
+            week: data.weekEarnings || 0,
+            month: data.monthEarnings || 0,
+            deliveryEarnings: data.totalEarnings || 0,
+            tips: data.totalTips || 0,
+            bonuses: data.totalBonuses || 0
+          }
+        };
+        
+        return {
+          success: true,
+          data: balance,
+          message: 'Driver balance fetched successfully'
+        };
+      }
+      
+      return response as ApiResponse<DriverBalance>;
+      
+    } catch (error) {
+      return {
+        success: false,
+        data: {} as DriverBalance,
+        error: error instanceof Error ? error.message : 'Failed to fetch driver balance'
       };
     }
   }
