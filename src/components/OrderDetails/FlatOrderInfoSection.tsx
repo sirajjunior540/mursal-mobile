@@ -138,7 +138,7 @@ export const FlatOrderInfoSection: React.FC<FlatOrderInfoSectionProps> = ({
             <View style={styles.infoContent}>
               <Text style={styles.infoLabel}>Order Total</Text>
               <Text style={styles.infoValue}>
-                {order.currency || 'SAR'} {order.total_amount?.toFixed(2) || '0.00'}
+                {order.currency || 'SAR'} {typeof order.total_amount === 'number' ? order.total_amount.toFixed(2) : '0.00'}
               </Text>
             </View>
           </View>
@@ -151,7 +151,7 @@ export const FlatOrderInfoSection: React.FC<FlatOrderInfoSectionProps> = ({
               <View style={styles.infoContent}>
                 <Text style={styles.infoLabel}>Delivery Fee</Text>
                 <Text style={styles.infoValue}>
-                  {order.currency || 'SAR'} {order.delivery_fee.toFixed(2)}
+                  {order.currency || 'SAR'} {typeof order.delivery_fee === 'number' ? order.delivery_fee.toFixed(2) : '0.00'}
                 </Text>
               </View>
             </View>
