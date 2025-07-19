@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
-import { Modal, View, ScrollView, TouchableOpacity, Text } from 'react-native';
+import { Modal, View, ScrollView, TouchableOpacity, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Order } from '../../types';
 import { flatModalStyles } from '../../design/orderDetails/flatModalStyles';
+import { flatColors } from '../../design/dashboard/flatColors';
+import { premiumTypography } from '../../design/dashboard/premiumTypography';
 import { FlatOrderHeader } from './FlatOrderHeader';
 import { FlatSpecialHandlingBadges } from './FlatSpecialHandlingBadges';
 import { FlatOrderInfoSection } from './FlatOrderInfoSection';
-import { FlatOrderActions } from './FlatOrderActions';
+import { OrderActionsSimple } from './OrderActionsSimple';
 
 interface FlatOrderDetailsModalProps {
   visible: boolean;
@@ -147,7 +149,7 @@ export const FlatOrderDetailsModal: React.FC<FlatOrderDetailsModalProps> = ({
                 />
 
                 {/* Order Actions */}
-                <FlatOrderActions
+                <OrderActionsSimple
                   order={currentOrder}
                   showStatusButton={showStatusButton}
                   readonly={readonly}
@@ -234,10 +236,6 @@ const BatchOrdersList: React.FC<BatchOrdersListProps> = ({
     </View>
   );
 };
-
-import { StyleSheet } from 'react-native';
-import { flatColors } from '../../design/dashboard/flatColors';
-import { premiumTypography } from '../../design/dashboard/premiumTypography';
 
 const batchListStyles = StyleSheet.create({
   container: {

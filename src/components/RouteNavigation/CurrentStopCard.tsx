@@ -1,10 +1,15 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Modal, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Modal, Alert, ActivityIndicator } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { CurrentStopCardProps } from '../../types/route.types';
 import { flatColors } from '../../design/dashboard/flatColors';
 import { premiumTypography } from '../../design/dashboard/premiumTypography';
 import { premiumShadows } from '../../design/dashboard/premiumShadows';
+import { InAppCamera } from '../Photo';
+import { photoService } from '../../services/photoService';
+import { SecureStorage } from '../../utils';
+import { useTranslation } from 'react-i18next';
+import { DeliveryScenarioModal, DeliveryScenario } from './DeliveryScenarioModal';
 
 export const CurrentStopCard: React.FC<CurrentStopCardProps> = ({
   routePoint,
@@ -14,7 +19,16 @@ export const CurrentStopCard: React.FC<CurrentStopCardProps> = ({
   onViewDetails,
   isLoading = false,
 }) => {
+  const { t } = useTranslation();
   const [showInfoModal, setShowInfoModal] = useState(false);
+  const [showPhotoModal, setShowPhotoModal] = useState(false);
+  const [showInAppCamera, setShowInAppCamera] = useState(false);
+  const [showScenarioModal, setShowScenarioModal] = useState(false);
+  const [pendingStatusUpdate, setPendingStatusUpdate] = useState<{ status: string; label: string } | null>(null);
+  const [selectedScenario, setSelectedScenario] = useState<DeliveryScenario | null>(null);
+  const [recipientInfo, setRecipientInfo] = useState<{ name?: string; relation?: string; notes?: string } | null>(null);
+  const [isCheckingPhotoRequirements, setIsCheckingPhotoRequirements] = useState(false);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const { order, type, address, sequenceNumber, batchOrders } = routePoint;
   
   const getCustomerPhone = () => {
@@ -51,7 +65,129 @@ export const CurrentStopCard: React.FC<CurrentStopCardProps> = ({
     }
   };
 
-  const handleStatusUpdate = (status: string, label: string) => {
+  // Check if photo is required for delivery
+  const checkPhotoRequirement = async (status: string) => {
+    if (status !== 'delivered') return false;
+    
+    try {
+      setIsCheckingPhotoRequirements(true);
+      
+      // Debug: Check if token exists
+      const token = await SecureStorage.getAuthToken();
+      console.log('Auth token exists:', !!token);
+      
+      const requirements = await photoService.checkPhotoRequirements(order.id);
+      return requirements.is_photo_required;
+    } catch (error) {
+      console.error('Failed to check photo requirements:', error);
+      // For now, return true to always require photo while we fix the auth issue
+      return true;
+    } finally {
+      setIsCheckingPhotoRequirements(false);
+    }
+  };
+
+  const handleInAppPhotoTaken = async (photo: { uri: string; base64?: string }) => {
+    console.log('In-app photo taken:', photo);
+    setShowInAppCamera(false);
+    
+    try {
+      setIsUploadingPhoto(true);
+      
+      // Check auth token before upload
+      const token = await SecureStorage.getAuthToken();
+      if (!token) {
+        Alert.alert('Error', 'Please login again to continue');
+        return;
+      }
+      
+      console.log('Uploading photo with data:', {
+        deliveryId: order.id,
+        photoUri: photo.uri,
+        hasBase64: !!photo.base64,
+      });
+      
+      // Determine photo reason based on scenario
+      let photoReason = 'proof_of_delivery';
+      if (selectedScenario === 'left_at_door') {
+        photoReason = 'left_at_door';
+      } else if (selectedScenario === 'delivered_to_neighbor' || selectedScenario === 'delivered_to_security' || selectedScenario === 'delivered_to_reception') {
+        photoReason = 'alternate_recipient';
+      }
+      
+      // Upload the photo
+      const uploadedPhoto = await photoService.uploadDeliveryPhoto({
+        deliveryId: order.id,
+        photo: {
+          uri: photo.uri,
+          type: 'image/jpeg',
+          fileName: `delivery_photo_${Date.now()}.jpg`,
+          fileSize: 0,
+          base64: photo.base64,
+          reason: photoReason,
+          notes: recipientInfo?.notes || '',
+          alternateRecipientName: recipientInfo?.name,
+          alternateRecipientRelation: recipientInfo?.relation,
+        },
+      });
+
+      // Close photo modal
+      setShowPhotoModal(false);
+
+      // Now update the status with the photo ID
+      if (pendingStatusUpdate && onStatusUpdate) {
+        onStatusUpdate(order.id, pendingStatusUpdate.status, uploadedPhoto.id);
+        setPendingStatusUpdate(null);
+      }
+    } catch (error) {
+      console.error('Photo upload failed:', error);
+      Alert.alert(
+        t('error'),
+        error.message || t('failedToUploadPhoto'),
+        [
+          {
+            text: t('retry'),
+            onPress: () => setShowInAppCamera(true),
+          },
+          {
+            text: t('cancel'),
+            style: 'cancel',
+          },
+        ]
+      );
+    } finally {
+      setIsUploadingPhoto(false);
+    }
+  };
+
+  const handleScenarioSelected = (scenario: DeliveryScenario, recipientName?: string, recipientRelation?: string, notes?: string) => {
+    setSelectedScenario(scenario);
+    setRecipientInfo({ name: recipientName, relation: recipientRelation, notes });
+    setShowScenarioModal(false);
+    
+    // Check if photo is required for this scenario
+    const scenarioRequiresPhoto = scenario !== 'handed_to_customer';
+    
+    if (scenarioRequiresPhoto) {
+      setShowPhotoModal(true);
+    } else {
+      // Direct delivery to customer, no photo needed
+      if (pendingStatusUpdate) {
+        onStatusUpdate(order.id, pendingStatusUpdate.status);
+        setPendingStatusUpdate(null);
+      }
+    }
+  };
+
+  const handleStatusUpdate = async (status: string, label: string) => {
+    // For delivered status, show scenario selection first
+    if (status === 'delivered') {
+      setPendingStatusUpdate({ status, label });
+      setShowScenarioModal(true);
+      return;
+    }
+
+    // For other statuses, proceed with normal confirmation
     Alert.alert(
       'Confirm Action',
       `Are you sure you want to ${label.toLowerCase()}?`,
@@ -222,7 +358,7 @@ export const CurrentStopCard: React.FC<CurrentStopCardProps> = ({
                   statusOptions[0].status === 'failed' && styles.failedButton,
                 ]}
                 onPress={() => handleStatusUpdate(statusOptions[0].status, statusOptions[0].label)}
-                disabled={isLoading}
+                disabled={isLoading || isCheckingPhotoRequirements || isUploadingPhoto}
               >
                 <Ionicons 
                   name={statusOptions[0].icon} 
@@ -263,7 +399,7 @@ export const CurrentStopCard: React.FC<CurrentStopCardProps> = ({
                   option.status === 'delivered' && styles.deliveredButton,
                 ]}
                 onPress={() => handleStatusUpdate(option.status, option.label)}
-                disabled={isLoading}
+                disabled={isLoading || isCheckingPhotoRequirements || isUploadingPhoto}
               >
                 <Ionicons 
                   name={option.icon} 
@@ -348,6 +484,82 @@ export const CurrentStopCard: React.FC<CurrentStopCardProps> = ({
           </View>
         </View>
       </Modal>
+
+      {/* Delivery Scenario Modal */}
+      <DeliveryScenarioModal
+        isVisible={showScenarioModal}
+        onClose={() => {
+          setShowScenarioModal(false);
+          setPendingStatusUpdate(null);
+        }}
+        onScenarioSelected={handleScenarioSelected}
+      />
+
+      {/* Photo Modal - Improved Design */}
+      <Modal
+        visible={showPhotoModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowPhotoModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, styles.photoModalContent]}>
+            {/* Header with Icon */}
+            <View style={styles.photoModalHeader}>
+              <View style={styles.photoModalIcon}>
+                <Ionicons name="camera" size={32} color={flatColors.accent.blue} />
+              </View>
+            </View>
+            
+            <Text style={styles.photoModalTitle}>Photo Required</Text>
+            <Text style={styles.photoModalText}>
+              {selectedScenario === 'left_at_door' && 'Take a photo showing where you left the package'}
+              {(selectedScenario === 'delivered_to_neighbor' || selectedScenario === 'delivered_to_security' || selectedScenario === 'delivered_to_reception') && 'Take a photo of the package with the recipient'}
+              {selectedScenario === 'other' && 'Take a photo as proof of delivery'}
+              {!selectedScenario && 'Please provide a photo as proof of delivery'}
+            </Text>
+            
+            <View style={styles.photoModalActions}>
+              <TouchableOpacity 
+                style={styles.photoModalButton} 
+                onPress={() => setShowInAppCamera(true)}
+                disabled={isUploadingPhoto}
+              >
+                {isUploadingPhoto ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Ionicons name="camera-outline" size={24} color="#FFFFFF" />
+                    <Text style={styles.photoModalButtonText}>Take Photo</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.photoModalCancelButton} 
+                onPress={() => {
+                  setShowPhotoModal(false);
+                  setPendingStatusUpdate(null);
+                  setSelectedScenario(null);
+                  setRecipientInfo(null);
+                }}
+                disabled={isUploadingPhoto}
+              >
+                <Text style={styles.photoModalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* In-App Camera Modal */}
+      <InAppCamera
+        isVisible={showInAppCamera}
+        onClose={() => setShowInAppCamera(false)}
+        onPhotoTaken={handleInAppPhotoTaken}
+        title="Delivery Photo"
+        instruction="Take a clear photo of the delivered package"
+      />
     </View>
   );
 };
@@ -760,5 +972,104 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     lineHeight: premiumTypography.callout.lineHeight,
     color: '#FFFFFF',
+  },
+  modalText: {
+    fontSize: 16,
+    color: flatColors.neutral[600],
+    textAlign: 'center',
+    marginBottom: 24,
+    paddingHorizontal: 20,
+  },
+  photoButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: flatColors.accent.blue,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    gap: 8,
+    marginHorizontal: 20,
+    marginBottom: 12,
+  },
+  photoButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  cancelButton: {
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    marginBottom: 20,
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: flatColors.neutral[600],
+  },
+  
+  // Improved Photo Modal Styles
+  photoModalContent: {
+    paddingTop: 32,
+    paddingBottom: 24,
+    alignItems: 'center',
+  },
+  photoModalHeader: {
+    marginBottom: 20,
+  },
+  photoModalIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: flatColors.cards.blue.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  photoModalTitle: {
+    fontSize: premiumTypography.headline.medium.fontSize,
+    fontWeight: '700',
+    lineHeight: premiumTypography.headline.medium.lineHeight,
+    color: flatColors.neutral[800],
+    marginBottom: 8,
+  },
+  photoModalText: {
+    fontSize: premiumTypography.body.fontSize,
+    fontWeight: premiumTypography.body.fontWeight,
+    lineHeight: premiumTypography.body.lineHeight,
+    color: flatColors.neutral[600],
+    textAlign: 'center',
+    paddingHorizontal: 40,
+    marginBottom: 32,
+  },
+  photoModalActions: {
+    width: '100%',
+    paddingHorizontal: 24,
+    gap: 12,
+  },
+  photoModalButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: flatColors.accent.blue,
+    paddingVertical: 16,
+    borderRadius: 12,
+    gap: 8,
+    ...premiumShadows.small,
+  },
+  photoModalButtonText: {
+    fontSize: premiumTypography.callout.fontSize,
+    fontWeight: '600',
+    lineHeight: premiumTypography.callout.lineHeight,
+    color: '#FFFFFF',
+  },
+  photoModalCancelButton: {
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  photoModalCancelText: {
+    fontSize: premiumTypography.callout.fontSize,
+    fontWeight: '600',
+    lineHeight: premiumTypography.callout.lineHeight,
+    color: flatColors.neutral[600],
   },
 });

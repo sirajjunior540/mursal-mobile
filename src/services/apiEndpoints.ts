@@ -742,7 +742,7 @@ export class ApiEndpoints {
     }
   }
 
-  async updateOrderStatus(orderId: string, status: OrderStatus): Promise<ApiResponse<void>> {
+  async updateOrderStatus(orderId: string, status: OrderStatus, photoId?: string): Promise<ApiResponse<void>> {
     // Map our frontend status to backend expected values
     const statusMap: Record<OrderStatus, string> = {
       'pending': 'pending',
@@ -762,6 +762,11 @@ export class ApiEndpoints {
     let locationData: SmartStatusUpdateData = {
       status: statusMap[status] || status
     };
+    
+    // Add photo ID if provided (for delivered status with photo)
+    if (photoId) {
+      (locationData as any).photo_id = photoId;
+    }
 
     try {
       // Try to get current location from locationService

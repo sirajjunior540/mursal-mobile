@@ -48,6 +48,7 @@ import { Order } from './src/types';
 import { theme } from './src/shared/styles/theme';
 import { locationService } from './src/services/locationService';
 import { requestNotificationPermissions } from './src/utils/permissions';
+import { soundService } from './src/services/soundService';
 import { notificationService } from './src/services/notificationService';
 import { haptics } from './src/utils/haptics';
 import { ENV, getTenantHost } from './src/config/environment';
@@ -349,10 +350,30 @@ const AppNavigator = () => {
 function App() {
   const isDarkMode = useColorScheme() === 'dark';
   
+  // Handle app state changes
+  useEffect(() => {
+    const handleAppStateChange = (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'active') {
+        // Play sound when app comes to foreground
+        soundService.playOrderNotification();
+        logger.info('🔊 App became active - playing startup sound');
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+  
   // Initialize app permissions and services
   useEffect(() => {
     const initializeApp = async () => {
       logger.info('🚀 Initializing Mursal Driver App');
+      
+      // Play startup sound
+      soundService.playOrderNotification();
       
       try {
         // Request location permissions

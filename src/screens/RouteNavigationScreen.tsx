@@ -17,7 +17,7 @@ import {
   UpcomingStops,
   RouteMap,
 } from '../components/RouteNavigation';
-import { FlatOrderDetailsModal } from '../components/OrderDetails/FlatOrderDetailsModal';
+import { FlatOrderDetailsModal } from '../components/OrderDetails';
 import FloatingQRButton from '../components/FloatingQRButton';
 
 import { useOrders } from '../features/orders/context/OrderProvider';
@@ -349,10 +349,10 @@ const RouteNavigationScreen: React.FC = () => {
     }
   }, []);
 
-  const handleStatusUpdate = useCallback(async (orderId: string, newStatus: string) => {
+  const handleStatusUpdate = useCallback(async (orderId: string, newStatus: string, photoId?: string) => {
     setIsUpdatingStatus(true);
     try {
-      await updateOrderStatus(orderId, newStatus);
+      await updateOrderStatus(orderId, newStatus, photoId);
       await handleRefresh();
       Alert.alert('Success', 'Order status updated successfully');
     } catch (error) {

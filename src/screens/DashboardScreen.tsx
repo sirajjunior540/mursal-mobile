@@ -14,7 +14,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import Haptics from 'react-native-haptic-feedback';
 
 import IncomingOrderModal from '../components/IncomingOrderModal';
-import { FlatOrderDetailsModal } from '../components/OrderDetails/FlatOrderDetailsModal';
+import { FlatOrderDetailsModal } from '../components/OrderDetails';
 import FloatingQRButton from '../components/FloatingQRButton';
 import {
   FlatDashboardHeader,

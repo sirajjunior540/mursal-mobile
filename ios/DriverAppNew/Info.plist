@@ -32,7 +32,7 @@
 		<true/>
 		<key>NSExceptionDomains</key>
 		<dict>
-			<key>192.168.1.170</key>
+			<key>192.168.1.50</key>
 			<dict>
 				<key>NSExceptionAllowsInsecureHTTPLoads</key>
 				<true/>
@@ -42,7 +42,7 @@
 				<key>NSExceptionAllowsInsecureHTTPLoads</key>
 				<true/>
 			</dict>
-			<key>sirajjunior.192.168.1.170</key>
+			<key>sirajjunior.192.168.1.50</key>
 			<dict>
 				<key>NSExceptionAllowsInsecureHTTPLoads</key>
 				<true/>
@@ -59,7 +59,9 @@
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Mursal Driver needs your location to show your position on the map and provide accurate delivery tracking.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Mursal Driver needs camera access to scan QR codes for order verification and package tracking.</string>
+	<string>Mursal Driver needs camera access to scan QR codes for order verification, package tracking, and capture delivery photos as proof of delivery.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Mursal Driver needs access to your photo library to select delivery photos.</string>
 	<key>RCTNewArchEnabled</key>
 	<true/>
 	<key>UIBackgroundModes</key>

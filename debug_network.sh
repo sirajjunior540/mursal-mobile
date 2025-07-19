@@ -4,8 +4,8 @@
 echo "🔧 Network Debug Tool for DriverApp Login"
 echo "=================================================="
 
-API_BASE_URL="http://192.168.1.170:8000"
-API_HOST="sirajjunior.192.168.1.170"
+API_BASE_URL="http://192.168.1.50:8000"
+API_HOST="sirajjunior.192.168.1.50"
 TENANT_ID="sirajjunior"
 
 echo "📍 Configuration:"
@@ -19,15 +19,15 @@ echo "------------------------------"
 
 # Test 1: Server reachability
 echo "🧪 Testing server reachability..."
-if ping -c 1 192.168.1.170 &> /dev/null; then
-    echo "  ✅ Server 192.168.1.170 is reachable"
+if ping -c 1 192.168.1.50 &> /dev/null; then
+    echo "  ✅ Server 192.168.1.50 is reachable"
 else
-    echo "  ❌ Server 192.168.1.170 is NOT reachable"
+    echo "  ❌ Server 192.168.1.50 is NOT reachable"
 fi
 
 # Test 2: Port connectivity
 echo "🧪 Testing port 8000 connectivity..."
-if nc -z 192.168.1.170 8000 2>/dev/null; then
+if nc -z 192.168.1.50 8000 2>/dev/null; then
     echo "  ✅ Port 8000 is open"
 else
     echo "  ❌ Port 8000 is closed or filtered"
@@ -137,14 +137,14 @@ echo ""
 echo "✅ Network tests completed!"
 echo ""
 echo "💡 Troubleshooting Tips:"
-echo "   • Ensure the Django server is running on 192.168.1.170:8000"
+echo "   • Ensure the Django server is running on 192.168.1.50:8000"
 echo "   • Check if tenant 'sirajjunior' is configured in Django"
 echo "   • Verify CORS and ALLOWED_HOSTS settings in Django"
-echo "   • Test from a browser: http://192.168.1.170:8000/api/v1/auth/"
+echo "   • Test from a browser: http://192.168.1.50:8000/api/v1/auth/"
 echo "   • Check firewall settings on the server"
 echo "   • Make sure you're on the same network as the server"
 echo ""
 echo "📝 Django settings to check:"
-echo "   ALLOWED_HOSTS = ['192.168.1.170', 'sirajjunior.192.168.1.170', '*']"
+echo "   ALLOWED_HOSTS = ['192.168.1.50', 'sirajjunior.192.168.1.50', '*']"
 echo "   CORS_ALLOW_ALL_ORIGINS = True (for development)"
 echo "   Django tenant middleware properly configured"

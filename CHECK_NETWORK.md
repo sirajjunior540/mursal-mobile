@@ -1,14 +1,14 @@
 # Network Connection Checklist for Physical Phone
 
 ## 1. Verify Both Devices on Same Network
-- Your computer IP: 192.168.1.170
+- Your computer IP: 192.168.1.50
 - Make sure your phone is connected to the same Wi-Fi network
 - Check phone's Wi-Fi settings to confirm
 
 ## 2. Test Connection from Phone
 Open your phone's browser and navigate to:
 ```
-http://192.168.1.170:8000/whoami/
+http://192.168.1.50:8000/whoami/
 ```
 
 You should see a response like "mursal multi-tenant ecommerce delivery platform"

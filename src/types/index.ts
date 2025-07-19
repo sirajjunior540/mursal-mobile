@@ -1,5 +1,21 @@
 // Core Types for DriverApp
 
+// Delivery Photo Reasons
+export enum DeliveryPhotoReason {
+  NO_SIGNATURE = 'no_signature',
+  ALTERNATE_RECIPIENT = 'alternate_recipient',
+  LEFT_AT_DOOR = 'left_at_door',
+  DELIVERY_ISSUE = 'delivery_issue',
+  CUSTOMER_REFUSED = 'customer_refused',
+  COMPANY_POLICY = 'company_policy',
+  CUSTOMER_REQUEST = 'customer_request',
+  PROOF_OF_DELIVERY = 'proof_of_delivery',
+  DAMAGED_PACKAGE = 'damaged_package',
+  INCOMPLETE_ORDER = 'incomplete_order',
+  WRONG_ADDRESS = 'wrong_address',
+  OTHER = 'other',
+}
+
 export interface Tenant {
   id: string;
   name: string;
@@ -325,7 +341,7 @@ export interface OrderContextType {
   refreshOrders: () => Promise<void>;
   acceptOrder: (orderId: string) => Promise<boolean>;
   declineOrder: (orderId: string) => Promise<void>;
-  updateOrderStatus: (orderId: string, status: OrderStatus) => Promise<boolean>;
+  updateOrderStatus: (orderId: string, status: OrderStatus, photoId?: string) => Promise<boolean>;
   getOrderHistory: (filter?: 'today' | 'week' | 'month') => Promise<void>;
   getOrderDetails: (orderId: string) => Promise<Order | null>;
   getDriverOrders: () => Promise<void>;

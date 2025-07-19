@@ -59,7 +59,7 @@ export interface RouteMapProps {
 export interface CurrentStopCardProps {
   routePoint: RoutePoint;
   onNavigate: (order: Order) => void;
-  onStatusUpdate: (orderId: string, status: string) => void;
+  onStatusUpdate: (orderId: string, status: string, photoId?: string) => void;
   onCallCustomer: (phone: string) => void;
   onViewDetails: (order: Order) => void;
   isLoading?: boolean;

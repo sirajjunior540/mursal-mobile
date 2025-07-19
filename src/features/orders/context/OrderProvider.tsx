@@ -256,9 +256,9 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
     }
   }, [orders]);
 
-  const updateOrderStatus = useCallback(async (deliveryId: string, status: OrderStatus): Promise<boolean> => {
+  const updateOrderStatus = useCallback(async (deliveryId: string, status: OrderStatus, photoId?: string): Promise<boolean> => {
     try {
-      const response = await apiService.updateOrderStatus(deliveryId, status);
+      const response = await apiService.updateOrderStatus(deliveryId, status, photoId);
       if (response.success) {
         // Update order in state (using delivery ID since order.id contains delivery ID)
         setOrders(prev => prev.map(o => 

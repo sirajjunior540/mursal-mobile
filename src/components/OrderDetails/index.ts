@@ -4,3 +4,6 @@ export { FlatSpecialHandlingBadges } from './FlatSpecialHandlingBadges';
 export { FlatOrderActions } from './FlatOrderActions';
 export { FlatOrderDetailsModal } from './FlatOrderDetailsModal';
 export { SafeMapView } from './SafeMapView';
+export { OrderActionsWithPhoto } from './OrderActionsWithPhoto';
+export { OrderPhotosSection } from './OrderPhotosSection';
+export { OrderActionsSimple } from './OrderActionsSimple';
