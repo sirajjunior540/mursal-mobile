@@ -17,7 +17,9 @@ import { /* COLORS, FONTS */ } from '../constants';
 import { haptics } from '../utils/haptics';
 import { soundService } from '../services/soundService';
 import { notificationService } from '../services/notificationService';
-import { Design } from '../constants/designSystem';
+import { flatColors } from '../design/dashboard/flatColors';
+import { premiumTypography } from '../design/dashboard/premiumTypography';
+import { premiumShadows } from '../design/dashboard/premiumShadows';
 
 const { /* width: SCREEN_WIDTH, */ height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -392,7 +394,7 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
                 <Ionicons 
                   name={isBatchOrder ? "map" : "cube"} 
                   size={20} 
-                  color={isBatchOrder ? "#FF6B6B" : Design.colors.primary} 
+                  color={isBatchOrder ? flatColors.accent.red : flatColors.accent.blue} 
                 />
               </View>
               <View style={styles.timerInfo}>
@@ -454,7 +456,7 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
                 <Ionicons 
                   name={showRouteDetails ? 'chevron-up' : 'chevron-down'} 
                   size={16} 
-                  color={Design.colors.primary} 
+                  color={flatColors.accent.blue} 
                 />
               </TouchableOpacity>
             )}
@@ -493,7 +495,7 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
                 <View style={[styles.specialHandlingBadge, styles.codBadge]}>
                   <Ionicons name="cash" size={14} color="#fff" />
                   <Text style={styles.specialHandlingText}>
-                    COD ${order.cod_amount?.toFixed(2) || order.total?.toFixed(2) || '0.00'}
+                    COD ${Number(order.cod_amount || order.total || 0).toFixed(2)}
                   </Text>
                 </View>
               )}
@@ -523,7 +525,7 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
                 {/* Single Order or Single-Order Batch - Pickup Info */}
                 <View style={styles.locationSection}>
                   <View style={styles.locationIcon}>
-                    <Ionicons name="bag-outline" size={20} color={Design.colors.primary} />
+                    <Ionicons name="bag-outline" size={20} color={flatColors.accent.blue} />
                   </View>
                   <View style={styles.locationInfo}>
                     <Text style={styles.locationLabel}>PICKUP</Text>
@@ -536,7 +538,7 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
                 {/* Single Order or Single-Order Batch - Drop-off Info */}
                 <View style={styles.locationSection}>
                   <View style={styles.locationIcon}>
-                    <Ionicons name="home-outline" size={20} color={Design.colors.success} />
+                    <Ionicons name="home-outline" size={20} color={flatColors.accent.green} />
                   </View>
                   <View style={styles.locationInfo}>
                     <Text style={styles.locationLabel}>DELIVERY</Text>
@@ -552,19 +554,84 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
                 <View style={styles.routeSummaryContainer}>
                   <View style={styles.routeStats}>
                     <View style={styles.routeStat}>
-                      <Ionicons name="bag" size={16} color={Design.colors.primary} />
+                      <Ionicons name="bag" size={16} color={flatColors.accent.blue} />
                       <Text style={styles.routeStatText}>{totalPickupStops} Pickups</Text>
                     </View>
                     <View style={styles.routeStat}>
-                      <Ionicons name="home" size={16} color={Design.colors.success} />
+                      <Ionicons name="home" size={16} color={flatColors.accent.green} />
                       <Text style={styles.routeStatText}>{totalDeliveryStops} Deliveries</Text>
                     </View>
                     <View style={styles.routeStat}>
-                      <Ionicons name="receipt" size={16} color={Design.colors.warning} />
+                      <Ionicons name="receipt" size={16} color={flatColors.accent.orange} />
                       <Text style={styles.routeStatText}>{batchTotalOrders} Orders</Text>
                     </View>
                   </View>
                 </View>
+
+                {/* Batch Orders List */}
+                {batchProperties?.orders && batchProperties.orders.length > 0 && (
+                  <View style={styles.batchOrdersList}>
+                    <Text style={styles.batchOrdersTitle}>Orders in this batch:</Text>
+                    {batchProperties.orders.map((batchOrder, index) => (
+                      <View key={batchOrder.id || index} style={styles.batchOrderItem}>
+                        <View style={styles.batchOrderHeader}>
+                          <View style={styles.batchOrderNumber}>
+                            <Text style={styles.batchOrderNumberText}>
+                              #{batchOrder.order_number || `Order ${index + 1}`}
+                            </Text>
+                          </View>
+                          <View style={styles.batchOrderAmount}>
+                            <Text style={styles.batchOrderAmountText}>
+                              ${Number(batchOrder.total || 0).toFixed(2)}
+                            </Text>
+                          </View>
+                        </View>
+                        
+                        <View style={styles.batchOrderCustomer}>
+                          <Ionicons name="person" size={14} color="#666" />
+                          <Text style={styles.batchOrderCustomerText}>
+                            {batchOrder.customer_details?.name || 'Customer'}
+                          </Text>
+                        </View>
+                        
+                        <View style={styles.batchOrderAddress}>
+                          <Ionicons name="location" size={14} color="#666" />
+                          <Text style={styles.batchOrderAddressText} numberOfLines={1}>
+                            {batchOrder.delivery_address || 'Delivery address'}
+                          </Text>
+                        </View>
+                        
+                        {/* Special handling indicators for each order */}
+                        {(batchOrder.cash_on_delivery || batchOrder.requires_signature || batchOrder.special_handling) && (
+                          <View style={styles.batchOrderBadges}>
+                            {batchOrder.cash_on_delivery && (
+                              <View style={[styles.batchOrderBadge, styles.codBadge]}>
+                                <Ionicons name="cash" size={12} color="#fff" />
+                                <Text style={styles.batchOrderBadgeText}>COD</Text>
+                              </View>
+                            )}
+                            {batchOrder.requires_signature && (
+                              <View style={[styles.batchOrderBadge, styles.signatureBadge]}>
+                                <Ionicons name="create" size={12} color="#fff" />
+                                <Text style={styles.batchOrderBadgeText}>SIG</Text>
+                              </View>
+                            )}
+                            {batchOrder.special_handling && (
+                              <View style={[styles.batchOrderBadge, styles.specialBadge]}>
+                                <Ionicons name="warning" size={12} color="#fff" />
+                                <Text style={styles.batchOrderBadgeText}>
+                                  {typeof batchOrder.special_handling === 'object' 
+                                    ? (batchOrder.special_handling.fragile ? 'FRAGILE' : 'SPECIAL')
+                                    : 'SPECIAL'}
+                                </Text>
+                              </View>
+                            )}
+                          </View>
+                        )}
+                      </View>
+                    ))}
+                  </View>
+                )}
                 
                 {/* Route Details */}
                 {showRouteDetails && (
@@ -628,7 +695,7 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
               </View>
               {isBatchOrder && (
                 <View style={styles.metric}>
-                  <Ionicons name="layers-outline" size={16} color={Design.colors.success} />
+                  <Ionicons name="layers-outline" size={16} color={flatColors.accent.green} />
                   <Text style={[styles.metricText, styles.successMetricText]}>
                     {batchTotalOrders} orders
                   </Text>
@@ -636,7 +703,7 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
               )}
               {!isBatchOrder && order.delivery_fee && (
                 <View style={styles.metric}>
-                  <Ionicons name="car-outline" size={16} color={Design.colors.success} />
+                  <Ionicons name="car-outline" size={16} color={flatColors.accent.green} />
                   <Text style={[styles.metricText, styles.successMetricText]}>
                     +${parseFloat(String(order.delivery_fee)).toFixed(2)}
                   </Text>
@@ -689,29 +756,29 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: Design.spacing[5],
+    paddingHorizontal: 20,
   },
   container: {
-    backgroundColor: Design.colors.background,
-    borderRadius: Design.borderRadius.lg,
+    backgroundColor: flatColors.backgrounds.primary,
+    borderRadius: 16,
     width: '100%',
     maxWidth: 380,
     overflow: 'hidden',
-    ...Design.shadows.large,
+    ...premiumShadows.large,
     borderWidth: 1,
-    borderColor: Design.colors.border,
+    borderColor: flatColors.neutral[200],
   },
   timerHeader: {
-    backgroundColor: Design.colors.backgroundSecondary,
-    paddingVertical: Design.spacing[4],
-    paddingHorizontal: Design.spacing[5],
+    backgroundColor: flatColors.backgrounds.secondary,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
     borderBottomWidth: 1,
-    borderBottomColor: Design.colors.border,
+    borderBottomColor: flatColors.neutral[200],
   },
   timerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Design.spacing[3],
+    gap: 12,
   },
   timerCircle: {
     width: 48,
@@ -720,169 +787,171 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: Design.colors.background,
+    backgroundColor: flatColors.backgrounds.primary,
   },
   timerText: {
-    ...Design.typography.h5,
+    ...premiumTypography.headline.medium,
     fontWeight: '700',
   },
   timerInfo: {
     flex: 1,
   },
   timerTitle: {
-    ...Design.typography.body,
+    ...premiumTypography.callout,
     fontSize: 16,
     fontWeight: '600',
-    color: Design.colors.text,
+    color: flatColors.neutral[800],
   },
   timerSubtitle: {
-    ...Design.typography.caption,
-    color: Design.colors.textSecondary,
-    marginTop: Design.spacing[1],
+    ...premiumTypography.caption.medium,
+    color: flatColors.neutral[600],
+    marginTop: 4,
   },
   timerIconContainer: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: Design.colors.primaryLight,
+    backgroundColor: flatColors.cards.blue.background,
     justifyContent: 'center',
     alignItems: 'center',
   },
   batchTimerIcon: {
-    backgroundColor: '#FFE5E5',
+    backgroundColor: flatColors.cards.red.background,
   },
   orderTypeContainer: {
     flexDirection: 'row',
-    gap: Design.spacing[2],
-    paddingHorizontal: Design.spacing[5],
-    paddingTop: Design.spacing[3],
-    paddingBottom: Design.spacing[2],
+    gap: 8,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 8,
   },
   orderTypeBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Design.colors.primaryLight,
-    paddingHorizontal: Design.spacing[3],
-    paddingVertical: Design.spacing[2],
-    borderRadius: Design.borderRadius.md,
-    gap: Design.spacing[2],
+    backgroundColor: flatColors.cards.blue.background,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    gap: 8,
     borderWidth: 1,
-    borderColor: Design.colors.primary,
+    borderColor: flatColors.accent.blue,
   },
   foodBadge: {
-    backgroundColor: Design.colors.errorBackground,
-    borderColor: Design.colors.error,
+    backgroundColor: flatColors.cards.red.background,
+    borderColor: flatColors.accent.red,
   },
   fastBadge: {
-    backgroundColor: Design.colors.warningBackground,
-    borderColor: Design.colors.warning,
+    backgroundColor: flatColors.cards.yellow.background,
+    borderColor: flatColors.accent.yellow,
   },
   orderTypeText: {
-    ...Design.typography.caption,
+    ...premiumTypography.caption.medium,
     fontWeight: '600',
-    color: Design.colors.primary,
+    color: flatColors.accent.blue,
   },
   priorityBadge: {
-    paddingHorizontal: Design.spacing[3],
-    paddingVertical: Design.spacing[2],
-    borderRadius: Design.borderRadius.md,
-    backgroundColor: Design.colors.warningBackground,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: flatColors.cards.yellow.background,
     borderWidth: 1,
-    borderColor: Design.colors.warning,
+    borderColor: flatColors.accent.yellow,
   },
   urgentBadge: {
-    backgroundColor: Design.colors.errorBackground,
-    borderColor: Design.colors.error,
+    backgroundColor: flatColors.cards.red.background,
+    borderColor: flatColors.accent.red,
   },
   priorityText: {
-    ...Design.typography.caption,
+    ...premiumTypography.caption.medium,
     fontWeight: '600',
-    color: Design.colors.text,
+    color: flatColors.neutral[800],
   },
   orderSummary: {
-    paddingHorizontal: Design.spacing[5],
-    paddingVertical: Design.spacing[4],
+    paddingHorizontal: 20,
+    paddingVertical: 16,
   },
   orderNumber: {
-    ...Design.typography.body,
+    ...premiumTypography.callout,
     fontSize: 16,
     fontWeight: '700',
-    color: Design.colors.text,
-    marginBottom: Design.spacing[4],
+    color: flatColors.neutral[800],
+    marginBottom: 16,
     textAlign: 'center',
   },
   locationSection: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: Design.spacing[3],
-    gap: Design.spacing[3],
+    marginBottom: 12,
+    gap: 12,
   },
   locationIcon: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: Design.colors.backgroundSecondary,
+    backgroundColor: flatColors.backgrounds.secondary,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: Design.colors.border,
+    borderColor: flatColors.neutral[200],
   },
   locationInfo: {
     flex: 1,
   },
   locationLabel: {
-    ...Design.typography.overline,
-    color: Design.colors.textSecondary,
-    marginBottom: Design.spacing[1],
+    ...premiumTypography.caption.medium,
+    fontWeight: '600',
+    color: flatColors.neutral[600],
+    marginBottom: 4,
+    textTransform: 'uppercase',
   },
   locationAddress: {
-    ...Design.typography.body,
-    color: Design.colors.text,
+    ...premiumTypography.body,
+    color: flatColors.neutral[800],
     lineHeight: 20,
   },
   metricsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: Design.spacing[4],
-    paddingTop: Design.spacing[3],
+    marginTop: 16,
+    paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: Design.colors.border,
+    borderTopColor: flatColors.neutral[200],
   },
   metric: {
     alignItems: 'center',
-    gap: Design.spacing[1],
+    gap: 4,
   },
   metricText: {
-    ...Design.typography.caption,
-    color: Design.colors.textSecondary,
+    ...premiumTypography.caption.medium,
+    color: flatColors.neutral[600],
     fontWeight: '500',
   },
   successMetricText: {
-    color: Design.colors.success,
+    color: flatColors.accent.green,
   },
   actionButtons: {
     flexDirection: 'row',
-    gap: Design.spacing[2],
-    padding: Design.spacing[5],
-    backgroundColor: Design.colors.backgroundSecondary,
+    gap: 8,
+    padding: 20,
+    backgroundColor: flatColors.backgrounds.secondary,
     borderTopWidth: 1,
-    borderTopColor: Design.colors.border,
+    borderTopColor: flatColors.neutral[200],
   },
   declineButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Design.colors.errorBackground,
-    borderRadius: Design.borderRadius.md,
-    paddingVertical: Design.spacing[3],
-    gap: Design.spacing[1],
+    backgroundColor: flatColors.cards.red.background,
+    borderRadius: 12,
+    paddingVertical: 12,
+    gap: 4,
     borderWidth: 1,
-    borderColor: Design.colors.errorBorder,
+    borderColor: flatColors.accent.red,
   },
   declineButtonText: {
-    ...Design.typography.button,
-    color: Design.colors.error,
+    ...premiumTypography.button,
+    color: flatColors.accent.red,
     fontSize: 14,
     fontWeight: '600',
   },
@@ -891,16 +960,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Design.colors.backgroundTertiary,
-    borderRadius: Design.borderRadius.md,
-    paddingVertical: Design.spacing[3],
-    gap: Design.spacing[1],
+    backgroundColor: flatColors.backgrounds.tertiary,
+    borderRadius: 12,
+    paddingVertical: 12,
+    gap: 4,
     borderWidth: 1,
-    borderColor: Design.colors.border,
+    borderColor: flatColors.neutral[200],
   },
   skipButtonText: {
-    ...Design.typography.button,
-    color: Design.colors.textSecondary,
+    ...premiumTypography.button,
+    color: flatColors.neutral[600],
     fontSize: 14,
     fontWeight: '600',
   },
@@ -909,92 +978,93 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Design.colors.success,
-    borderRadius: Design.borderRadius.md,
-    paddingVertical: Design.spacing[3],
-    gap: Design.spacing[1],
+    backgroundColor: flatColors.accent.green,
+    borderRadius: 12,
+    paddingVertical: 12,
+    gap: 4,
+    ...premiumShadows.small,
   },
   acceptButtonText: {
-    ...Design.typography.button,
-    color: Design.colors.textInverse,
+    ...premiumTypography.button,
+    color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '600',
   },
   batchBadge: {
-    backgroundColor: '#FFF5F5',
-    borderColor: '#FF6B6B',
+    backgroundColor: flatColors.cards.red.background,
+    borderColor: flatColors.accent.red,
   },
   batchOrderTypeText: {
-    color: '#FF6B6B',
+    color: flatColors.accent.red,
   },
   routeDetailsButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: Design.spacing[3],
-    paddingVertical: Design.spacing[2],
-    borderRadius: Design.borderRadius.md,
-    backgroundColor: Design.colors.background,
-    gap: Design.spacing[1],
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: flatColors.backgrounds.primary,
+    gap: 4,
     borderWidth: 1,
-    borderColor: Design.colors.border,
+    borderColor: flatColors.neutral[200],
   },
   routeDetailsText: {
-    ...Design.typography.caption,
-    color: Design.colors.primary,
+    ...premiumTypography.caption.medium,
+    color: flatColors.accent.blue,
     fontWeight: '600',
   },
   routeSummaryContainer: {
-    marginBottom: Design.spacing[4],
+    marginBottom: 16,
   },
   routeStats: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    paddingVertical: Design.spacing[4],
-    backgroundColor: '#FFF5F5', // Light red background for batch
-    borderRadius: Design.borderRadius.lg,
+    paddingVertical: 16,
+    backgroundColor: flatColors.cards.red.background,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#FFE0E0',
+    borderColor: flatColors.cards.red.border,
   },
   routeStat: {
     alignItems: 'center',
-    gap: Design.spacing[1],
+    gap: 4,
   },
   routeStatText: {
-    ...Design.typography.caption,
-    color: Design.colors.text,
+    ...premiumTypography.caption.medium,
+    color: flatColors.neutral[800],
     fontWeight: '600',
   },
   routeStopsList: {
-    marginTop: Design.spacing[4],
-    paddingTop: Design.spacing[4],
+    marginTop: 16,
+    paddingTop: 16,
     borderTopWidth: 1,
-    borderTopColor: Design.colors.border,
+    borderTopColor: flatColors.neutral[200],
   },
   routeListTitle: {
-    ...Design.typography.bodySmall,
+    ...premiumTypography.callout,
     fontWeight: '600',
-    color: Design.colors.text,
-    marginBottom: Design.spacing[3],
+    color: flatColors.neutral[800],
+    marginBottom: 12,
   },
   routeStopItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: Design.spacing[3],
-    marginBottom: Design.spacing[2],
-    gap: Design.spacing[3],
+    paddingVertical: 12,
+    marginBottom: 8,
+    gap: 12,
   },
   stopNumber: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: Design.colors.gray300,
+    backgroundColor: flatColors.neutral[300],
     justifyContent: 'center',
     alignItems: 'center',
   },
   stopNumberText: {
-    ...Design.typography.caption,
+    ...premiumTypography.caption.medium,
     fontWeight: '700',
-    color: Design.colors.text,
+    color: flatColors.neutral[800],
   },
   stopIcon: {
     width: 32,
@@ -1004,53 +1074,53 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   pickupIcon: {
-    backgroundColor: Design.colors.primary,
+    backgroundColor: flatColors.accent.blue,
   },
   deliveryIcon: {
-    backgroundColor: Design.colors.success,
+    backgroundColor: flatColors.accent.green,
   },
   stopDetails: {
     flex: 1,
   },
   stopType: {
-    ...Design.typography.caption,
+    ...premiumTypography.caption.medium,
     fontWeight: '600',
-    color: Design.colors.textSecondary,
-    marginBottom: Design.spacing[1],
+    color: flatColors.neutral[600],
+    marginBottom: 4,
   },
   stopAddress: {
-    ...Design.typography.body,
-    color: Design.colors.text,
-    marginBottom: Design.spacing[1],
+    ...premiumTypography.body,
+    color: flatColors.neutral[800],
+    marginBottom: 4,
   },
   stopOrderNumber: {
-    ...Design.typography.caption,
-    color: Design.colors.textSecondary,
+    ...premiumTypography.caption.medium,
+    color: flatColors.neutral[600],
   },
   stopCustomer: {
-    ...Design.typography.caption,
-    color: Design.colors.primary,
+    ...premiumTypography.caption.medium,
+    color: flatColors.accent.blue,
     fontWeight: '600',
   },
   // Special handling styles
   specialHandlingContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Design.spacing[2],
-    paddingHorizontal: Design.spacing[5],
-    paddingBottom: Design.spacing[3],
+    gap: 8,
+    paddingHorizontal: 20,
+    paddingBottom: 12,
   },
   specialHandlingBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: Design.spacing[2],
-    paddingVertical: Design.spacing[1],
-    borderRadius: Design.borderRadius.sm,
-    gap: Design.spacing[1],
-    backgroundColor: Design.colors.warning,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    gap: 4,
+    backgroundColor: flatColors.accent.yellow,
   },
   specialHandlingText: {
-    ...Design.typography.caption,
+    ...premiumTypography.caption.medium,
     fontWeight: '600',
     color: '#fff',
     fontSize: 11,
@@ -1073,8 +1143,96 @@ const styles = StyleSheet.create({
   idBadge: {
     backgroundColor: '#5F3DC4',
   },
-  // Unused styles removed for ESLint compliance
-  // batchOrdersList, batchListTitle, batchOrderItem, etc.
+  // Batch orders list styles
+  batchOrdersList: {
+    marginTop: 16,
+    paddingHorizontal: 20,
+  },
+  batchOrdersTitle: {
+    ...premiumTypography.body.medium,
+    fontWeight: '700',
+    color: flatColors.neutral[800],
+    marginBottom: 12,
+  },
+  batchOrderItem: {
+    backgroundColor: flatColors.backgrounds.secondary,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: flatColors.neutral[200],
+  },
+  batchOrderHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  batchOrderNumber: {
+    backgroundColor: flatColors.cards.blue.background,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  batchOrderNumberText: {
+    ...premiumTypography.caption.medium,
+    fontWeight: '600',
+    color: flatColors.accent.blue,
+  },
+  batchOrderAmount: {
+    backgroundColor: flatColors.cards.green.background,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  batchOrderAmountText: {
+    ...premiumTypography.caption.medium,
+    fontWeight: '700',
+    color: flatColors.accent.green,
+  },
+  batchOrderCustomer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  batchOrderCustomerText: {
+    ...premiumTypography.caption.medium,
+    color: flatColors.neutral[700],
+  },
+  batchOrderAddress: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
+  batchOrderAddressText: {
+    ...premiumTypography.caption.small,
+    color: flatColors.neutral[600],
+    flex: 1,
+  },
+  batchOrderBadges: {
+    flexDirection: 'row',
+    gap: 6,
+    flexWrap: 'wrap',
+  },
+  batchOrderBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 4,
+    gap: 3,
+  },
+  batchOrderBadgeText: {
+    ...premiumTypography.caption.small,
+    fontWeight: '600',
+    color: '#fff',
+    fontSize: 10,
+  },
+  specialBadge: {
+    backgroundColor: '#FF9F43',
+  },
 });
 
 export default IncomingOrderModal;

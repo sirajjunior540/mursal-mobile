@@ -48,6 +48,7 @@ export const OrderActionsSimple: React.FC<OrderActionsSimpleProps> = ({
   const [recipientInfo, setRecipientInfo] = useState<{ name?: string; relation?: string; notes?: string } | null>(null);
   const [isCheckingPhotoRequirements, setIsCheckingPhotoRequirements] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
   // Check if photo is required for delivery
   const checkPhotoRequirement = async (status: string) => {
@@ -71,7 +72,7 @@ export const OrderActionsSimple: React.FC<OrderActionsSimpleProps> = ({
     }
   };
 
-  const handleScenarioSelected = (scenario: DeliveryScenario, recipientName?: string, recipientRelation?: string, notes?: string) => {
+  const handleScenarioSelected = async (scenario: DeliveryScenario, recipientName?: string, recipientRelation?: string, notes?: string) => {
     setSelectedScenario(scenario);
     setRecipientInfo({ name: recipientName, relation: recipientRelation, notes });
     setShowScenarioModal(false);
@@ -84,9 +85,18 @@ export const OrderActionsSimple: React.FC<OrderActionsSimpleProps> = ({
     } else {
       // Direct delivery to customer, no photo needed
       if (pendingStatusUpdate && onStatusUpdate) {
-        onStatusUpdate(order.id, pendingStatusUpdate.status);
-        setPendingStatusUpdate(null);
-        onClose();
+        setIsUpdatingStatus(true);
+        try {
+          // Call the status update and wait for it to complete
+          await onStatusUpdate(order.id, pendingStatusUpdate.status);
+          setPendingStatusUpdate(null);
+          // Don't close immediately - let the parent handle it after successful update
+        } catch (error) {
+          console.error('Failed to update status:', error);
+          Alert.alert('Error', 'Failed to update delivery status');
+        } finally {
+          setIsUpdatingStatus(false);
+        }
       }
     }
   };
@@ -111,11 +121,19 @@ export const OrderActionsSimple: React.FC<OrderActionsSimpleProps> = ({
         {
           text: 'Confirm',
           style: status === 'failed' ? 'destructive' : 'default',
-          onPress: () => {
+          onPress: async () => {
             if (onStatusUpdate) {
-              onStatusUpdate(order.id, status);
+              setIsUpdatingStatus(true);
+              try {
+                await onStatusUpdate(order.id, status);
+                // Don't close immediately - let the parent handle it
+              } catch (error) {
+                console.error('Failed to update status:', error);
+                Alert.alert('Error', 'Failed to update order status');
+              } finally {
+                setIsUpdatingStatus(false);
+              }
             }
-            onClose();
           },
         },
       ],
@@ -171,9 +189,17 @@ export const OrderActionsSimple: React.FC<OrderActionsSimpleProps> = ({
 
       // Now update the status with the photo ID
       if (pendingStatusUpdate && onStatusUpdate) {
-        onStatusUpdate(order.id, pendingStatusUpdate.status, uploadedPhoto.id);
-        setPendingStatusUpdate(null);
-        onClose();
+        setIsUpdatingStatus(true);
+        try {
+          await onStatusUpdate(order.id, pendingStatusUpdate.status, uploadedPhoto.id);
+          setPendingStatusUpdate(null);
+          // Don't close immediately - let the parent handle it
+        } catch (error) {
+          console.error('Failed to update status with photo:', error);
+          Alert.alert('Error', 'Failed to update delivery status');
+        } finally {
+          setIsUpdatingStatus(false);
+        }
       }
     } catch (error) {
       console.error('Photo upload failed:', error);
@@ -234,16 +260,23 @@ export const OrderActionsSimple: React.FC<OrderActionsSimpleProps> = ({
     
     switch (order.status) {
       case 'pending':
+        // For pending orders that haven't been assigned/accepted yet
+        // No status actions should be available until accepted
+        break;
       case 'assigned':
+      case 'accepted':
+        // For assigned/accepted orders, show the next action: Mark as Picked Up
+        // Note: Backend sometimes uses 'assigned' for accepted orders
         actions.push({
           key: 'picked_up',
           label: 'Mark as Picked Up',
           color: flatColors.accent.orange,
-          icon: 'checkmark-circle',
+          icon: 'bag-check',
         });
         break;
       case 'picked_up':
       case 'in_transit':
+        // For picked up orders, show Mark as Delivered
         actions.push({
           key: 'delivered',
           label: 'Mark as Delivered',
@@ -257,30 +290,49 @@ export const OrderActionsSimple: React.FC<OrderActionsSimpleProps> = ({
   };
 
   const statusActions = getStatusActions();
-  const canAccept = order.status === 'pending' || order.status === 'assigned';
-  const canDecline = order.status === 'pending' || order.status === 'assigned';
+  // Only show Accept/Decline for orders that are NOT in the driver's active deliveries
+  // Check if onAccept callback exists - if not, this order is already accepted
+  const canAccept = (order.status === 'pending' || (order.status === 'assigned' && !!onAccept));
+  const canDecline = (order.status === 'pending' || (order.status === 'assigned' && !!onDecline));
 
-  if (readonly && statusActions.length === 0) {
+  // Show actions for orders that have status actions or can be accepted/declined
+  const shouldShowActions = !readonly && (statusActions.length > 0 || canAccept || canDecline);
+
+  // Debug logging to understand why actions might be hidden
+  console.log('OrderActionsSimple debug:', {
+    orderStatus: order.status,
+    readonly,
+    showStatusButton,
+    statusActionsLength: statusActions.length,
+    canAccept,
+    canDecline,
+    shouldShowActions,
+    hasOnAccept: !!onAccept,
+    hasOnStatusUpdate: !!onStatusUpdate,
+  });
+
+  // Don't render if readonly and no actions are available
+  if (readonly && statusActions.length === 0 && !shouldShowActions) {
     return null;
   }
 
   return (
     <>
       <View style={styles.container}>
-        {/* Available Order Actions */}
-        {canAccept && !readonly && (
+        {/* Available Order Actions - ONLY show for pending/assigned orders (not accepted) */}
+        {shouldShowActions && canAccept && (onAccept || onAcceptRoute) && (
           <View style={styles.actionSection}>
             <Text style={styles.sectionTitle}>Available Actions</Text>
             <View style={styles.buttonRow}>
-              {canDecline && (
+              {canDecline && onDecline && (
                 <TouchableOpacity style={styles.declineButton} onPress={handleDecline}>
-                  <Ionicons name="close" size={20} color={flatColors.accent.red} />
+                  <Ionicons name="close-circle" size={18} color={flatColors.accent.red} />
                   <Text style={styles.declineButtonText}>Decline</Text>
                 </TouchableOpacity>
               )}
               
               <TouchableOpacity style={styles.acceptButton} onPress={handleAccept}>
-                <Ionicons name="checkmark" size={20} color="#FFFFFF" />
+                <Ionicons name="checkmark-circle" size={18} color={flatColors.accent.blue} />
                 <Text style={styles.acceptButtonText}>
                   {isBatchOrder ? 'Accept Route' : 'Accept Order'}
                 </Text>
@@ -289,10 +341,14 @@ export const OrderActionsSimple: React.FC<OrderActionsSimpleProps> = ({
           </View>
         )}
 
-        {/* Status Update Actions */}
-        {showStatusButton && statusActions.length > 0 && !readonly && (
+        {/* Status Update Actions - Show for all statuses that have next actions */}
+        {showStatusButton && statusActions.length > 0 && shouldShowActions && onStatusUpdate && (
           <View style={styles.actionSection}>
-            <Text style={styles.sectionTitle}>Update Status</Text>
+            <Text style={styles.sectionTitle}>
+              {order.status === 'accepted' ? 'Next Action' : 
+               order.status === 'picked_up' || order.status === 'in_transit' ? 'Complete Delivery' :
+               'Update Status'}
+            </Text>
             <View style={styles.statusButtonContainer}>
               {statusActions.map((action) => (
                 <TouchableOpacity
@@ -301,12 +357,21 @@ export const OrderActionsSimple: React.FC<OrderActionsSimpleProps> = ({
                     styles.statusButton,
                     action.key === 'delivered' && styles.deliveredButton,
                     action.key === 'failed' && styles.failedButton,
+                    action.key === 'picked_up' && styles.pickedUpButton,
                   ]}
                   onPress={() => handleStatusUpdate(action.key, action.label)}
-                  disabled={isCheckingPhotoRequirements}
+                  disabled={isCheckingPhotoRequirements || isUpdatingStatus}
                 >
-                  {isCheckingPhotoRequirements && action.key === 'delivered' ? (
-                    <ActivityIndicator size="small" color={flatColors.accent.green} />
+                  {(isCheckingPhotoRequirements && action.key === 'delivered') || isUpdatingStatus ? (
+                    <ActivityIndicator 
+                      size="small" 
+                      color={
+                        action.key === 'delivered' ? flatColors.accent.green :
+                        action.key === 'failed' ? flatColors.accent.red :
+                        action.key === 'picked_up' ? flatColors.accent.orange :
+                        action.color
+                      }
+                    />
                   ) : (
                     <Ionicons 
                       name={action.icon} 
@@ -314,6 +379,7 @@ export const OrderActionsSimple: React.FC<OrderActionsSimpleProps> = ({
                       color={
                         action.key === 'delivered' ? flatColors.accent.green :
                         action.key === 'failed' ? flatColors.accent.red :
+                        action.key === 'picked_up' ? flatColors.accent.orange :
                         action.color
                       }
                     />
@@ -322,8 +388,9 @@ export const OrderActionsSimple: React.FC<OrderActionsSimpleProps> = ({
                     styles.statusButtonText,
                     action.key === 'delivered' && styles.deliveredButtonText,
                     action.key === 'failed' && styles.failedButtonText,
+                    action.key === 'picked_up' && styles.pickedUpButtonText,
                   ]}>
-                    {action.label}
+                    {isUpdatingStatus ? 'Updating...' : action.label}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -481,26 +548,28 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
+    paddingVertical: 14,
     borderRadius: 12,
-    backgroundColor: flatColors.accent.blue,
+    backgroundColor: flatColors.cards.blue.background,
+    borderWidth: 1,
+    borderColor: flatColors.accent.blue,
     gap: 8,
   },
   acceptButtonText: {
     fontSize: premiumTypography.callout.fontSize,
     fontWeight: '600',
     lineHeight: premiumTypography.callout.lineHeight,
-    color: '#FFFFFF',
+    color: flatColors.accent.blue,
   },
   declineButton: {
+    flex: 0.4,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 24,
+    paddingVertical: 14,
     borderRadius: 12,
-    backgroundColor: flatColors.backgrounds.primary,
-    borderWidth: 2,
+    backgroundColor: flatColors.cards.red.background,
+    borderWidth: 1,
     borderColor: flatColors.accent.red,
     gap: 8,
   },
@@ -543,6 +612,20 @@ const styles = StyleSheet.create({
   },
   failedButtonText: {
     color: flatColors.accent.red,
+  },
+  acceptedButton: {
+    backgroundColor: flatColors.cards.blue.background,
+    borderColor: flatColors.accent.blue,
+  },
+  acceptedButtonText: {
+    color: flatColors.accent.blue,
+  },
+  pickedUpButton: {
+    backgroundColor: flatColors.cards.yellow.background,
+    borderColor: flatColors.accent.orange,
+  },
+  pickedUpButtonText: {
+    color: flatColors.accent.orange,
   },
   batchInfo: {
     backgroundColor: flatColors.cards.blue.background,

@@ -88,13 +88,16 @@ const RouteNavigationScreen: React.FC = () => {
   useEffect(() => {
     const checkMapConfig = async () => {
       try {
-        const shouldShow = await mapProviderService.shouldShowMap();
-        const provider = await mapProviderService.getConfiguredProvider();
+        const mobileConfig = await mapProviderService.getMobileMapConfig();
         
         setMapConfig({
-          provider: provider as 'google' | 'mapbox' | 'openroute' | null,
-          isActive: shouldShow,
+          provider: mobileConfig.provider as 'google' | 'mapbox' | 'openroute' | null,
+          isActive: mobileConfig.showMap && mobileConfig.enableNavigation,
         });
+        
+        if (!mobileConfig.supportsMobile && mobileConfig.provider) {
+          console.warn(`Map provider ${mobileConfig.provider} has limited mobile support`);
+        }
       } catch (error) {
         console.error('Error checking map config:', error);
         setMapConfig({ provider: null, isActive: false });
@@ -243,8 +246,8 @@ const RouteNavigationScreen: React.FC = () => {
           points.push({
             id: `pickup-${order.id}`,
             order,
-            latitude: order.pickup_latitude,
-            longitude: order.pickup_longitude,
+            latitude: Number(order.pickup_latitude),
+            longitude: Number(order.pickup_longitude),
             address: order.pickup_address || 'Pickup Location',
             type: 'pickup',
             sequenceNumber: sequenceNumber++,
@@ -256,8 +259,8 @@ const RouteNavigationScreen: React.FC = () => {
           points.push({
             id: `delivery-${order.id}`,
             order,
-            latitude: order.delivery_latitude,
-            longitude: order.delivery_longitude,
+            latitude: Number(order.delivery_latitude),
+            longitude: Number(order.delivery_longitude),
             address: order.delivery_address || 'Delivery Location',
             type: 'delivery',
             sequenceNumber: sequenceNumber++,
@@ -470,6 +473,8 @@ const RouteNavigationScreen: React.FC = () => {
           setSelectedOrder(null);
         }}
         onStatusUpdate={handleStatusUpdate}
+        onAccept={undefined} // Don't show accept button for route orders
+        onDecline={undefined} // Don't show decline button for route orders
         onNavigate={(order) => {
           setShowOrderDetailsModal(false);
           if (order) {

@@ -7,6 +7,7 @@ import { Order, OrderContextType, OrderStatus } from '../../../types';
 import { apiService } from '../../../services/api';
 import { realtimeService } from '../../../services/realtimeService';
 import { useAuth } from '../../../contexts/AuthContext';
+import { useDriver } from '../../../contexts/DriverContext';
 import { orderActionService } from '../../../services/orderActionService';
 
 // Context
@@ -23,6 +24,7 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
   children,
 }) => {
   const { isLoggedIn, isLoading: authLoading } = useAuth();
+  const { driver } = useDriver();
   // State
   const [orders, setOrders] = useState<Order[]>([]);
   const [driverOrders, setDriverOrders] = useState<Order[]>([]);
@@ -68,6 +70,14 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
         // Set up realtime service callbacks
         realtimeService.setCallbacks({
           onNewOrder: (order: Order) => {
+            // Only process new orders if driver is online
+            if (!driver?.isOnline) {
+              console.log('🚫 Driver is offline, ignoring incoming order:', order.order_number);
+              return;
+            }
+            
+            console.log('📱 Driver is online, processing incoming order:', order.order_number);
+            
             // Add to orders if not already present
             setOrders(prev => {
               const exists = prev.some(o => o.id === order.id);
@@ -179,9 +189,13 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
   }, [orders, driverOrders]);
 
   const acceptOrder = useCallback(async (orderId: string): Promise<boolean> => {
+    console.log('🚀 [OrderProvider] acceptOrder called with ID:', orderId);
+    
     // Find the order in our current orders to debug
     const order = orders.find(o => o.id === orderId);
     if (!order) {
+      console.log('❌ [OrderProvider] Order not found in state:', orderId);
+      console.log('📋 [OrderProvider] Available order IDs:', orders.map(o => o.id));
       // Don't try to accept an order that's not in our state
       Alert.alert(
         'Order Not Available',
@@ -191,20 +205,54 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
       return false;
     }
     
+    console.log('✅ [OrderProvider] Order found:', {
+      id: order.id,
+      orderNumber: order.order_number,
+      status: order.status,
+      customer: order.customer?.name || 'Unknown'
+    });
+    
     try {
+      console.log('🔄 [OrderProvider] Calling orderActionService.acceptUnifiedOrder...');
       // Use the new unified order action service
       const response = await orderActionService.acceptUnifiedOrder(order, orderId);
       
+      console.log('📨 [OrderProvider] Response received:', {
+        success: response.success,
+        error: response.error,
+        hasData: !!response.data
+      });
+      
       if (response.success) {
+        console.log('✅ [OrderProvider] Order accepted successfully, removing from available orders');
         // Remove the accepted order from available orders
         setOrders(prev => prev.filter(o => o.id !== orderId));
+        
+        // Refresh driver orders to get the newly accepted order
+        console.log('🔄 [OrderProvider] Refreshing driver orders after acceptance');
+        await getDriverOrders();
+        
+        // Also refresh available orders to ensure consistency
+        console.log('🔄 [OrderProvider] Refreshing available orders after acceptance');
+        await refreshOrders();
+        
         return true;
       } else {
+        console.log('❌ [OrderProvider] Order acceptance failed:', response.error);
         throw new Error(response.error || 'Failed to accept order');
       }
     } catch (error: any) {
+      console.error('💥 [OrderProvider] Exception in acceptOrder:', error);
+      console.log('🔍 [OrderProvider] Error details:', {
+        message: error.message,
+        status: error.response?.status,
+        type: typeof error,
+        hasResponseData: !!error.response?.data
+      });
+      
       // Check if it's a 404 error (order not found)
       if (error.response?.status === 404 || error.message?.includes('404')) {
+        console.log('🗑️ [OrderProvider] 404 error - removing order from state');
         // Remove the order from local state since it doesn't exist in backend
         setOrders(prev => prev.filter(o => o.id !== orderId));
         
@@ -214,11 +262,18 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
           'This order is no longer available. It may have been accepted by another driver.',
           [{ text: 'OK' }]
         );
+      } else {
+        // Show generic error for other failures
+        Alert.alert(
+          'Accept Order Failed',
+          `Failed to accept order: ${error.message || 'Unknown error'}`,
+          [{ text: 'OK' }]
+        );
       }
       
       return false;
     }
-  }, [orders]);
+  }, [orders, getDriverOrders]);
 
   const declineOrder = useCallback(async (orderId: string, reason?: string) => {
     // Check if order exists in state

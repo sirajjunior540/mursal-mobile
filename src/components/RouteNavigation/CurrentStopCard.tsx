@@ -136,8 +136,31 @@ export const CurrentStopCard: React.FC<CurrentStopCardProps> = ({
 
       // Now update the status with the photo ID
       if (pendingStatusUpdate && onStatusUpdate) {
-        onStatusUpdate(order.id, pendingStatusUpdate.status, uploadedPhoto.id);
-        setPendingStatusUpdate(null);
+        // Check if this is a consolidated batch delivery
+        if (batchOrders && batchOrders.length > 1 && type === 'delivery') {
+          // For consolidated deliveries, update all orders in the batch
+          Alert.alert(
+            'Update All Orders',
+            `This will mark all ${batchOrders.length} orders in this batch as ${pendingStatusUpdate.label.toLowerCase()}. Continue?`,
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { 
+                text: 'Update All', 
+                onPress: () => {
+                  // Update all orders in the batch with the same photo
+                  batchOrders.forEach((batchOrder) => {
+                    onStatusUpdate(batchOrder.id, pendingStatusUpdate.status, uploadedPhoto.id);
+                  });
+                  setPendingStatusUpdate(null);
+                }
+              }
+            ]
+          );
+        } else {
+          // Single order update
+          onStatusUpdate(order.id, pendingStatusUpdate.status, uploadedPhoto.id);
+          setPendingStatusUpdate(null);
+        }
       }
     } catch (error) {
       console.error('Photo upload failed:', error);
@@ -173,8 +196,31 @@ export const CurrentStopCard: React.FC<CurrentStopCardProps> = ({
     } else {
       // Direct delivery to customer, no photo needed
       if (pendingStatusUpdate) {
-        onStatusUpdate(order.id, pendingStatusUpdate.status);
-        setPendingStatusUpdate(null);
+        // Check if this is a consolidated batch delivery
+        if (batchOrders && batchOrders.length > 1 && type === 'delivery') {
+          // For consolidated deliveries, update all orders in the batch
+          Alert.alert(
+            'Update All Orders',
+            `This will mark all ${batchOrders.length} orders in this batch as ${pendingStatusUpdate.label.toLowerCase()}. Continue?`,
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { 
+                text: 'Update All', 
+                onPress: () => {
+                  // Update all orders in the batch
+                  batchOrders.forEach((batchOrder) => {
+                    onStatusUpdate(batchOrder.id, pendingStatusUpdate.status);
+                  });
+                  setPendingStatusUpdate(null);
+                }
+              }
+            ]
+          );
+        } else {
+          // Single order update
+          onStatusUpdate(order.id, pendingStatusUpdate.status);
+          setPendingStatusUpdate(null);
+        }
       }
     }
   };

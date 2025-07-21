@@ -314,7 +314,7 @@ export class ApiEndpoints {
   // ==================== Orders & Deliveries ====================
 
   async getAvailableOrders(): Promise<ApiResponse<Order[]>> {
-    // Get available orders for the driver to accept (unassigned/broadcast orders)
+    // Get available orders for the driver to accept (unassigned/broadcast orders + assigned orders)
     try {
       let apiUrl = '/api/v1/delivery/deliveries/available_orders/';
       
@@ -334,12 +334,48 @@ export class ApiEndpoints {
       console.log('[API] Fetching available orders from:', apiUrl);
       const response = await this.client.get<BackendDelivery[]>(apiUrl);
       
+      let availableOrders: Order[] = [];
+      
       if (response.success && response.data) {
-        const orders: Order[] = (response.data || []).map(ApiTransformers.transformOrder);
-        console.log('[API] Successfully fetched', orders.length, 'available orders');
+        availableOrders = (response.data || []).map(ApiTransformers.transformOrder);
+        console.log('[API] Successfully fetched', availableOrders.length, 'available orders from primary endpoint');
+      }
+      
+      // Also get assigned orders for this driver from by_driver endpoint
+      try {
+        console.log('[API] Fetching assigned orders that need acceptance...');
+        const byDriverResponse = await this.client.get<BackendDelivery[]>('/api/v1/delivery/deliveries/by_driver/');
+        
+        if (byDriverResponse.success && byDriverResponse.data) {
+          // Get only pending orders that belong in Available Orders
+          // 'assigned' status means the driver has already accepted it
+          const pendingOrders = (byDriverResponse.data || [])
+            .filter(delivery => {
+              const status = delivery.status?.toLowerCase();
+              return status === 'pending';
+            })
+            .map(ApiTransformers.transformOrder);
+          
+          console.log('[API] Found', pendingOrders.length, 'pending orders to add to available orders');
+          
+          // Merge pending orders with available orders, avoiding duplicates
+          pendingOrders.forEach(pendingOrder => {
+            const exists = availableOrders.some(order => order.id === pendingOrder.id);
+            if (!exists) {
+              availableOrders.push(pendingOrder);
+            }
+          });
+        }
+      } catch (assignedError) {
+        console.warn('[API] Could not fetch assigned orders:', assignedError);
+      }
+      
+      console.log('[API] Total available orders (including assigned):', availableOrders.length);
+      
+      if (availableOrders.length > 0 || response.success) {
         return {
           success: true,
-          data: orders,
+          data: availableOrders,
           message: response.message
         };
       }
@@ -444,7 +480,7 @@ export class ApiEndpoints {
 
   async getDriverOrders(): Promise<ApiResponse<Order[]>> {
     // Use by_driver endpoint as primary since it has complete order data
-    // Based on backend testing, this endpoint includes ASSIGNED status deliveries
+    // Filter out ASSIGNED status deliveries - these should appear in Available Orders until driver accepts them
     
     try {
       console.log('[API] Fetching driver orders from /api/v1/delivery/deliveries/by_driver/');
@@ -454,7 +490,24 @@ export class ApiEndpoints {
       if (response.success && response.data) {
         console.log('[API] Processing', response.data.length, 'deliveries');
         
-        const orders: Order[] = (response.data || []).map((backendItem, index) => {
+        // Include orders that the driver has accepted and is working on
+        // Filter out only 'pending' orders - 'assigned' means driver accepted it
+        // Valid statuses for active deliveries: assigned, accepted, picked_up, in_transit, etc.
+        const acceptedDeliveries = (response.data || []).filter(delivery => {
+          const status = delivery.status?.toLowerCase();
+          // Only exclude pending orders - all other statuses are active deliveries
+          const isActiveDelivery = status !== 'pending';
+          
+          if (!isActiveDelivery) {
+            console.log('[API] Filtering out delivery with status:', status, 'for delivery ID:', delivery.id);
+          }
+          
+          return isActiveDelivery;
+        });
+        
+        console.log('[API] Filtered to', acceptedDeliveries.length, 'accepted deliveries from', response.data.length, 'total');
+        
+        const orders: Order[] = acceptedDeliveries.map((backendItem, index) => {
           try {
             console.log('[API] Transforming delivery', index, ':', backendItem);
             const transformedOrder = ApiTransformers.transformOrder(backendItem);

@@ -43,10 +43,14 @@ class MapProviderService {
     }
 
     // Fetch configuration from backend
-    this.configPromise = apiService.get<MapProviderConfig>('/api/v1/tenants/map-info/')
+    this.configPromise = apiService.getClient().get<MapProviderConfig>('/api/v1/tenants/map-info/')
       .then(response => {
-        this.config = response.data;
-        return response.data;
+        if (response.success && response.data) {
+          this.config = response.data;
+          return response.data;
+        } else {
+          throw new Error(response.error || 'Failed to fetch map config');
+        }
       })
       .catch(error => {
         console.error('Failed to fetch map provider config:', error);
@@ -371,6 +375,111 @@ class MapProviderService {
   async shouldShowMap(): Promise<boolean> {
     const config = await this.getConfig();
     return config.map_provider !== 'none';
+  }
+
+  /**
+   * Get configured provider type
+   */
+  async getConfiguredProvider(): Promise<string | null> {
+    const config = await this.getConfig();
+    return config.map_provider === 'none' ? null : config.map_provider;
+  }
+
+  /**
+   * Check if mobile navigation is enabled for the provider
+   */
+  async isMobileNavigationEnabled(): Promise<boolean> {
+    try {
+      const response = await apiService.getClient().get<any>('/api/v1/tenants/map-info/');
+      if (response.success && response.data) {
+        return response.data.use_map_for_mobile_navigation ?? true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Failed to check mobile navigation setting:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Get mobile-optimized map config
+   */
+  async getMobileMapConfig(): Promise<{
+    showMap: boolean;
+    provider: string | null;
+    enableNavigation: boolean;
+    supportsMobile: boolean;
+  }> {
+    try {
+      const [showMap, provider, enableNavigation] = await Promise.all([
+        this.shouldShowMap(),
+        this.getConfiguredProvider(),
+        this.isMobileNavigationEnabled(),
+      ]);
+
+      // Check if provider supports mobile
+      const supportsMobile = this.providerSupportsMobile(provider);
+
+      return {
+        showMap: showMap && supportsMobile,
+        provider,
+        enableNavigation: enableNavigation && supportsMobile,
+        supportsMobile,
+      };
+    } catch (error) {
+      console.error('Error getting mobile map config:', error);
+      return {
+        showMap: false,
+        provider: null,
+        enableNavigation: false,
+        supportsMobile: false,
+      };
+    }
+  }
+
+  /**
+   * Check if a provider supports mobile platforms
+   */
+  private providerSupportsMobile(provider: string | null): boolean {
+    switch (provider) {
+      case 'google':
+        return true; // Google Maps has excellent React Native support
+      case 'mapbox':
+        return true; // Mapbox has React Native SDK
+      case 'openrouteservice':
+        return true; // Can be used with web-based maps in mobile
+      case 'openstreetmap':
+        return true; // Can be used with react-native-maps
+      case 'none':
+      default:
+        return false;
+    }
+  }
+
+  /**
+   * Get provider-specific mobile limitations
+   */
+  async getProviderLimitations(provider: string): Promise<string[]> {
+    const limitations: { [key: string]: string[] } = {
+      'google': [
+        'Requires Google Play Services on Android',
+        'May require additional billing setup for mobile usage'
+      ],
+      'mapbox': [
+        'Requires Mapbox account with mobile SDK access',
+        'Different pricing for mobile vs web usage'
+      ],
+      'openrouteservice': [
+        'Limited to web-view based maps in mobile',
+        'May have performance limitations on slower devices'
+      ],
+      'openstreetmap': [
+        'Basic functionality only',
+        'Limited routing capabilities without additional services'
+      ]
+    };
+
+    return limitations[provider] || [];
   }
 }
 

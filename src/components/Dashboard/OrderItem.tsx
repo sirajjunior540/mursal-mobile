@@ -68,7 +68,7 @@ export const OrderItem: React.FC<OrderItemProps> = ({
           {order.cash_on_delivery && (
             <View style={styles.codBadge}>
               <Ionicons name="cash" size={14} color="#00D2D3" />
-              <Text style={styles.codAmount}>${order.cod_amount?.toFixed(2) || '0.00'}</Text>
+              <Text style={styles.codAmount}>${Number(order.cod_amount || 0).toFixed(2)}</Text>
             </View>
           )}
           {showChevron && (

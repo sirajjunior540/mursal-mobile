@@ -1,14 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Modal, View, ScrollView, TouchableOpacity, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { Order } from '../../types';
+import { Order, isBatchOrder as checkIsBatchOrder, getBatchProperties } from '../../types';
 import { flatModalStyles } from '../../design/orderDetails/flatModalStyles';
 import { flatColors } from '../../design/dashboard/flatColors';
 import { premiumTypography } from '../../design/dashboard/premiumTypography';
 import { FlatOrderHeader } from './FlatOrderHeader';
 import { FlatSpecialHandlingBadges } from './FlatSpecialHandlingBadges';
 import { FlatOrderInfoSection } from './FlatOrderInfoSection';
+import { OrderPhotosSection } from './OrderPhotosSection';
 import { OrderActionsSimple } from './OrderActionsSimple';
 
 interface FlatOrderDetailsModalProps {
@@ -47,6 +48,36 @@ export const FlatOrderDetailsModal: React.FC<FlatOrderDetailsModalProps> = ({
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [showBatchList, setShowBatchList] = useState(true);
 
+  // Detect if this is a batch order - only call if order exists
+  const isBatchOrder = order ? checkIsBatchOrder(order) : false;
+  const batchProps = order ? getBatchProperties(order) : null;
+  
+  // Use provided batch orders or extract from order.current_batch
+  const actualBatchOrders = useMemo(() => {
+    if (batchOrders && batchOrders.length > 0) {
+      return batchOrders;
+    }
+    if (isBatchOrder && batchProps?.orders) {
+      return batchProps.orders;
+    }
+    return [];
+  }, [batchOrders, isBatchOrder, batchProps]);
+
+  // Determine batch type if not provided
+  const actualBatchType = useMemo(() => {
+    if (batchType) return batchType;
+    if (!isBatchOrder || !actualBatchOrders.length) return null;
+    
+    const uniqueDeliveryAddresses = new Set(
+      actualBatchOrders.map(o => o.delivery_address).filter(Boolean)
+    );
+    return uniqueDeliveryAddresses.size > 1 ? 'distribution' : 'consolidated';
+  }, [batchType, isBatchOrder, actualBatchOrders]);
+
+  // Override isBatchView if we detect a batch order
+  const actualIsBatchView = isBatchView || isBatchOrder;
+  
+  // Early return after ALL hooks
   if (!order) return null;
 
   // Handle batch order selection
@@ -62,13 +93,14 @@ export const FlatOrderDetailsModal: React.FC<FlatOrderDetailsModalProps> = ({
 
   // Determine current order to display
   const currentOrder = selectedOrder || order;
-  const isShowingBatchList = isBatchView && showBatchList && batchOrders.length > 1;
+  const isShowingBatchList = actualIsBatchView && showBatchList && actualBatchOrders.length > 1;
   const isShowingIndividualOrder = !isShowingBatchList;
 
   // Calculate batch properties for actions
-  const batchProperties = isBatchView ? {
-    orders: batchOrders,
-    totalValue: batchOrders.reduce((sum, o) => sum + (o.total_amount || 0), 0),
+  const batchProperties = actualIsBatchView ? {
+    orders: actualBatchOrders,
+    totalValue: actualBatchOrders.reduce((sum, o) => sum + (o.total_amount || o.total || 0), 0),
+    batchId: batchProps?.batchId || order.id,
   } : undefined;
 
   return (
@@ -87,12 +119,12 @@ export const FlatOrderDetailsModal: React.FC<FlatOrderDetailsModalProps> = ({
           title={
             isShowingBatchList ? 'Batch Orders' :
             selectedOrder ? 'Order Details' :
-            isBatchView ? 'Batch Details' :
+            actualIsBatchView ? 'Batch Details' :
             'Order Details'
           }
           isBatchView={isShowingBatchList}
-          batchType={batchType}
-          orderCount={batchOrders.length}
+          batchType={actualBatchType}
+          orderCount={actualBatchOrders.length}
           onMarkAsFailed={
             currentOrder && onStatusUpdate && !readonly && 
             (currentOrder.status === 'picked_up' || currentOrder.status === 'in_transit')
@@ -128,9 +160,9 @@ export const FlatOrderDetailsModal: React.FC<FlatOrderDetailsModalProps> = ({
             {/* Batch Orders List */}
             {isShowingBatchList && (
               <BatchOrdersList
-                orders={batchOrders}
+                orders={actualBatchOrders}
                 onOrderSelect={handleOrderSelect}
-                batchType={batchType}
+                batchType={actualBatchType}
               />
             )}
 
@@ -148,13 +180,21 @@ export const FlatOrderDetailsModal: React.FC<FlatOrderDetailsModalProps> = ({
                   onNavigate={onNavigate}
                 />
 
+                {/* Delivery Photos Section - Only show for completed/delivered orders */}
+                {(currentOrder.status === 'delivered' || currentOrder.status === 'completed') && (
+                  <OrderPhotosSection
+                    orderId={currentOrder.id}
+                    orderNumber={currentOrder.order_number}
+                  />
+                )}
+
                 {/* Order Actions */}
                 <OrderActionsSimple
                   order={currentOrder}
                   showStatusButton={showStatusButton}
                   readonly={readonly}
-                  isBatchOrder={isBatchView && !selectedOrder}
-                  isConsolidatedBatch={batchType === 'consolidated'}
+                  isBatchOrder={actualIsBatchView && !selectedOrder}
+                  isConsolidatedBatch={actualBatchType === 'consolidated'}
                   batchProperties={batchProperties}
                   onStatusUpdate={onStatusUpdate}
                   onAccept={onAccept}

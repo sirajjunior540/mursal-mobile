@@ -105,7 +105,7 @@ export const PremiumOrderItem: React.FC<OrderItemProps> = ({
                 <View style={styles.codBadge}>
                   <Ionicons name="cash" size={14} color={premiumColors.gradients.emerald[0]} />
                   <Text style={styles.codAmount}>
-                    ${order.cod_amount?.toFixed(2) || '0.00'}
+                    ${Number(order.cod_amount || 0).toFixed(2)}
                   </Text>
                 </View>
               )}

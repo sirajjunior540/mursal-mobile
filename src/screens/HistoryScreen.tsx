@@ -22,6 +22,7 @@ import { DateRangeFilter } from '../components/History/DateRangeFilter';
 import { OrderHistoryCard } from '../components/History/OrderHistoryCard';
 import { EarningsCard } from '../components/History/EarningsCard';
 import { TransactionList } from '../components/History/TransactionList';
+import { OrderHistoryDetailsModal } from '../components/History/OrderHistoryDetailsModal';
 import EmptyState from '../components/EmptyState';
 
 type RootStackParamList = {
@@ -54,6 +55,8 @@ const HistoryScreen: React.FC = () => {
   const [earnings, setEarnings] = useState<DriverBalance | null>(null);
   const [earningsLoading, setEarningsLoading] = useState(false);
   const [transactions, setTransactions] = useState<BalanceTransaction[]>([]);
+  const [detailsModalVisible, setDetailsModalVisible] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
 
   // Show earnings tab if accessed from balance card
   const showEarningsTab = params?.tab === 'earnings';
@@ -219,12 +222,18 @@ const HistoryScreen: React.FC = () => {
     setCurrentTab(tab);
   }, []);
 
+  const handleViewDetails = useCallback((order: Order) => {
+    setSelectedOrder(order);
+    setDetailsModalVisible(true);
+  }, []);
+
   // Render functions
   const renderOrderCard = ({ item: order }: { item: Order }) => (
     <OrderHistoryCard
       order={order}
       onPress={() => handleCardPress(order)}
       isExpanded={expandedCard === order.id}
+      onViewDetails={() => handleViewDetails(order)}
     />
   );
 
@@ -305,6 +314,18 @@ const HistoryScreen: React.FC = () => {
         <View style={styles.loadingOverlay}>
           <ActivityIndicator size="large" color={flatColors.accent.blue} />
         </View>
+      )}
+
+      {/* Order Details Modal */}
+      {selectedOrder && (
+        <OrderHistoryDetailsModal
+          isVisible={detailsModalVisible}
+          onClose={() => {
+            setDetailsModalVisible(false);
+            setSelectedOrder(null);
+          }}
+          order={selectedOrder}
+        />
       )}
 
     </SafeAreaView>

@@ -10,12 +10,14 @@ interface OrderHistoryCardProps {
   order: Order;
   onPress: () => void;
   isExpanded?: boolean;
+  onViewDetails?: () => void;
 }
 
 export const OrderHistoryCard: React.FC<OrderHistoryCardProps> = ({
   order,
   onPress,
-  isExpanded = false
+  isExpanded = false,
+  onViewDetails
 }) => {
   const getStatusColor = (status: OrderStatus): string => {
     switch (status) {
@@ -82,12 +84,26 @@ export const OrderHistoryCard: React.FC<OrderHistoryCardProps> = ({
         </View>
         
         <View style={styles.headerRight}>
-          <Text style={styles.amount}>
-            ${(order.total || 0).toFixed(2)}
-          </Text>
-          <Text style={styles.date}>
-            {formatDate(order.created_at)}
-          </Text>
+          <View style={styles.headerRightContent}>
+            <Text style={styles.amount}>
+              ${(order.total || 0).toFixed(2)}
+            </Text>
+            <Text style={styles.date}>
+              {formatDate(order.created_at)}
+            </Text>
+          </View>
+          {onViewDetails && (
+            <TouchableOpacity
+              style={styles.viewDetailsButton}
+              onPress={(e) => {
+                e.stopPropagation();
+                onViewDetails();
+              }}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="eye" size={20} color={flatColors.accent.blue} />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -169,7 +185,22 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   headerRight: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  headerRightContent: {
     alignItems: 'flex-end',
+  },
+  viewDetailsButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: flatColors.cards.blue.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: flatColors.accent.blue + '20',
   },
   orderNumberContainer: {
     alignSelf: 'flex-start',

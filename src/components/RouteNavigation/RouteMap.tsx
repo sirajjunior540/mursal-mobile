@@ -5,6 +5,7 @@ import { RouteMapProps } from '../../types/route.types';
 import { flatColors } from '../../design/dashboard/flatColors';
 import { premiumTypography } from '../../design/dashboard/premiumTypography';
 import { premiumShadows } from '../../design/dashboard/premiumShadows';
+import UniversalMapView from '../UniversalMap/UniversalMapView';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -15,6 +16,20 @@ export const RouteMap: React.FC<RouteMapProps> = ({
   mapProvider,
   onMarkerPress,
 }) => {
+  // Debug logging
+  console.log('[RouteMap] Props:', {
+    hasRoute: !!route,
+    pointsCount: route?.points?.length || 0,
+    points: route?.points?.map(p => ({ 
+      id: p.id, 
+      lat: p.latitude, 
+      lng: p.longitude,
+      type: p.type,
+      address: p.address 
+    })),
+    showMap,
+    mapProvider
+  });
   // If map is not configured or enabled, show alternative view
   if (!showMap || !mapProvider) {
     return (
@@ -72,61 +87,21 @@ export const RouteMap: React.FC<RouteMapProps> = ({
     isCompleted: point.order.status === 'delivered',
   })) || [];
 
-  // Map provider specific rendering
-  const renderMapView = () => {
-    switch (mapProvider) {
-      case 'google':
-        return renderGoogleMap();
-      case 'mapbox':
-        return renderMapboxMap();
-      case 'openroute':
-        return renderOpenRouteMap();
-      default:
-        return renderFallbackMap();
+  // Convert route points to map points format
+  const mapPoints = route?.points?.map((point, index) => ({
+    id: point.id,
+    latitude: point.latitude,
+    longitude: point.longitude,
+    title: `${index + 1}. ${point.type === 'pickup' ? 'Pickup' : 'Delivery'}`,
+    description: point.address,
+    type: point.type,
+  })) || [];
+
+  // Handle point press
+  const handlePointPress = (point: any) => {
+    if (onMarkerPress) {
+      onMarkerPress(point.id);
     }
-  };
-
-  const renderGoogleMap = () => {
-    // Google Maps implementation would go here
-    return (
-      <View style={styles.mapPlaceholder}>
-        <Ionicons name="map" size={24} color={flatColors.accent.blue} />
-        <Text style={styles.mapProviderText}>Google Maps</Text>
-        <Text style={styles.mapStopsText}>{markers.length} stops</Text>
-      </View>
-    );
-  };
-
-  const renderMapboxMap = () => {
-    // Mapbox implementation would go here
-    return (
-      <View style={styles.mapPlaceholder}>
-        <Ionicons name="map" size={24} color={flatColors.accent.green} />
-        <Text style={styles.mapProviderText}>Mapbox</Text>
-        <Text style={styles.mapStopsText}>{markers.length} stops</Text>
-      </View>
-    );
-  };
-
-  const renderOpenRouteMap = () => {
-    // OpenRouteService implementation would go here
-    return (
-      <View style={styles.mapPlaceholder}>
-        <Ionicons name="map" size={24} color={flatColors.accent.purple} />
-        <Text style={styles.mapProviderText}>OpenRouteService</Text>
-        <Text style={styles.mapStopsText}>{markers.length} stops</Text>
-      </View>
-    );
-  };
-
-  const renderFallbackMap = () => {
-    return (
-      <View style={styles.mapPlaceholder}>
-        <Ionicons name="location-outline" size={24} color={flatColors.neutral[400]} />
-        <Text style={styles.mapProviderText}>Route Overview</Text>
-        <Text style={styles.mapStopsText}>{markers.length} stops planned</Text>
-      </View>
-    );
   };
 
   return (
@@ -158,14 +133,14 @@ export const RouteMap: React.FC<RouteMapProps> = ({
 
       {/* Map View */}
       <View style={styles.mapContainer}>
-        {renderMapView()}
-        
-        {/* Overlay Info */}
-        <View style={styles.mapOverlay}>
-          <Text style={styles.overlayText}>
-            Current: Stop {currentStopIndex + 1} of {markers.length}
-          </Text>
-        </View>
+        <UniversalMapView
+          points={mapPoints}
+          height={240}
+          center={mapRegion}
+          showCurrentLocation={true}
+          showRouteOptimization={true}
+          onPointPress={handlePointPress}
+        />
       </View>
 
       {/* Map Legend */}

@@ -22,12 +22,12 @@ import {
   FlatPerformanceMetrics,
   FlatStatusCard,
   FlatAvailableOrdersCard,
-  FlatActiveDeliveriesCard,
 } from '../components/Dashboard/flat';
+import { EnhancedActiveDeliveriesCard } from '../components/Dashboard/EnhancedActiveDeliveriesCard';
 
 import { useOrders } from '../features/orders/context/OrderProvider';
 import { useDriver } from '../contexts/DriverContext';
-import { Order } from '@/types';
+import { Order, OrderStatus } from '@/types';
 import { QRScanResult } from '../types/tracking';
 import { Design } from '../constants/designSystem';
 import { flatColors } from '../design/dashboard/flatColors';
@@ -52,6 +52,7 @@ const DashboardScreen: React.FC = () => {
     getDriverOrders,
     acceptOrder, 
     declineOrder,
+    updateOrderStatus,
     setOrderNotificationCallback,
     canAcceptOrder 
   } = useOrders();
@@ -152,7 +153,9 @@ const DashboardScreen: React.FC = () => {
     try {
       const result = await orderActionService.acceptRoute(routeId, orderData || incomingOrder, {
         showConfirmation: false,
-        onSuccess: () => {
+        onSuccess: async () => {
+          // Refresh driver orders to get the newly accepted route
+          await getDriverOrders();
           // Navigate directly to route screen
           navigation.navigate('Navigation');
         },
@@ -222,18 +225,29 @@ const DashboardScreen: React.FC = () => {
     setSelectedOrder(null);
   }, []);
 
-  const handleOrderDetailsAccept = useCallback(async (orderId: string, newStatus: string) => {
+  const handleOrderDetailsAccept = useCallback(async (orderId: string, newStatus: string, photoId?: string) => {
     // For available orders, accept the order
     if (selectedOrder && !activeOrders?.some(o => o.id === selectedOrder.id)) {
       handleCloseOrderDetails();
       await handleAcceptOrder(orderId);
     } else {
       // For active orders, update status
-      // This would need to be implemented based on your status update logic
-      console.log('Update order status to:', newStatus);
-      handleCloseOrderDetails();
+      try {
+        console.log('Updating order status to:', newStatus, 'with photoId:', photoId);
+        const success = await updateOrderStatus(orderId, newStatus as OrderStatus, photoId);
+        if (success) {
+          // Refresh orders to reflect the status change
+          await getDriverOrders();
+          handleCloseOrderDetails();
+        } else {
+          Alert.alert('Error', 'Failed to update order status');
+        }
+      } catch (error) {
+        console.error('Error updating order status:', error);
+        Alert.alert('Error', 'Failed to update order status');
+      }
     }
-  }, [handleAcceptOrder, handleCloseOrderDetails, selectedOrder, activeOrders]);
+  }, [handleAcceptOrder, handleCloseOrderDetails, selectedOrder, activeOrders, updateOrderStatus, getDriverOrders]);
 
   const handleOrderDetailsNavigate = useCallback(() => {
     handleCloseOrderDetails();
@@ -246,37 +260,226 @@ const DashboardScreen: React.FC = () => {
       
       // Handle different types of QR codes
       if (result.data) {
-        // Check if it's an order number or tracking code
+        // Check if it's an order batch data URL format: data:orderbatch...
+        if (result.data.startsWith('data:orderbatch')) {
+          try {
+            // Extract the data after "data:orderbatch,"
+            const dataContent = result.data.replace('data:orderbatch,', '');
+            console.log('Extracted orderbatch data:', dataContent);
+            
+            // Try to parse as JSON
+            const parsedData = JSON.parse(decodeURIComponent(dataContent));
+            console.log('Parsed orderbatch data:', parsedData);
+            
+            // Extract order information
+            const orderId = parsedData.order_id || parsedData.orderId || parsedData.id;
+            const orderNumber = parsedData.order_number || parsedData.orderNumber;
+            const batchId = parsedData.batch_id || parsedData.batchId;
+            
+            // First check if order is in active deliveries (already assigned to driver)
+            const activeOrder = activeOrders?.find(order => 
+              order.id === orderId ||
+              order.order_number === orderNumber ||
+              order.id === String(orderId) ||
+              order.order_number === String(orderNumber)
+            );
+            
+            if (activeOrder) {
+              // Open order details modal instead of directly updating status
+              setSelectedOrder(activeOrder);
+              setShowOrderDetailsModal(true);
+              Alert.alert(
+                'Order Scanned',
+                `Order #${activeOrder.order_number}\n\nPlease review the order details and update status from there.`,
+                [{ text: 'OK' }]
+              );
+              return;
+            } else {
+              // Check if order is available but not assigned
+              const availableOrder = availableOrders?.find(order => 
+                order.id === orderId ||
+                order.order_number === orderNumber ||
+                order.id === String(orderId) ||
+                order.order_number === String(orderNumber)
+              );
+              
+              if (availableOrder) {
+                // Order is available - show accept confirmation
+                Alert.alert(
+                  'Accept Order?',
+                  `Order #${availableOrder.order_number}\n\nWould you like to accept this order?`,
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    { 
+                      text: 'Accept', 
+                      onPress: async () => {
+                        await handleAcceptOrder(availableOrder.id);
+                      }
+                    }
+                  ]
+                );
+              } else {
+                // Order not found in any list - driver not authorized
+                console.log('Order not found in driver assignments:', { orderId, orderNumber, batchId });
+                Alert.alert(
+                  'Not Authorized', 
+                  'This order is not assigned to you.',
+                  [{ text: 'OK' }]
+                );
+              }
+            }
+            return;
+          } catch (error) {
+            console.error('Failed to parse orderbatch data:', error);
+            Alert.alert('QR Code Error', 'Failed to parse order batch data from QR code.');
+            return;
+          }
+        }
+        
+        // Check if it's the new pipe-delimited format: ORDER123|http://...|456|BATCH789
+        if (result.data.includes('|')) {
+          const parts = result.data.split('|');
+          if (parts.length >= 3) {
+            const orderIdentifier = parts[0]; // ORDER123
+            const trackingUrl = parts[1]; // http://...
+            const orderId = parts[2]; // 456
+            const batchId = parts.length > 3 ? parts[3] : null; // BATCH789
+            
+            // Extract order number from identifier
+            const orderNumber = orderIdentifier.replace(/^(ORD|ORDER|#)/i, '');
+            
+            // Apply same logic as data:orderbatch format
+            const activeOrder = activeOrders?.find(order => 
+              order.id === orderId || 
+              order.order_number === orderNumber ||
+              order.order_number === orderIdentifier
+            );
+            
+            if (activeOrder) {
+              // Open order details modal instead of directly updating status
+              setSelectedOrder(activeOrder);
+              setShowOrderDetailsModal(true);
+              Alert.alert(
+                'Order Scanned',
+                `Order #${activeOrder.order_number}\n\nPlease review the order details and update status from there.`,
+                [{ text: 'OK' }]
+              );
+              return;
+            } else {
+              const availableOrder = availableOrders?.find(order => 
+                order.id === orderId || 
+                order.order_number === orderNumber ||
+                order.order_number === orderIdentifier
+              );
+              
+              if (availableOrder) {
+                Alert.alert(
+                  'Accept Order?',
+                  `Order #${availableOrder.order_number}\n\nWould you like to accept this order?`,
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Accept', onPress: async () => await handleAcceptOrder(availableOrder.id) }
+                  ]
+                );
+              } else {
+                Alert.alert('Not Authorized', 'This order is not assigned to you.', [{ text: 'OK' }]);
+              }
+            }
+            return;
+          }
+        }
+        
+        // Check if it's a simple order number or tracking code
         if (result.data.match(/^(ORD|ORDER|#)/i)) {
-          // It's an order number - navigate to order details
-          const orderId = result.data.replace(/^(ORD|ORDER|#)/i, '');
-          Alert.alert(
-            'Order QR Code',
-            `Order ${orderId} detected. Would you like to view details?`,
-            [
-              { text: 'Cancel', style: 'cancel' },
-              { 
-                text: 'View Order', 
-                onPress: () => {
-                  // Navigate to order details if it exists
-                  console.log('Navigate to order:', orderId);
+          // It's an order number - apply same security logic
+          const orderNumber = result.data.replace(/^(ORD|ORDER|#)/i, '');
+          
+          const activeOrder = activeOrders?.find(order => 
+            order.order_number === orderNumber ||
+            order.order_number === result.data ||
+            order.id === orderNumber
+          );
+          
+          if (activeOrder) {
+            // Open order details modal instead of directly updating status
+            setSelectedOrder(activeOrder);
+            setShowOrderDetailsModal(true);
+            Alert.alert(
+              'Order Scanned',
+              `Order #${activeOrder.order_number}\n\nPlease review the order details and update status from there.`,
+              [{ text: 'OK' }]
+            );
+            return;
+          } else {
+            const availableOrder = availableOrders?.find(order => 
+              order.order_number === orderNumber ||
+              order.order_number === result.data ||
+              order.id === orderNumber
+            );
+            
+            if (availableOrder) {
+              Alert.alert(
+                'Accept Order?',
+                `Order #${availableOrder.order_number}\n\nWould you like to accept this order?`,
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Accept', onPress: async () => await handleAcceptOrder(availableOrder.id) }
+                ]
+              );
+            } else {
+              Alert.alert('Not Authorized', 'This order is not assigned to you.', [{ text: 'OK' }]);
+            }
+          }
+        } else {
+          // Try to parse as JSON (legacy format)
+          try {
+            const parsedData = JSON.parse(result.data);
+            if (parsedData.order_id || parsedData.orderId) {
+              const orderId = parsedData.order_id || parsedData.orderId;
+              
+              // Apply same security logic for JSON format
+              const activeOrder = activeOrders?.find(order => order.id === orderId);
+              
+              if (activeOrder) {
+                // Open order details modal instead of directly updating status
+                setSelectedOrder(activeOrder);
+                setShowOrderDetailsModal(true);
+                Alert.alert(
+                  'Order Scanned',
+                  `Order #${activeOrder.order_number}\n\nPlease review the order details and update status from there.`,
+                  [{ text: 'OK' }]
+                );
+                return;
+              } else {
+                const availableOrder = availableOrders?.find(order => order.id === orderId);
+                
+                if (availableOrder) {
+                  Alert.alert(
+                    'Accept Order?',
+                    `Order #${availableOrder.order_number}\n\nWould you like to accept this order?`,
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      { text: 'Accept', onPress: async () => await handleAcceptOrder(availableOrder.id) }
+                    ]
+                  );
+                } else {
+                  Alert.alert('Not Authorized', 'This order is not assigned to you.', [{ text: 'OK' }]);
                 }
               }
-            ]
-          );
-        } else {
-          // Generic QR code - show the data
-          Alert.alert(
-            'QR Code Scanned',
-            `Data: ${result.data}`,
-            [{ text: 'OK' }]
-          );
+            } else {
+              // Generic QR code
+              Alert.alert('QR Code Scanned', `Data: ${result.data}`, [{ text: 'OK' }]);
+            }
+          } catch {
+            // Not JSON, treat as generic QR code
+            Alert.alert('QR Code Scanned', `Data: ${result.data}`, [{ text: 'OK' }]);
+          }
         }
       }
     } else {
       Alert.alert('Scan Failed', result.message || 'Failed to scan QR code');
     }
-  }, []);
+  }, [availableOrders, activeOrders]);
 
   // Prepare stats data for StatsCards component
   const statsData = {
@@ -334,7 +537,7 @@ const DashboardScreen: React.FC = () => {
             }}
           />
           
-          <FlatActiveDeliveriesCard
+          <EnhancedActiveDeliveriesCard
             orders={activeOrders || []}
             isExpanded={showActiveDeliveries}
             onToggle={() => {
@@ -342,7 +545,7 @@ const DashboardScreen: React.FC = () => {
               setShowActiveDeliveries(!showActiveDeliveries);
             }}
             onOrderPress={handleShowOrderDetails}
-            onViewAll={() => {}} // No longer needed since card handles expansion internally
+            onViewAll={() => navigation.navigate('Navigation')}
           />
           
           <FlatAvailableOrdersCard
@@ -376,21 +579,31 @@ const DashboardScreen: React.FC = () => {
         order={selectedOrder}
         onClose={handleCloseOrderDetails}
         onStatusUpdate={handleOrderDetailsAccept}
-        onAccept={async (order) => {
-          handleCloseOrderDetails();
-          await handleAcceptOrder(order.id);
-        }}
-        onDecline={async (order) => {
-          handleCloseOrderDetails();
-          await handleDeclineOrder(order.id);
-        }}
+        onAccept={
+          // Only show Accept button for available orders (not in active deliveries)
+          selectedOrder && !activeOrders?.some(o => o.id === selectedOrder.id)
+            ? async (order) => {
+                handleCloseOrderDetails();
+                await handleAcceptOrder(order.id);
+              }
+            : undefined
+        }
+        onDecline={
+          // Only show Decline button for available orders (not in active deliveries)
+          selectedOrder && !activeOrders?.some(o => o.id === selectedOrder.id)
+            ? async (order) => {
+                handleCloseOrderDetails();
+                await handleDeclineOrder(order.id);
+              }
+            : undefined
+        }
         onNavigate={handleOrderDetailsNavigate}
         onCall={(phone) => {
           // Handle phone call
           console.log('Call:', phone);
         }}
         showStatusButton={true}
-        readonly={!activeOrders?.some(o => o.id === selectedOrder?.id)}
+        readonly={false}
         title="Delivery Details"
       />
 

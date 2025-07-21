@@ -17,7 +17,7 @@ export const FlatSpecialHandlingBadges: React.FC<FlatSpecialHandlingBadgesProps>
     badges.push({
       key: 'cod',
       icon: 'cash',
-      text: `COD ${order.currency || 'SAR'} ${order.cod_amount.toFixed(2)}`,
+      text: `COD ${order.currency || 'SAR'} ${Number(order.cod_amount).toFixed(2)}`,
       backgroundColor: flatColors.cards.green.background,
       textColor: flatColors.accent.green,
     });

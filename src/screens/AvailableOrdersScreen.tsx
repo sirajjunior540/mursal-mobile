@@ -19,6 +19,7 @@ import BatchOrderCard from '../components/BatchOrderCard';
 import { useOrders } from '../features/orders/context/OrderProvider';
 import { Order, isBatchOrder } from '../types';
 import { Design } from '../constants/designSystem';
+import { apiService } from '../services/api';
 
 const AvailableOrdersScreen: React.FC = () => {
   const navigation = useNavigation();
@@ -46,42 +47,67 @@ const AvailableOrdersScreen: React.FC = () => {
     navigation.navigate('OrderDetails' as never, { orderId: order.id } as never);
   };
 
-  // Group available orders by pickup location
+  // Group available orders by batch ID first, then by pickup location
   const groupedAvailableOrders = useMemo(() => {
-    const groups = new Map<string, Order[]>();
+    const batchGroups = new Map<string, Order[]>();
+    const pickupGroups = new Map<string, Order[]>();
+    const standaloneOrders: Order[] = [];
     
+    // First, group by batch ID
     availableOrders.forEach((order) => {
-      if (order.pickup_latitude && order.pickup_longitude) {
-        const pickupKey = `${order.pickup_latitude}-${order.pickup_longitude}`;
-        if (!groups.has(pickupKey)) {
-          groups.set(pickupKey, []);
+      if (order.current_batch?.id) {
+        const batchId = order.current_batch.id;
+        if (!batchGroups.has(batchId)) {
+          batchGroups.set(batchId, []);
         }
-        groups.get(pickupKey)!.push(order);
+        batchGroups.get(batchId)!.push(order);
+      } else if (order.pickup_latitude && order.pickup_longitude) {
+        // If no batch ID, group by pickup location
+        const pickupKey = `${order.pickup_latitude}-${order.pickup_longitude}`;
+        if (!pickupGroups.has(pickupKey)) {
+          pickupGroups.set(pickupKey, []);
+        }
+        pickupGroups.get(pickupKey)!.push(order);
+      } else {
+        // Standalone orders without batch ID or coordinates
+        standaloneOrders.push(order);
       }
     });
     
     // Convert to array of grouped orders
-    const groupedArray: (Order | { isBatchGroup: true; orders: Order[]; pickupAddress: string })[] = [];
+    const groupedArray: (Order | { isBatchGroup: true; orders: Order[]; pickupAddress: string; batchId?: string; batchName?: string })[] = [];
     
-    groups.forEach((orders, pickupKey) => {
+    // Add batch groups first
+    batchGroups.forEach((orders, batchId) => {
+      if (orders.length >= 1) {
+        // Even single order batches should be grouped if they have a batch ID
+        groupedArray.push({
+          isBatchGroup: true,
+          orders: orders,
+          pickupAddress: orders[0].pickup_address || 'Pickup Location',
+          batchId: batchId,
+          batchName: orders[0].current_batch?.name || `Batch ${orders[0].current_batch?.batch_number}`
+        });
+      }
+    });
+    
+    // Then add pickup location groups (only if multiple orders)
+    pickupGroups.forEach((orders, pickupKey) => {
       if (orders.length > 1) {
-        // Create a batch group for multiple orders at same pickup
         groupedArray.push({
           isBatchGroup: true,
           orders: orders,
           pickupAddress: orders[0].pickup_address || 'Pickup Location'
         });
       } else {
-        // Single order, add as is
-        groupedArray.push(orders[0]);
+        // Single order at pickup location, add as standalone
+        standaloneOrders.push(orders[0]);
       }
     });
     
-    // Add orders without pickup coordinates
-    availableOrders.forEach((order) => {
-      if (!order.pickup_latitude || !order.pickup_longitude) {
-        groupedArray.push(order);
-      }
+    // Finally add standalone orders
+    standaloneOrders.forEach(order => {
+      groupedArray.push(order);
     });
     
     return groupedArray;
@@ -101,11 +127,15 @@ const AvailableOrdersScreen: React.FC = () => {
               <Ionicons name="layers" size={24} color="#FFFFFF" />
             </View>
             <View style={styles.batchGroupInfo}>
-              <Text style={styles.batchGroupTitle}>Batch Pickup</Text>
+              <Text style={styles.batchGroupTitle}>
+                {item.batchId ? (item.batchName || 'Batch Order') : 'Batch Pickup'}
+              </Text>
               <Text style={styles.batchGroupSubtitle}>{item.orders.length} orders • ${totalValue.toFixed(2)}</Text>
             </View>
             <View style={styles.batchGroupBadge}>
-              <Text style={styles.batchGroupBadgeText}>SAME PICKUP</Text>
+              <Text style={styles.batchGroupBadgeText}>
+                {item.batchId ? 'BATCH ORDER' : 'SAME PICKUP'}
+              </Text>
             </View>
           </View>
           
@@ -134,20 +164,35 @@ const AvailableOrdersScreen: React.FC = () => {
             <TouchableOpacity
               style={styles.batchGroupAcceptButton}
               onPress={() => {
-                // Handle batch acceptance - could accept all orders or show selection
+                // Handle batch acceptance
                 Alert.alert(
                   'Accept Batch Orders',
-                  `Accept all ${item.orders.length} orders from this pickup location?`,
+                  `Accept all ${item.orders.length} orders${item.batchId ? ' in this batch' : ' from this pickup location'}?`,
                   [
                     { text: 'Cancel', style: 'cancel' },
                     { 
                       text: 'Accept All', 
                       onPress: async () => {
-                        // Accept all orders in the batch
-                        for (const order of item.orders) {
-                          await acceptOrder(order.id);
+                        try {
+                          if (item.batchId) {
+                            // For true batch orders, use batch accept endpoint
+                            const response = await apiService.acceptBatchOrder(item.batchId);
+                            if (response.success) {
+                              console.log(`✅ Batch ${item.batchId} accepted successfully`);
+                            } else {
+                              Alert.alert('Error', 'Failed to accept batch order');
+                            }
+                          } else {
+                            // For same pickup location orders, accept individually
+                            for (const order of item.orders) {
+                              await acceptOrder(order.id);
+                            }
+                          }
+                          handleRefresh();
+                        } catch (error) {
+                          console.error('Error accepting batch:', error);
+                          Alert.alert('Error', 'Failed to accept batch orders');
                         }
-                        handleRefresh();
                       }
                     }
                   ]
