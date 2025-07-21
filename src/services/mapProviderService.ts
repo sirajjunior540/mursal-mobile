@@ -8,6 +8,7 @@ import { apiService } from './api';
 export interface MapProviderConfig {
   map_provider: 'none' | 'google' | 'mapbox' | 'openrouteservice';
   api_key: string | null;
+  secret_token?: string | null;
   enable_real_time_traffic: boolean;
   enable_alternative_routes: boolean;
 }
@@ -54,14 +55,15 @@ class MapProviderService {
       })
       .catch(error => {
         console.error('Failed to fetch map provider config:', error);
-        // Return default config on error
+        // Return Google Maps as default config on error since we have it configured
         const defaultConfig: MapProviderConfig = {
-          map_provider: 'none',
-          api_key: null,
+          map_provider: 'google',
+          api_key: Config.GOOGLE_MAPS_ANDROID_SDK_KEY || null,
           enable_real_time_traffic: false,
           enable_alternative_routes: false
         };
         this.config = defaultConfig;
+        console.log('[mapProviderService] Using default Google Maps config due to error');
         return defaultConfig;
       })
       .finally(() => {
@@ -409,6 +411,8 @@ class MapProviderService {
     provider: string | null;
     enableNavigation: boolean;
     supportsMobile: boolean;
+    api_key?: string;
+    secret_token?: string;
   }> {
     try {
       const [showMap, provider, enableNavigation] = await Promise.all([
@@ -419,12 +423,34 @@ class MapProviderService {
 
       // Check if provider supports mobile
       const supportsMobile = this.providerSupportsMobile(provider);
+      
+      // Get API key from backend config
+      let api_key = this.config?.api_key || '';
+      let secret_token = this.config?.secret_token || '';
+      
+      // Use environment tokens as fallback if backend doesn't provide them
+      if (provider === 'mapbox') {
+        if (!api_key) {
+          api_key = Config.MAP_BOX_TOKEN || '';
+        }
+        if (!secret_token) {
+          secret_token = Config.MAPBOX_SECRET_TOKEN || '';
+        }
+      } else if (provider === 'google') {
+        // For Google Maps, use the environment key as fallback
+        if (!api_key) {
+          api_key = Config.GOOGLE_MAPS_ANDROID_SDK_KEY || '';
+          console.log('[mapProviderService] Using Google Maps key from environment');
+        }
+      }
 
       return {
         showMap: showMap && supportsMobile,
         provider,
         enableNavigation: enableNavigation && supportsMobile,
         supportsMobile,
+        api_key,
+        secret_token,
       };
     } catch (error) {
       console.error('Error getting mobile map config:', error);
@@ -433,6 +459,8 @@ class MapProviderService {
         provider: null,
         enableNavigation: false,
         supportsMobile: false,
+        api_key: '',
+        secret_token: '',
       };
     }
   }

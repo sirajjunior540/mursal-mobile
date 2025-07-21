@@ -10,6 +10,8 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import { mapProviderService } from '../../services/mapProviderService';
 import { flatColors } from '../../design/dashboard/flatColors';
 import { premiumTypography } from '../../design/dashboard/premiumTypography';
+// Temporarily disabled due to React Native 0.80 compatibility issues
+// import MapboxMapView from './MapboxMapView';
 
 interface MapPoint {
   id: string;
@@ -63,15 +65,23 @@ export const UniversalMapView: React.FC<UniversalMapViewProps> = ({
       try {
         setLoading(true);
         const config = await mapProviderService.getMobileMapConfig();
+        console.log('[UniversalMapView] Loaded config:', config);
         setMapConfig(config);
         
-        if (!config.supportsMobile) {
+        // Don't show error for supported providers
+        if (!config.supportsMobile && config.provider !== 'google') {
           const provider = config.provider || 'selected provider';
           setError(`${provider} is not fully supported on mobile devices`);
         }
       } catch (err) {
-        console.error('Failed to load map config:', err);
-        setError('Failed to load map configuration');
+        console.error('[UniversalMapView] Failed to load map config:', err);
+        // Default to Google Maps on error since we have the API key configured
+        setMapConfig({
+          showMap: true,
+          provider: 'google',
+          enableNavigation: true,
+          supportsMobile: true,
+        });
       } finally {
         setLoading(false);
       }
@@ -185,8 +195,9 @@ export const UniversalMapView: React.FC<UniversalMapViewProps> = ({
     );
   }
 
-  // Error state
-  if (error || !mapConfig?.showMap || mapError) {
+  // Error state - only show if there's an actual error or maps are explicitly disabled
+  if (error || mapConfig?.provider === 'none' || mapError) {
+    console.log('[UniversalMapView] Showing error state:', { error, provider: mapConfig?.provider, mapError });
     return (
       <View style={[styles.container, { height }, style]}>
         <View style={styles.errorContainer}>
@@ -215,6 +226,14 @@ export const UniversalMapView: React.FC<UniversalMapViewProps> = ({
 
   // Render provider-specific map
   const renderMap = () => {
+    console.log('[UniversalMapView] renderMap called with provider:', mapConfig?.provider);
+    
+    // If no config loaded yet, default to Google Maps
+    if (!mapConfig) {
+      console.log('[UniversalMapView] No config, defaulting to Google Maps');
+      return renderGoogleMap();
+    }
+    
     switch (mapConfig.provider) {
       case 'google':
         return renderGoogleMap();
@@ -225,6 +244,7 @@ export const UniversalMapView: React.FC<UniversalMapViewProps> = ({
       case 'openstreetmap':
         return renderOpenStreetMap();
       default:
+        console.log('[UniversalMapView] Unknown provider, using fallback');
         return renderFallbackView();
     }
   };
@@ -237,10 +257,39 @@ export const UniversalMapView: React.FC<UniversalMapViewProps> = ({
   };
 
   const renderMapboxMap = () => {
-    // For Mapbox, we use the default provider which will use Apple Maps on iOS and Google Maps on Android
-    // Mapbox SDK integration would require additional setup
-    console.log('[UniversalMapView] Rendering Mapbox map with default provider');
-    return renderNativeMap(PROVIDER_DEFAULT);
+    console.log('[UniversalMapView] Mapbox temporarily disabled due to React Native 0.80 compatibility');
+    console.log('[UniversalMapView] @rnmapbox/maps needs to be updated for RN 0.80 support');
+    console.log('[UniversalMapView] Falling back to Google Maps on Android, Apple Maps on iOS');
+    
+    // Fallback to Google Maps on Android until @rnmapbox/maps is updated for React Native 0.80
+    const fallbackProvider = Platform.OS === 'android' ? PROVIDER_GOOGLE : PROVIDER_DEFAULT;
+    return renderNativeMap(fallbackProvider);
+    
+    // Original Mapbox implementation - will restore when compatibility is fixed
+    /*
+    console.log('[UniversalMapView] Rendering native Mapbox map with token:', {
+      hasApiKey: !!mapConfig.api_key,
+      hasSecretToken: !!mapConfig.secret_token,
+    });
+    
+    // Convert points to simple format for MapboxMapView
+    const mapboxPoints = points.map(point => ({
+      latitude: point.latitude,
+      longitude: point.longitude,
+      type: (point.type || 'delivery') as 'pickup' | 'delivery',
+    }));
+    
+    // Use public access token (pk.*) for the SDK, not the secret token
+    // The secret token is only used during build time for SDK download
+    return (
+      <MapboxMapView
+        points={mapboxPoints}
+        height={height}
+        accessToken={mapConfig.api_key || ''}
+        initialRegion={mapRegion}
+      />
+    );
+    */
   };
 
   const renderOpenRouteServiceMap = () => {
@@ -265,22 +314,27 @@ export const UniversalMapView: React.FC<UniversalMapViewProps> = ({
       regionCenter: mapRegion,
     });
     const markerColors = {
-      pickup: '#FF6B6B',
-      delivery: '#4ECDC4',
+      pickup: '#FF9F43',
+      delivery: '#10B981',
       current: '#3B82F6',
     };
+
+    // Force a valid initial region
+    const initialMapRegion = {
+      latitude: mapRegion.latitude || 25.409328,
+      longitude: mapRegion.longitude || 55.44359,
+      latitudeDelta: 0.05,
+      longitudeDelta: 0.05,
+    };
+
+    console.log('[UniversalMapView] Using initial region:', initialMapRegion);
 
     return (
       <MapView
         ref={mapRef}
         style={styles.map}
         provider={provider}
-        initialRegion={{
-          latitude: 24.7136,
-          longitude: 46.6753,
-          latitudeDelta: 0.1,
-          longitudeDelta: 0.1,
-        }}
+        initialRegion={initialMapRegion}
         showsUserLocation={showCurrentLocation}
         showsMyLocationButton={showCurrentLocation}
         showsCompass={true}
@@ -299,19 +353,26 @@ export const UniversalMapView: React.FC<UniversalMapViewProps> = ({
           console.log('[UniversalMapView] MapRegion:', mapRegion);
           setMapError(false);
           
-          // Force animate to Saudi Arabia first
+          // Force animate to the correct region after map loads
           if (mapRef.current) {
-            const defaultRegion = {
-              latitude: 24.7136,
-              longitude: 46.6753,
-              latitudeDelta: 2.0,
-              longitudeDelta: 2.0,
+            const targetRegion = {
+              latitude: mapRegion.latitude || 25.409328,
+              longitude: mapRegion.longitude || 55.44359,
+              latitudeDelta: 0.02,
+              longitudeDelta: 0.02,
             };
             
-            console.log('[UniversalMapView] Animating to default Saudi region first');
-            mapRef.current.animateToRegion(defaultRegion, 1000);
+            console.log('[UniversalMapView] Animating to target region:', targetRegion);
             
-            // Then fit to actual coordinates if available
+            // First animation to get us to the right area
+            setTimeout(() => {
+              if (mapRef.current) {
+                mapRef.current.animateToRegion(targetRegion, 1000);
+                console.log('[UniversalMapView] First animation triggered');
+              }
+            }, 100);
+            
+            // Second attempt with fitToCoordinates if we have multiple points
             if (points.length > 0) {
               setTimeout(() => {
                 if (mapRef.current) {
@@ -325,17 +386,24 @@ export const UniversalMapView: React.FC<UniversalMapViewProps> = ({
                   console.log('[UniversalMapView] Valid coordinates for fitting:', validCoordinates);
                   
                   if (validCoordinates.length > 0) {
-                    mapRef.current.fitToCoordinates(validCoordinates, {
-                      edgePadding: { top: 100, right: 100, bottom: 100, left: 100 },
-                      animated: true,
-                    });
-                    console.log('[UniversalMapView] Called fitToCoordinates with valid points');
-                  } else if (mapRegion.latitude !== 0 || mapRegion.longitude !== 0) {
-                    mapRef.current.animateToRegion(mapRegion, 1000);
-                    console.log('[UniversalMapView] No valid coordinates, animating to calculated region');
+                    // Try fitToSuppliedMarkers as alternative
+                    if (mapRef.current.fitToSuppliedMarkers) {
+                      mapRef.current.fitToSuppliedMarkers({
+                        edgePadding: { top: 100, right: 100, bottom: 100, left: 100 },
+                        animated: true,
+                      });
+                      console.log('[UniversalMapView] Called fitToSuppliedMarkers');
+                    } else {
+                      // Fallback to fitToCoordinates
+                      mapRef.current.fitToCoordinates(validCoordinates, {
+                        edgePadding: { top: 100, right: 100, bottom: 100, left: 100 },
+                        animated: true,
+                      });
+                      console.log('[UniversalMapView] Called fitToCoordinates');
+                    }
                   }
                 }
-              }, 2000);
+              }, 1500);
             }
           }
         }}
@@ -344,7 +412,18 @@ export const UniversalMapView: React.FC<UniversalMapViewProps> = ({
           setMapError(true);
         }}
       >
-        {/* Render route polyline first so it appears below markers */}
+        {/* Debug marker - always visible */}
+        <Marker
+          coordinate={{
+            latitude: 25.409328,
+            longitude: 55.44359,
+          }}
+          title="DEBUG MARKER"
+          description="This is a test marker at the exact coordinates"
+          pinColor="red"
+        />
+
+        {/* Render actual route polyline */}
         {routeCoordinates.length > 1 && (
           <Polyline
             coordinates={routeCoordinates}
@@ -354,7 +433,7 @@ export const UniversalMapView: React.FC<UniversalMapViewProps> = ({
           />
         )}
 
-        {/* Render markers */}
+        {/* Render actual markers */}
         {points.map((point, index) => {
           // Determine marker color based on type
           let markerColor = markerColors[point.type || 'current'];
@@ -366,17 +445,47 @@ export const UniversalMapView: React.FC<UniversalMapViewProps> = ({
             markerColor = '#10B981'; // Green for delivery
           }
 
+          // Check if this point overlaps with a previous point
+          const overlappingIndex = points.findIndex((p, i) => 
+            i < index && 
+            Math.abs(p.latitude - point.latitude) < 0.0001 && 
+            Math.abs(p.longitude - point.longitude) < 0.0001
+          );
+
+          // Add small offset if overlapping
+          let offsetLat = 0;
+          let offsetLng = 0;
+          if (overlappingIndex !== -1) {
+            // Add small offset to make both markers visible
+            offsetLat = 0.0002 * (index - overlappingIndex);
+            offsetLng = 0.0002 * (index - overlappingIndex);
+            console.log(`[UniversalMapView] Point ${index} overlaps with ${overlappingIndex}, adding offset`);
+          }
+
+          console.log(`[UniversalMapView] Rendering marker ${index}:`, {
+            id: point.id,
+            lat: point.latitude + offsetLat,
+            lng: point.longitude + offsetLng,
+            type: point.type,
+            color: markerColor,
+            hasOffset: overlappingIndex !== -1
+          });
+
           return (
             <Marker
-              key={point.id}
+              key={`marker-${index}`}
               coordinate={{
-                latitude: point.latitude,
-                longitude: point.longitude,
+                latitude: point.latitude + offsetLat,
+                longitude: point.longitude + offsetLng,
               }}
-              title={point.title}
-              description={point.description}
+              title={point.title || `${point.type === 'pickup' ? 'Pickup' : 'Delivery'} ${index + 1}`}
+              description={point.description || point.address}
               pinColor={markerColor}
-              onPress={() => onPointPress?.(point)}
+              tracksViewChanges={false}
+              onPress={() => {
+                console.log('[UniversalMapView] Marker pressed:', point);
+                onPointPress?.(point);
+              }}
             />
           );
         })}

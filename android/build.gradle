@@ -6,6 +6,10 @@ buildscript {
         targetSdkVersion = 35
         ndkVersion = "27.1.12297006"
         kotlinVersion = "2.1.20"
+        RNMapboxMapsLibs = {
+            implementation 'com.mapbox.maps:android:10.6.0'
+            implementation 'com.mapbox.mapboxsdk:mapbox-sdk-turf:5.4.1'
+        }
     }
     repositories {
         google()
@@ -23,10 +27,34 @@ buildscript {
 apply plugin: "com.facebook.react.rootproject"
 
 allprojects {
+    repositories {
+        google()
+        mavenCentral()
+        
+        // Mapbox Maven repository
+        maven {
+            url 'https://api.mapbox.com/downloads/v2/releases/maven'
+            authentication {
+                basic(BasicAuthentication)
+            }
+            credentials {
+                // Do not change the username below.
+                // This should always be `mapbox` (not your username).
+                username = "mapbox"
+                // Use the secret token you stored in gradle.properties as the password
+                password = project.properties['MAPBOX_DOWNLOADS_TOKEN'] ?: ""
+            }
+        }
+    }
+    
     tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).all {
         kotlinOptions {
-            freeCompilerArgs += ["-Xjvm-default=all", "-Xopt-in=kotlin.RequiresOptIn"]
+            freeCompilerArgs += ["-Xjvm-default=all", "-Xopt-in=kotlin.RequiresOptIn", "-Xskip-prerelease-check"]
             allWarningsAsErrors = false
+            // Suppress errors for rnmapbox_maps module
+            if (project.name == "rnmapbox_maps") {
+                freeCompilerArgs += ["-Xallow-kotlin-package"]
+            }
         }
     }
 }

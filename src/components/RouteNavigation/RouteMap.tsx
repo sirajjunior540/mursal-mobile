@@ -1,13 +1,11 @@
 import React from 'react';
-import { View, Text, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { RouteMapProps } from '../../types/route.types';
 import { flatColors } from '../../design/dashboard/flatColors';
 import { premiumTypography } from '../../design/dashboard/premiumTypography';
 import { premiumShadows } from '../../design/dashboard/premiumShadows';
-import UniversalMapView from '../UniversalMap/UniversalMapView';
-
-const { width: screenWidth } = Dimensions.get('window');
+import { SimpleMapView } from '../UniversalMap/SimpleMapView';
 
 export const RouteMap: React.FC<RouteMapProps> = ({
   route,
@@ -16,6 +14,13 @@ export const RouteMap: React.FC<RouteMapProps> = ({
   mapProvider,
   onMarkerPress,
 }) => {
+  // Convert route points to simple map points format first
+  const mapPoints = route?.points?.map((point) => ({
+    latitude: point.latitude,
+    longitude: point.longitude,
+    type: point.type as 'pickup' | 'delivery',
+  })) || [];
+
   // Debug logging
   console.log('[RouteMap] Props:', {
     hasRoute: !!route,
@@ -28,8 +33,10 @@ export const RouteMap: React.FC<RouteMapProps> = ({
       address: p.address 
     })),
     showMap,
-    mapProvider
+    mapProvider,
+    mapPoints
   });
+  
   // If map is not configured or enabled, show alternative view
   if (!showMap || !mapProvider) {
     return (
@@ -84,25 +91,9 @@ export const RouteMap: React.FC<RouteMapProps> = ({
     description: point.address,
     type: point.type,
     isCurrent: index === currentStopIndex,
-    isCompleted: point.order.status === 'delivered',
+    isCompleted: point.order?.status === 'delivered',
   })) || [];
 
-  // Convert route points to map points format
-  const mapPoints = route?.points?.map((point, index) => ({
-    id: point.id,
-    latitude: point.latitude,
-    longitude: point.longitude,
-    title: `${index + 1}. ${point.type === 'pickup' ? 'Pickup' : 'Delivery'}`,
-    description: point.address,
-    type: point.type,
-  })) || [];
-
-  // Handle point press
-  const handlePointPress = (point: any) => {
-    if (onMarkerPress) {
-      onMarkerPress(point.id);
-    }
-  };
 
   return (
     <View style={styles.container}>
@@ -133,13 +124,10 @@ export const RouteMap: React.FC<RouteMapProps> = ({
 
       {/* Map View */}
       <View style={styles.mapContainer}>
-        <UniversalMapView
-          points={mapPoints}
-          height={240}
-          center={mapRegion}
-          showCurrentLocation={true}
-          showRouteOptimization={true}
-          onPointPress={handlePointPress}
+        <SimpleMapView 
+          points={mapPoints} 
+          height={240} 
+          initialRegion={mapRegion}
         />
       </View>
 
@@ -272,12 +260,12 @@ const styles = StyleSheet.create({
   legendItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
   },
   legendDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
+    marginRight: 6,
   },
   legendText: {
     fontSize: premiumTypography.caption.small.fontSize,

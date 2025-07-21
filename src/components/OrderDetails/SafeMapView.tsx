@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Platform, Text } from 'react-native';
-import UniversalMapView from '../UniversalMapView';
+import { UniversalMapView } from '../UniversalMap';
 import { Design } from '../../constants/designSystem';
 
 // Singleton to track if a map is already mounted
@@ -65,9 +65,27 @@ export const SafeMapView: React.FC<SafeMapViewProps> = (props) => {
     );
   }
 
+  // Convert markers to points format for new UniversalMapView
+  const points = props.markers?.map((marker, index) => ({
+    id: marker.id || `marker-${index}`,
+    latitude: marker.coordinate?.latitude || marker.latitude || 0,
+    longitude: marker.coordinate?.longitude || marker.longitude || 0,
+    title: marker.title,
+    description: marker.description,
+    type: marker.type || 'delivery',
+  })) || [];
+
   // Wrap in error boundary
   try {
-    return <UniversalMapView {...props} onError={handleError} />;
+    return (
+      <UniversalMapView 
+        points={points}
+        route={props.route}
+        style={props.style}
+        height={props.style?.height || 300}
+        onError={handleError}
+      />
+    );
   } catch (error) {
     console.log('Map error:', error);
     return (

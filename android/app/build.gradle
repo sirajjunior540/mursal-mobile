@@ -87,6 +87,13 @@ android {
         versionCode 1
         versionName "1.0"
     }
+    
+    packagingOptions {
+        pickFirst 'lib/x86/libc++_shared.so'
+        pickFirst 'lib/x86_64/libc++_shared.so'
+        pickFirst 'lib/arm64-v8a/libc++_shared.so'
+        pickFirst 'lib/armeabi-v7a/libc++_shared.so'
+    }
     signingConfigs {
         debug {
             storeFile file('debug.keystore')
@@ -119,6 +126,9 @@ dependencies {
     // Firebase dependencies (versions managed by BoM)
     implementation("com.google.firebase:firebase-analytics")
     implementation("com.google.firebase:firebase-messaging")
+    
+    // Google Play Services Maps for react-native-maps
+    implementation("com.google.android.gms:play-services-maps:19.0.0")
 
     if (hermesEnabled.toBoolean()) {
         implementation("com.facebook.react:hermes-android")
