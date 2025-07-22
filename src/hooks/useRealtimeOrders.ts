@@ -4,6 +4,7 @@ import { Order } from '../types';
 import { realtimeService } from '../services/realtimeService';
 import { locationService } from '../services/locationService';
 import { soundService } from '../services/soundService';
+import { useAuth } from '../contexts/AuthContext';
 
 export interface UseRealtimeOrdersReturn {
   newOrders: Order[];
@@ -18,6 +19,7 @@ export interface UseRealtimeOrdersReturn {
 }
 
 export const useRealtimeOrders = (): UseRealtimeOrdersReturn => {
+  const { isLoggedIn } = useAuth();
   const [newOrders, setNewOrders] = useState<Order[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const [isLocationTracking, setIsLocationTracking] = useState(false);
@@ -25,23 +27,36 @@ export const useRealtimeOrders = (): UseRealtimeOrdersReturn => {
   
   const appStateRef = useRef(AppState.currentState);
   const notificationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const initialized = useRef(false);
 
   useEffect(() => {
-    initializeServices();
-    setupAppStateListener();
+    if (isLoggedIn) {
+      initializeServices();
+      setupAppStateListener();
+    } else {
+      // Clean up when user logs out
+      cleanup();
+      initialized.current = false;
+    }
     
     return () => {
       cleanup();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isLoggedIn]);
 
   const initializeServices = useCallback(async () => {
+    if (!isLoggedIn || initialized.current) {
+      console.log('🚫 useRealtimeOrders: Skipping initialization - not logged in or already initialized');
+      return;
+    }
+    
     try {
-      // Initialize realtime service
-      await realtimeService.initialize();
+      console.log('🔄 useRealtimeOrders: Setting up callbacks for realtime service');
       
-      // Set up callbacks
+      // Don't initialize directly - the AuthContext already enables initialization
+      // The OrderContext will handle the actual initialization
+      // Just set up callbacks
       realtimeService.setCallbacks({
         onNewOrder: handleNewOrder,
         onOrderUpdate: handleOrderUpdate,
@@ -57,15 +72,15 @@ export const useRealtimeOrders = (): UseRealtimeOrdersReturn => {
       setIsLocationTracking(locationService.isLocationTracking());
       setIsConnected(realtimeService.isConnectedToServer());
       
-      // Start services if enabled
-      if (config.enabled) {
-        realtimeService.start();
-      }
+      // Mark as initialized
+      initialized.current = true;
+      
+      console.log('✅ useRealtimeOrders: Successfully set up callbacks and state');
     } catch (error) {
-      console.error('Failed to initialize realtime services:', error);
+      console.error('❌ useRealtimeOrders: Failed to set up realtime services:', error);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isLoggedIn]);
 
   const setupAppStateListener = useCallback(() => {
     const handleAppStateChange = (nextAppState: string) => {
