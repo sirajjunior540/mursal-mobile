@@ -84,7 +84,10 @@ export class PollingClient {
    */
   private async poll(): Promise<void> {
     try {
-      console.log('[PollingClient] Polling for orders...');
+      // Only log in development
+      if (__DEV__) {
+        console.log('[PollingClient] Polling for orders...');
+      }
       this.lastPollTime = Date.now();
 
       const orders = await this.fetchOrders();
@@ -100,14 +103,18 @@ export class PollingClient {
 
       // Notify callback with orders
       if (orders && orders.length > 0) {
-        console.log(`[PollingClient] Received ${orders.length} orders`);
+        if (__DEV__) {
+          console.log(`[PollingClient] Received ${orders.length} orders`);
+        }
         this.callbacks.onData?.(orders);
-      } else {
-        console.log('[PollingClient] No orders received');
       }
     } catch (error) {
       this.consecutiveErrors++;
-      console.error(`[PollingClient] Polling error (${this.consecutiveErrors}/${this.maxConsecutiveErrors}):`, error);
+      
+      // Only log errors in development or if it's a critical error
+      if (__DEV__ || this.consecutiveErrors >= this.maxConsecutiveErrors) {
+        console.error(`[PollingClient] Polling error (${this.consecutiveErrors}/${this.maxConsecutiveErrors}):`, error);
+      }
 
       // Notify error callback
       this.callbacks.onError?.(`Polling error: ${error}`);
@@ -140,7 +147,9 @@ export class PollingClient {
       headers.Authorization = `Bearer ${this.config.authToken}`;
     }
 
-    console.log(`[PollingClient] Fetching from: ${url} with Host: ${API_CONFIG.HOST}`);
+    if (__DEV__) {
+      console.log(`[PollingClient] Fetching from: ${url} with Host: ${API_CONFIG.HOST}`);
+    }
 
     const response = await fetch(url, {
       method: 'GET',

@@ -85,7 +85,7 @@ export interface OrderTrackingStats {
 class RealtimeService {
   private config: RealtimeConfig = {
     mode: 'polling',
-    pollingInterval: 10000, // 10 seconds
+    pollingInterval: 30000, // 30 seconds - reduced for better battery life (FCM handles urgent notifications)
     enabled: true, // ✅ Enable by default
   };
 
@@ -102,19 +102,21 @@ class RealtimeService {
    */
   async initialize(): Promise<void> {
     try {
-      console.log('🚀 Initializing RealtimeService...');
-      console.log('🔍 Call stack:', new Error().stack?.split('\n').slice(1, 4).join('\n'));
+      if (__DEV__) {
+        console.log('🚀 Initializing RealtimeService...');
+        console.log('🔍 Call stack:', new Error().stack?.split('\n').slice(1, 4).join('\n'));
+      }
 
       // Check if initialization is blocked (safety measure)
       if (this.initializationBlocked) {
-        console.log('🚫 RealtimeService initialization is blocked - call enableInitialization() first');
+        if (__DEV__) console.log('🚫 RealtimeService initialization is blocked - call enableInitialization() first');
         this.callbacks.onError?.('Realtime service initialization blocked - login required');
         return;
       }
 
       // Check if already initialized
       if (this.initialized) {
-        console.log('⚠️ RealtimeService already initialized, skipping');
+        if (__DEV__) console.log('⚠️ RealtimeService already initialized, skipping');
         // Still set up callbacks if needed
         if (this.sdk && Object.keys(this.callbacks).length > 0) {
           this.setupSdkCallbacks();
@@ -126,14 +128,14 @@ class RealtimeService {
       const savedConfig = await Storage.getItem<RealtimeConfig>('realtime_config');
       if (savedConfig) {
         this.config = { ...this.config, ...savedConfig };
-        console.log('📋 Loaded saved config:', savedConfig);
+        if (__DEV__) console.log('📋 Loaded saved config:', savedConfig);
       }
 
       // Initialize the SDK
       await this.initializeSDK();
 
       this.initialized = true;
-      console.log('✅ RealtimeService initialized successfully');
+      if (__DEV__) console.log('✅ RealtimeService initialized successfully');
     } catch (error) {
       console.error('❌ RealtimeService initialization failed:', error);
       this.initialized = false;
@@ -146,7 +148,7 @@ class RealtimeService {
    */
   private async initializeSDK(): Promise<void> {
     try {
-      console.log('🔧 Initializing RealtimeSDK...');
+      if (__DEV__) console.log('🔧 Initializing RealtimeSDK...');
 
       // Check if we're in a valid state for initialization
       if (this.initializationBlocked) {

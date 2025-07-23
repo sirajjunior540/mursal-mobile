@@ -26,6 +26,13 @@ import {
  * into the frontend TypeScript types used by the mobile app.
  */
 
+// Performance optimization: Only log in development
+const perfLog = (message: string, data?: any) => {
+  if (__DEV__ && apiDebug) {
+    console.log(message, data);
+  }
+};
+
 export class ApiTransformers {
   /**
    * Transform backend driver data to frontend Driver type
@@ -60,7 +67,7 @@ export class ApiTransformers {
     const deliveryStatus = delivery?.status || delivery?.delivery_status;
     const orderStatus = order.status || order.order_status;
     
-    apiDebug('Determining order status', { deliveryStatus, orderStatus });
+    perfLog('Determining order status', { deliveryStatus, orderStatus });
 
     // Map backend status to frontend OrderStatus enum
     const statusMap: Record<string, OrderStatus> = {
@@ -80,19 +87,19 @@ export class ApiTransformers {
 
     // Available orders are those that drivers can accept
     if (!delivery?.driver || delivery?.driver === null || delivery?.driver === '') {
-      apiDebug('Order has no driver assigned - setting status to pending');
+      perfLog('Order has no driver assigned - setting status to pending');
       return 'pending';
     }
 
     // If delivery has a driver, use the delivery status directly
     if (delivery?.driver && deliveryStatus) {
-      apiDebug('Order has driver - using delivery status', deliveryStatus);
+      perfLog('Order has driver - using delivery status', deliveryStatus);
       return deliveryStatus as OrderStatus;
     }
 
     // Use delivery status if available, then order status, default to pending
     const finalStatus = deliveryStatus || orderStatus || 'pending';
-    apiDebug('Final order status determined', finalStatus);
+    perfLog('Final order status determined', finalStatus);
     return statusMap[finalStatus] || 'pending';
   }
 
@@ -105,8 +112,67 @@ export class ApiTransformers {
       throw new Error('Invalid backend data provided to transformOrder');
     }
     
-    const data = backendData as BackendOrder | BackendDelivery;
-    apiDebug('transformOrder input', data);
+    const data = backendData as any;
+    
+    // Performance: Remove excessive logging
+    perfLog('transformOrder input type', { type: data.type, hasBatch: !!data.batch_id });
+    
+    // Check if this is a batch order from available_orders endpoint
+    if (data.type === 'batch' && data.batch_id && data.orders) {
+      perfLog('Processing batch order', { orderCount: data.orders.length });
+      
+      // For batch orders, we need to return the first delivery with batch info
+      if (data.orders.length > 0) {
+        const firstDelivery = data.orders[0];
+        
+        // Make sure the delivery has an ID
+        if (!firstDelivery.id) {
+          console.error('❌ [TRANSFORM] First delivery in batch has no ID!');
+          firstDelivery.id = firstDelivery.order?.id || firstDelivery.order || `batch-${data.batch_id}-1`;
+        }
+        
+        const transformedOrder = this.transformOrder(firstDelivery);
+        
+        // Add batch information
+        transformedOrder.current_batch = {
+          id: data.batch_id,
+          batch_number: data.batch_number,
+          name: `Batch ${data.batch_number}`,
+          status: 'pending',
+          batch_type: data.batch_type || 'regular',
+          orders: data.orders.map((d: any) => this.transformOrder(d))
+        };
+        
+        // Override some fields with batch-level data
+        transformedOrder.pickup_address = data.pickup_address || transformedOrder.pickup_address;
+        transformedOrder.pickup_latitude = data.pickup_latitude || transformedOrder.pickup_latitude;
+        transformedOrder.pickup_longitude = data.pickup_longitude || transformedOrder.pickup_longitude;
+        
+        // Make sure we have contact info
+        if (data.pickup_contact_name) {
+          transformedOrder.pickup_contact_name = data.pickup_contact_name;
+        }
+        if (data.pickup_contact_phone) {
+          transformedOrder.pickup_contact_phone = data.pickup_contact_phone;
+        }
+        
+        perfLog('Batch order transformed', {
+          id: transformedOrder.id,
+          batchId: transformedOrder.current_batch.id,
+          orderCount: transformedOrder.current_batch.orders?.length
+        });
+        
+        return transformedOrder;
+      }
+    }
+    
+    // Check if this is a single order from available_orders endpoint
+    if (data.type === 'single') {
+      perfLog('Processing single order');
+      // Remove the type field and process the rest
+      const { type, ...orderData } = data;
+      return this.transformOrder(orderData);
+    }
 
     // Handle different backend response formats
     let order: BackendOrder | null = null;
@@ -118,7 +184,7 @@ export class ApiTransformers {
       
       // If order is just an ID, create a minimal order object
       if (typeof delivery.order === 'number' || typeof delivery.order === 'string') {
-        apiDebug('Order field is just an ID, creating minimal order object');
+        perfLog('Order field is just an ID, creating minimal order object');
         order = {
           id: String(delivery.order),
           order_number: delivery.order_id ? `#${delivery.order_id}` : `#${delivery.order}`,
@@ -147,24 +213,14 @@ export class ApiTransformers {
       order = data as BackendOrder;
     }
 
-    apiDebug('Transforming order data', { hasOrder: !!order, hasDelivery: !!delivery });
+    perfLog('Transforming order data', { hasOrder: !!order, hasDelivery: !!delivery });
 
-    // Enhanced customer data extraction with debugging
-    apiDebug('Customer data extraction started');
-    
-    // Debug coordinates
-    apiDebug('Coordinate data', { 
-      pickup_lat: order?.pickup_latitude, 
-      pickup_lng: order?.pickup_longitude,
-      delivery_lat: order?.delivery_latitude,
-      delivery_lng: order?.delivery_longitude
-    });
-
+    // Enhanced customer data extraction
     let customerData: BackendCustomer = {};
     
     // Handle case where customer is just an ID (needs to be fixed in backend)
     if (order && (typeof order.customer === 'number' || typeof order.customer === 'string')) {
-      apiDebug('Customer field is just an ID, not an object. Backend should return customer_details.');
+      perfLog('Customer field is just an ID');
       customerData = {
         id: String(order.customer),
         name: order.customer_name,
@@ -203,14 +259,19 @@ export class ApiTransformers {
 
     // Log if customer data is missing for debugging
     if (!customer.name || customer.name === 'Unknown Customer') {
-      apiDebug('Missing customer data in order', { orderId: order?.id, deliveryId: delivery?.id });
+      if (__DEV__) {
+        console.error('❌ [TRANSFORM] Missing customer name!', { orderId: order?.id, deliveryId: delivery?.id });
+      }
     }
 
     // CRITICAL: For available_orders endpoint, the root object IS the delivery
-    // So backendData.id is the delivery ID we need for accept/decline
     const primaryId = String(data.id || delivery?.id || order?.id || '');
 
-    apiDebug('ID Resolution', { primaryId, dataId: data.id, deliveryId: delivery?.id, orderId: order?.id });
+    if (!primaryId || primaryId === 'undefined' || primaryId === '') {
+      console.error('❌ [TRANSFORM] No valid ID found in order data!');
+    }
+    
+    perfLog('ID Resolution', { primaryId });
 
     // Batch order support - use current_batch structure
     const isBatchDelivery = !!(
@@ -221,7 +282,7 @@ export class ApiTransformers {
       order?.current_batch_id
     );
 
-    apiDebug('Batch detection', { isBatchDelivery });
+    perfLog('Batch detection', { isBatchDelivery });
 
     // Transform order items
     const items = (order?.items || order?.order_items || []).map((item: BackendOrderItem) => ({
@@ -232,9 +293,6 @@ export class ApiTransformers {
       specialInstructions: item.notes || ''
     }));
 
-    // Calculate estimated delivery time based on various time fields
-    // (This is now directly assigned in the order object below)
-
     // Parse coordinates with better debugging - coordinates are only on order, not delivery
     const parsedCoords = {
       pickup_lat: order?.pickup_latitude ? parseFloat(String(order.pickup_latitude)) : undefined,
@@ -243,7 +301,7 @@ export class ApiTransformers {
       delivery_lng: order?.delivery_longitude ? parseFloat(String(order.delivery_longitude)) : undefined,
     };
     
-    apiDebug('Parsed coordinates', parsedCoords);
+    perfLog('Parsed coordinates', parsedCoords);
 
     const baseOrder: Order = {
       // Use the primary ID (delivery ID if available, otherwise order ID)
@@ -285,14 +343,11 @@ export class ApiTransformers {
       final_delivery_address: order?.final_delivery_address,
       final_delivery_latitude: order?.final_delivery_latitude ? parseFloat(String(order.final_delivery_latitude)) : undefined,
       final_delivery_longitude: order?.final_delivery_longitude ? parseFloat(String(order.final_delivery_longitude)) : undefined,
-      // Add batch orders if this is a batch
-      // Note: 'orders' property is defined in BatchOrder interface but not in base Order
     };
 
     // If this is a batch order, try to determine batch size from available data
     if (isBatchDelivery && order?.consolidation_batch_id) {
       // For now, we'll estimate batch size from other indicators
-      // In a real implementation, this would come from the backend
       const estimatedBatchSize = order?.batchSize || 
                                 order?.orders?.length || 
                                 2; // Default estimate
@@ -303,7 +358,15 @@ export class ApiTransformers {
       } as Order;
     }
 
-    return baseOrder as Order;
+    const finalOrder = baseOrder as Order;
+    
+    perfLog('Final transformed order', {
+      id: finalOrder.id,
+      orderNumber: finalOrder.order_number,
+      status: finalOrder.status
+    });
+    
+    return finalOrder;
   }
 
   /**

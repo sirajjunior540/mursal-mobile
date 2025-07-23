@@ -4,6 +4,7 @@
  */
 import Config from 'react-native-config';
 import { apiService } from './api';
+import { decryptSensitiveData } from '../utils/encryption';
 
 export interface MapProviderConfig {
   map_provider: 'none' | 'google' | 'mapbox' | 'openrouteservice';
@@ -47,8 +48,21 @@ class MapProviderService {
     this.configPromise = apiService.getClient().get<MapProviderConfig>('/api/v1/tenants/map-info/')
       .then(response => {
         if (response.success && response.data) {
-          this.config = response.data;
-          return response.data;
+          // Decrypt the API key if it's encrypted
+          const config = response.data;
+          if (config.api_key) {
+            console.log('[mapProviderService] Received API key, attempting to decrypt...');
+            try {
+              const decryptedKey = decryptSensitiveData(config.api_key);
+              config.api_key = decryptedKey;
+              console.log('[mapProviderService] API key decrypted successfully');
+            } catch (error) {
+              console.error('[mapProviderService] Failed to decrypt API key:', error);
+              // Keep the original key if decryption fails
+            }
+          }
+          this.config = config;
+          return config;
         } else {
           throw new Error(response.error || 'Failed to fetch map config');
         }

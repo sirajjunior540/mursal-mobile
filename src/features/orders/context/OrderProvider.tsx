@@ -32,6 +32,8 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+  const [seenOrderIds, setSeenOrderIds] = useState<Set<string>>(new Set());
+  const [seenBatchIds, setSeenBatchIds] = useState<Set<string>>(new Set());
   
   // Store the notification callback
   const notificationCallbackRef = useRef<((order: Order) => void) | null>(null);
@@ -45,7 +47,43 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
       const response = await apiService.getAvailableOrders();
       
       if (response.success) {
-        setOrders(response.data);
+        const newOrders = response.data;
+        
+        // Check for new orders that weren't seen before
+        const batchesToNotify = new Map<string, Order>(); // Map to store first order of each batch
+        
+        newOrders.forEach(order => {
+          const batchId = order.current_batch?.id;
+          
+          if (!seenOrderIds.has(order.id) && driver?.isOnline) {
+            if (batchId) {
+              // For batch orders, only notify once per batch
+              if (!seenBatchIds.has(batchId) && !batchesToNotify.has(batchId)) {
+                console.log('🆕 [OrderProvider] New batch detected during refresh:', batchId);
+                batchesToNotify.set(batchId, order); // Store first order of batch
+              }
+            } else {
+              // For non-batch orders, notify immediately
+              if (notificationCallbackRef.current) {
+                console.log('🆕 [OrderProvider] New single order detected during refresh:', order.order_number);
+                notificationCallbackRef.current(order);
+              }
+            }
+          }
+        });
+        
+        // Trigger notifications for new batches (one per batch)
+        batchesToNotify.forEach((order, batchId) => {
+          if (notificationCallbackRef.current) {
+            console.log('🔔 [OrderProvider] Triggering notification for batch:', batchId);
+            notificationCallbackRef.current(order);
+          }
+          setSeenBatchIds(prev => new Set([...prev, batchId]));
+        });
+        
+        // Update seen order IDs
+        setSeenOrderIds(new Set(newOrders.map(o => o.id)));
+        setOrders(newOrders);
         setLastUpdated(new Date().toISOString());
       } else {
         setError(response.error || 'Failed to fetch orders');
@@ -56,7 +94,7 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [seenOrderIds, driver?.isOnline]);
 
   // Initialize realtime service when user is logged in
   useEffect(() => {
@@ -70,27 +108,71 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
         // Set up realtime service callbacks
         realtimeService.setCallbacks({
           onNewOrder: (order: Order) => {
+            // Check driver online status from context
+            const isDriverOnline = driver?.isOnline && driver?.is_available && driver?.is_on_duty;
+            
+            console.log('🔔 [OrderProvider] New order received:', {
+              orderNumber: order.order_number,
+              orderId: order.id,
+              driverOnline: isDriverOnline,
+              driverStatus: {
+                isOnline: driver?.isOnline,
+                isAvailable: driver?.is_available,
+                isOnDuty: driver?.is_on_duty
+              }
+            });
+            
             // Only process new orders if driver is online
-            if (!driver?.isOnline) {
-              console.log('🚫 Driver is offline, ignoring incoming order:', order.order_number);
+            if (!isDriverOnline) {
+              console.log('🚫 [OrderProvider] Driver is offline, ignoring incoming order:', order.order_number);
               return;
             }
             
-            console.log('📱 Driver is online, processing incoming order:', order.order_number);
+            console.log('📱 [OrderProvider] Driver is online, processing incoming order:', order.order_number);
+            
+            // Check if this order is part of a batch
+            const batchId = order.current_batch?.id;
+            if (batchId) {
+              // Check if we've already seen this batch
+              setSeenBatchIds(prev => {
+                const batchAlreadySeen = prev.has(batchId);
+                if (batchAlreadySeen) {
+                  console.log('⚠️ [OrderProvider] Batch already seen, skipping notification for order:', order.order_number);
+                  return prev;
+                }
+                
+                console.log('🆕 [OrderProvider] New batch detected:', batchId);
+                // Mark batch as seen
+                return new Set([...prev, batchId]);
+              });
+              
+              // If this is the first order from a batch, trigger the notification
+              const isBatchAlreadySeen = seenBatchIds.has(batchId);
+              if (!isBatchAlreadySeen && notificationCallbackRef.current) {
+                console.log('🔔 [OrderProvider] Triggering IncomingOrderModal for batch:', batchId);
+                notificationCallbackRef.current(order);
+              }
+            } else {
+              // For non-batch orders, trigger notification immediately
+              if (notificationCallbackRef.current) {
+                console.log('🔔 [OrderProvider] Triggering IncomingOrderModal for single order');
+                notificationCallbackRef.current(order);
+              }
+            }
             
             // Add to orders if not already present
             setOrders(prev => {
               const exists = prev.some(o => o.id === order.id);
               if (!exists) {
+                console.log('✅ [OrderProvider] Adding new order to state');
                 return [...prev, order];
               }
+              console.log('⚠️ [OrderProvider] Order already exists in state');
               return prev;
             });
             
-            // Trigger notification callback for IncomingOrderModal
-            if (notificationCallbackRef.current) {
-              notificationCallbackRef.current(order);
-            }
+            // Mark order as seen
+            setSeenOrderIds(prev => new Set([...prev, order.id]));
           },
           onOrderUpdate: (order: Order) => {
             setOrders(prev => prev.map(o => o.id === order.id ? order : o));
@@ -115,8 +197,13 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
         // Initialize the service
         await realtimeService.initialize();
         
-        // Start the service
-        realtimeService.start();
+        // Only start the service if driver is online
+        if (driver?.isOnline) {
+          console.log('🚀 [OrderProvider] Driver is online, starting realtime service...');
+          realtimeService.start();
+        } else {
+          console.log('⏸️ [OrderProvider] Driver is offline, not starting realtime service');
+        }
       } catch (error) {
         setError('Failed to initialize real-time updates');
       }
@@ -128,7 +215,7 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
     return () => {
       realtimeService.stop();
     };
-  }, [isLoggedIn, authLoading]);
+  }, [isLoggedIn, authLoading, driver]);
 
   // Load initial orders when user is logged in
   useEffect(() => {
@@ -136,6 +223,58 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
       refreshOrders();
     }
   }, [isLoggedIn, authLoading, refreshOrders]);
+  
+  // Set up periodic refresh for available orders when driver is online
+  useEffect(() => {
+    if (!isLoggedIn || authLoading || !driver?.isOnline) {
+      console.log('[OrderProvider] Skipping periodic refresh - driver offline or not logged in');
+      return;
+    }
+    
+    console.log('⏰ [OrderProvider] Setting up periodic refresh for available orders');
+    
+    // Initial refresh
+    refreshOrders();
+    
+    // Set up interval for periodic refresh (every 30 seconds)
+    const intervalId = setInterval(() => {
+      console.log('🔄 [OrderProvider] Periodic refresh triggered');
+      refreshOrders();
+    }, 30000); // 30 seconds
+    
+    return () => {
+      console.log('🛑 [OrderProvider] Clearing periodic refresh interval');
+      clearInterval(intervalId);
+    };
+  }, [isLoggedIn, authLoading, driver?.isOnline, refreshOrders]);
+  
+  // Listen for driver status changes to refresh orders immediately
+  useEffect(() => {
+    if (driver?.isOnline) {
+      console.log('🎯 [OrderProvider] Driver is online, starting realtime service and refreshing orders...');
+      
+      // Start realtime service when driver goes online
+      if (!realtimeService.isConnectedToServer()) {
+        console.log('🔄 Starting realtime service for online driver...');
+        realtimeService.start();
+      }
+      
+      // Small delay to ensure status is updated in backend
+      const timer = setTimeout(() => {
+        refreshOrders();
+        getDriverOrders();
+      }, 1000);
+      
+      return () => clearTimeout(timer);
+    } else if (driver && !driver.isOnline) {
+      console.log('🛑 [OrderProvider] Driver is offline, stopping realtime service...');
+      
+      // Stop realtime service when driver goes offline to prevent polling errors
+      if (realtimeService.isConnectedToServer()) {
+        realtimeService.stop();
+      }
+    }
+  }, [driver?.isOnline, refreshOrders, getDriverOrders]);
 
   const getOrderDetails = useCallback(async (orderId: string) => {
     // First check driver orders (accepted orders)
@@ -346,6 +485,8 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
     setOrders([]);
     setOrderHistory([]);
     setLastUpdated(null);
+    setSeenOrderIds(new Set());
+    setSeenBatchIds(new Set());
   }, []);
 
   const setOrderNotificationCallback = useCallback((callback: ((order: Order) => void) | null) => {

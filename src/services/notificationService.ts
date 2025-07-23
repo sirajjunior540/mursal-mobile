@@ -167,6 +167,9 @@ class NotificationService {
    */
   public vibrateForOrder() {
     try {
+      // Cancel any existing vibration first
+      Vibration.cancel();
+      
       // Vibration pattern: [duration, pause, duration, pause...] in milliseconds
       const pattern = [0, 200, 100, 200, 100, 400]; // Short-short-long pattern
       
@@ -178,6 +181,16 @@ class NotificationService {
         setTimeout(() => Vibration.vibrate(), 300);
         setTimeout(() => Vibration.vibrate(), 600);
       }
+    } catch (error) {
+    }
+  }
+  
+  /**
+   * Stop all vibrations
+   */
+  public stopVibration() {
+    try {
+      Vibration.cancel();
     } catch (error) {
     }
   }

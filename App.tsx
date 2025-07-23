@@ -162,7 +162,9 @@ const IncomingOrderManager = () => {
   const { 
     acceptOrder, 
     declineOrder, 
-    setOrderNotificationCallback
+    setOrderNotificationCallback,
+    getDriverOrders,
+    refreshOrders
   } = useOrders();
   const [incomingOrder, setIncomingOrder] = useState<Order | null>(null);
   const [showModal, setShowModal] = useState(false);
@@ -192,21 +194,28 @@ const IncomingOrderManager = () => {
     }
   };
   
-  const handleAcceptRoute = async (routeId: string) => {
+  const handleAcceptRoute = async (routeId: string, orderData?: any) => {
     try {
-      // For route acceptance, we accept the entire batch as one unit
-      const success = await acceptOrder(routeId);
+      // Import the orderActionService for batch acceptance
+      const { orderActionService } = await import('./src/services/orderActionService');
       
-      if (success) {
+      // Use the acceptRoute method which handles batch acceptance
+      const response = await orderActionService.acceptRoute(routeId, orderData);
+      
+      if (response.success) {
         setShowModal(false);
         setIncomingOrder(null);
-        Alert.alert('Success', 'Route accepted successfully!');
+        Alert.alert('Success', 'Batch order accepted successfully!');
+        
+        // Refresh driver orders to show the newly accepted batch
+        await getDriverOrders();
+        await refreshOrders();
       } else {
-        Alert.alert('Error', 'Failed to accept route. Please try again.');
+        Alert.alert('Error', response.error || 'Failed to accept batch order. Please try again.');
       }
     } catch (error) {
-      logger.error('Error accepting route:', error as Error);
-      Alert.alert('Error', 'Failed to accept route. Please try again.');
+      logger.error('Error accepting batch order:', error as Error);
+      Alert.alert('Error', 'Failed to accept batch order. Please try again.');
     }
   };
 

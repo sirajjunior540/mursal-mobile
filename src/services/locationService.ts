@@ -26,6 +26,7 @@ class LocationService {
   private appStateSubscription: any = null;
   private permissionCheckInterval: any = null;
   private forceUpdateTimer: any = null;
+  private lastKnownLocation: LocationCoords | null = null;
 
   /**
    * Request location permissions
@@ -74,20 +75,44 @@ class LocationService {
    */
   getCurrentLocation(): Promise<LocationCoords> {
     return new Promise((resolve, reject) => {
+      console.log('📍 [LocationService] Getting current location...');
+      
+      // If we have a recent last known location (within 30 seconds), use it
+      if (this.lastKnownLocation && this.lastKnownLocation.timestamp) {
+        const age = Date.now() - this.lastKnownLocation.timestamp;
+        if (age < 30000) { // 30 seconds
+          console.log(`📍 [LocationService] Using recent last known location (${age}ms old)`);
+          resolve(this.lastKnownLocation);
+          return;
+        }
+      }
+      
       Geolocation.getCurrentPosition(
         (position) => {
-          resolve({
+          const location: LocationCoords = {
             latitude: position.coords.latitude,
             longitude: position.coords.longitude,
             accuracy: position.coords.accuracy,
             timestamp: position.timestamp,
-          });
+          };
+          // Store as last known location
+          this.lastKnownLocation = location;
+          console.log(`✅ [LocationService] Got location: ${location.latitude}, ${location.longitude} (accuracy: ${location.accuracy}m)`);
+          resolve(location);
         },
         (error) => {
-          reject({
-            code: error.code,
-            message: error.message,
-          });
+          console.error(`❌ [LocationService] Location error: ${error.code} - ${error.message}`);
+          
+          // If we have ANY last known location, use it as fallback
+          if (this.lastKnownLocation) {
+            console.log('⚠️ [LocationService] Using fallback last known location');
+            resolve(this.lastKnownLocation);
+          } else {
+            reject({
+              code: error.code,
+              message: error.message,
+            });
+          }
         },
         {
           enableHighAccuracy: false, // Try without high accuracy first
@@ -96,6 +121,13 @@ class LocationService {
         }
       );
     });
+  }
+
+  /**
+   * Get last known location without waiting for GPS
+   */
+  getLastKnownLocation(): LocationCoords | null {
+    return this.lastKnownLocation;
   }
 
   /**
@@ -141,7 +173,7 @@ class LocationService {
       const permissions = await checkLocationPermissions();
       
       if (!permissions.fineLocation && this.isTracking) {
-        console.log('⚠️ Location permission lost, stopping tracking');
+        if (__DEV__) console.log('⚠️ Location permission lost, stopping tracking');
         this.stopLocationTracking();
         
         Alert.alert(
@@ -158,7 +190,7 @@ class LocationService {
    */
   private adjustTrackingForBackground(): void {
     if (this.isTracking) {
-      console.log('🔄 Adjusting location tracking for background mode');
+      if (__DEV__) console.log('🔄 Adjusting location tracking for background mode');
       // Restart tracking with longer intervals for battery optimization
       this.stopLocationTracking();
       this.startLocationTrackingInternal(this.backgroundUpdateInterval);
@@ -170,7 +202,7 @@ class LocationService {
    */
   private adjustTrackingForForeground(): void {
     if (this.isTracking) {
-      console.log('🔄 Adjusting location tracking for foreground mode');
+      if (__DEV__) console.log('🔄 Adjusting location tracking for foreground mode');
       // Restart tracking with normal intervals
       this.stopLocationTracking();
       this.startLocationTrackingInternal(this.updateInterval);
@@ -215,6 +247,7 @@ class LocationService {
     try {
       console.log('📍 Getting initial location...');
       const initialLocation = await this.getCurrentLocation();
+      this.lastKnownLocation = initialLocation; // Store as last known
       await this.updateLocationOnServer(initialLocation);
       this.lastLocationUpdate = Date.now();
       console.log(`✅ Initial location: ${initialLocation.latitude}, ${initialLocation.longitude}`);
@@ -230,6 +263,9 @@ class LocationService {
           accuracy: position.coords.accuracy,
           timestamp: position.timestamp,
         };
+
+        // Store as last known location
+        this.lastKnownLocation = location;
 
         console.log(`📍 Location update: ${location.latitude}, ${location.longitude} (accuracy: ${location.accuracy}m)`);
 
@@ -315,11 +351,11 @@ class LocationService {
    * Start the forced update timer (backup to ensure regular updates)
    */
   private startForceUpdateTimer(): void {
-    console.log('🕒 Starting forced update timer (every 2 minutes)');
+    if (__DEV__) console.log('🕒 Starting forced update timer (every 2 minutes)');
     
     this.forceUpdateTimer = setInterval(async () => {
       if (this.isTracking) {
-        console.log('🔄 Forced update timer triggered');
+        if (__DEV__) console.log('🔄 Forced update timer triggered');
         try {
           await this.forceLocationUpdate();
         } catch (error) {
@@ -334,7 +370,7 @@ class LocationService {
    */
   private stopForceUpdateTimer(): void {
     if (this.forceUpdateTimer) {
-      console.log('🛑 Stopping forced update timer');
+      if (__DEV__) console.log('🛑 Stopping forced update timer');
       clearInterval(this.forceUpdateTimer);
       this.forceUpdateTimer = null;
     }

@@ -95,7 +95,7 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
         type: 'pickup' as const,
         address: order.pickup_address,
         orderNumber: order.order_number,
-        customerName: order.customer_details?.name
+        customerName: order.customer?.name || order.customer_details?.name
       });
     }
     
@@ -108,7 +108,7 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
             type: 'delivery' as const,
             address: batchOrderItem.delivery_address || '',
             orderNumber: batchOrderItem.order_number,
-            customerName: batchOrderItem.customer_details?.name
+            customerName: batchOrderItem.customer?.name || batchOrderItem.customer_details?.name
           });
         }
       });
@@ -119,7 +119,7 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
         type: 'delivery' as const,
         address: order.delivery_address || '',
         orderNumber: order.order_number,
-        customerName: order.customer_details?.name
+        customerName: order.customer?.name || order.customer_details?.name
       });
     }
     
@@ -152,6 +152,9 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
   const startRinging = useCallback(() => {
     if (!visible || !order) return;
     
+    // Clear any existing ringing interval first
+    stopRinging();
+    
     // Play initial sound
     notificationService.playOrderSound();
     notificationService.vibrateForOrder();
@@ -161,6 +164,7 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
     const maxRings = 10; // Ring for 30 seconds
     
     ringingRef.current = setInterval(() => {
+      ringCount++;
       if (ringCount >= maxRings) {
         stopRinging();
         return;
@@ -170,9 +174,8 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
       if (ringCount % 2 === 0) { // Vibrate every other ring
         notificationService.vibrateForOrder();
       }
-      ringCount++;
     }, 3000);
-  }, [visible, order]);
+  }, [visible, order, stopRinging]);
 
   // Stop timer
   const stopTimer = useCallback(() => {
@@ -189,6 +192,8 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
       clearInterval(ringingRef.current);
       ringingRef.current = null;
     }
+    // Also stop any ongoing vibrations
+    notificationService.stopVibration();
   }, []);
 
   // Handle actions
@@ -198,10 +203,16 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
     stopRinging();
     haptics.success();
     
-    if (isBatchOrder && onAcceptRoute) {
-      // For batch orders, accept the entire route
-      console.log('✅ Driver accepted batch/route:', batchProperties?.batchId || order.id);
-      onAcceptRoute(batchProperties?.batchId || order.id, order);
+    if (isBatchOrder && onAcceptRoute && order.current_batch?.id) {
+      // For batch orders, accept the entire batch using the batch ID
+      const batchId = order.current_batch.id;
+      console.log('✅ Driver accepted batch:', batchId);
+      console.log('🔍 Batch details:', {
+        batchId: batchId,
+        batchName: order.current_batch.name,
+        orderCount: batchProperties?.orders?.length || 1
+      });
+      onAcceptRoute(batchId, order);
     } else {
       const apiIds = extractOrderApiIds(order);
       console.log('✅ Driver accepted order:', getOrderDisplayId(order));
@@ -522,6 +533,19 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
             
             {!isBatchOrder || (batchProperties?.orders?.length || 0) <= 1 ? (
               <>
+                {/* Customer Info */}
+                <View style={styles.locationSection}>
+                  <View style={styles.locationIcon}>
+                    <Ionicons name="person-outline" size={20} color={flatColors.primary} />
+                  </View>
+                  <View style={styles.locationInfo}>
+                    <Text style={styles.locationLabel}>CUSTOMER</Text>
+                    <Text style={styles.locationAddress} numberOfLines={1}>
+                      {order.customer?.name || order.customer_details?.name || 'Customer Name'}
+                    </Text>
+                  </View>
+                </View>
+
                 {/* Single Order or Single-Order Batch - Pickup Info */}
                 <View style={styles.locationSection}>
                   <View style={styles.locationIcon}>
@@ -590,7 +614,7 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
                         <View style={styles.batchOrderCustomer}>
                           <Ionicons name="person" size={14} color="#666" />
                           <Text style={styles.batchOrderCustomerText}>
-                            {batchOrder.customer_details?.name || 'Customer'}
+                            {batchOrder.customer?.name || batchOrder.customer_details?.name || 'Customer'}
                           </Text>
                         </View>
                         

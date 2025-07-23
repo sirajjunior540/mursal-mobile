@@ -123,7 +123,7 @@ export const DriverProvider: React.FC<DriverProviderProps> = ({ children }) => {
 
               // Send token to backend (only if the API endpoint exists)
               try {
-                const response = await apiService.updateFcmToken(token);
+                const response = await apiService.updateFCMToken(token);
                 if (response.success) {
                   console.log('✅ FCM token sent to backend');
                 } else {
@@ -260,9 +260,14 @@ export const DriverProvider: React.FC<DriverProviderProps> = ({ children }) => {
       if (response.success) {
         dispatch({ type: 'UPDATE_ONLINE_STATUS', payload: isOnline });
 
-        // Update cached driver data
+        // Update cached driver data with all status fields
         if (state.driver) {
-          const updatedDriver = { ...state.driver, isOnline };
+          const updatedDriver = { 
+            ...state.driver, 
+            isOnline,
+            is_available: isOnline,
+            is_on_duty: isOnline
+          };
           await Storage.setItem(STORAGE_KEYS.DRIVER_DATA, updatedDriver);
         }
 
@@ -292,6 +297,9 @@ export const DriverProvider: React.FC<DriverProviderProps> = ({ children }) => {
           } catch (error) {
             console.error('⚠️ Failed to get/update immediate location:', error);
           }
+          
+          // Order refresh is now handled by OrderProvider watching driver.isOnline
+          console.log('📦 Driver is online - OrderProvider will refresh orders automatically');
         } else {
           console.log('🛑 Driver going offline - stopping location tracking');
           locationService.stopLocationTracking();

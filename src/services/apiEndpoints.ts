@@ -225,12 +225,14 @@ export class ApiEndpoints {
   }
 
   async updateDriverStatus(isOnline: boolean): Promise<ApiResponse<void>> {
+    console.log(`📱 [API] Updating driver status to: ${isOnline ? 'ONLINE' : 'OFFLINE'}`);
     
     // Get driver ID
     const cachedDriver = await Storage.getItem(STORAGE_KEYS.DRIVER_DATA);
     const driverId = (cachedDriver as Driver)?.id || await this.extractDriverIdFromToken();
     
     if (!driverId) {
+      console.error('❌ [API] Driver ID not found');
       return {
         success: false,
         data: undefined,
@@ -238,6 +240,7 @@ export class ApiEndpoints {
       };
     }
     
+    console.log(`🔄 [API] Sending status update for driver ${driverId}`);
     
     try {
       const response = await this.client.post<void>('/api/v1/auth/drivers/update_my_status/', {
@@ -245,6 +248,12 @@ export class ApiEndpoints {
         is_available: isOnline,
         is_on_duty: isOnline
       });
+      
+      if (response.success) {
+        console.log(`✅ [API] Driver status updated successfully to: ${isOnline ? 'ONLINE' : 'OFFLINE'}`);
+      } else {
+        console.error(`❌ [API] Failed to update driver status:`, response.error);
+      }
       
       if (!response.success && response.error?.includes('404')) {
         await Storage.removeItem(STORAGE_KEYS.DRIVER_DATA);
@@ -268,17 +277,34 @@ export class ApiEndpoints {
   async updateLocation(latitude: number, longitude: number): Promise<ApiResponse<void>> {
 
     // Use the new update_my_location endpoint that doesn't require driver ID
+    // Validate coordinates before sending
+    if (!latitude || !longitude || isNaN(latitude) || isNaN(longitude)) {
+      console.error(`❌ [API] Invalid coordinates: lat=${latitude}, lon=${longitude}`);
+      return {
+        success: false,
+        data: undefined,
+        error: 'Invalid coordinates provided'
+      };
+    }
+    
     const endpoint = `/api/v1/auth/drivers/update_my_location/`;
+    console.log(`📍 [API] Updating location to: ${latitude}, ${longitude}`);
 
     try {
       const response = await this.client.post<void>(endpoint, {
-        latitude,
-        longitude
+        latitude: Number(latitude),
+        longitude: Number(longitude)
       });
 
+      if (response.success) {
+        console.log(`✅ [API] Location updated successfully`);
+      } else {
+        console.error(`❌ [API] Failed to update location:`, response.error);
+      }
 
       return response;
     } catch (error) {
+      console.error(`💥 [API] Exception updating location:`, error);
       throw error;
     }
   }
@@ -321,50 +347,169 @@ export class ApiEndpoints {
       // Try to get current location for nearby orders (optional)
       try {
         const locationService = await import('../services/locationService');
-        const currentLocation = await locationService.locationService.getCurrentLocation();
+        console.log('[API] Location service imported successfully');
+        
+        let currentLocation = null;
+        
+        // First try to get last known location
+        currentLocation = locationService.locationService.getLastKnownLocation();
+        console.log('[API] Last known location:', currentLocation);
+        
+        // If no last known location, try to get fresh location with timeout
+        if (!currentLocation) {
+          console.log('[API] No last known location, attempting to get fresh location...');
+          
+          // Add a timeout wrapper to prevent hanging
+          const locationPromise = locationService.locationService.getCurrentLocation();
+          const timeoutPromise = new Promise<null>((_, reject) => 
+            setTimeout(() => reject(new Error('Location timeout')), 3000) // Reduced to 3 seconds
+          );
+          
+          currentLocation = await Promise.race([locationPromise, timeoutPromise]).catch(err => {
+            console.log('[API] Location fetch failed or timed out:', err);
+            return null;
+          });
+        }
+        
+        console.log('[API] Final location result:', currentLocation);
+        
         if (currentLocation && currentLocation.latitude && currentLocation.longitude) {
           apiUrl += `?latitude=${currentLocation.latitude}&longitude=${currentLocation.longitude}`;
           console.log('[API] Using location for available orders:', currentLocation);
+        } else {
+          console.log('[API] No valid location available');
         }
-      } catch (locationError) {
-        console.warn('[API] Could not get location, fetching all available orders:', locationError);
+      } catch (locationError: any) {
+        console.warn('[API] Could not get location, error details:', {
+          message: locationError?.message,
+          code: locationError?.code,
+          stack: locationError?.stack
+        });
         // Continue without location parameters
       }
       
       console.log('[API] Fetching available orders from:', apiUrl);
-      const response = await this.client.get<BackendDelivery[]>(apiUrl);
+      
+      // Check driver status before making request
+      const cachedDriver = await Storage.getItem(STORAGE_KEYS.DRIVER_DATA);
+      const driverStatus = cachedDriver ? (cachedDriver as Driver) : null;
+      console.log('🚗 [API] Driver status check:', {
+        isOnline: driverStatus?.isOnline,
+        isAvailable: driverStatus?.is_available,
+        isOnDuty: driverStatus?.is_on_duty,
+        lastLocation: driverStatus?.last_location_update
+      });
+      
+      const response = await this.client.get<any>(apiUrl);
+      
+      console.log('📦 [API] Available orders raw response:', {
+        success: response.success,
+        hasData: !!response.data,
+        dataType: Array.isArray(response.data) ? 'array' : typeof response.data,
+        dataKeys: response.data ? Object.keys(response.data) : [],
+        error: response.error
+      });
+      
+      // Debug ApiTransformers availability
+      console.log('🔍 [API] ApiTransformers check:', {
+        hasApiTransformers: !!ApiTransformers,
+        hasTransformOrder: !!(ApiTransformers && ApiTransformers.transformOrder),
+        typeOfTransformOrder: ApiTransformers && ApiTransformers.transformOrder ? typeof ApiTransformers.transformOrder : 'undefined'
+      });
+      
+      // Log the actual structure
+      if (response.data && !Array.isArray(response.data)) {
+        console.log('📋 [API] Response data structure:', {
+          hasOrders: !!response.data.orders,
+          ordersCount: response.data.orders?.length || 0,
+          totalCount: response.data.total_count,
+          batchCount: response.data.batch_count,
+          singleCount: response.data.single_count,
+          hasResults: !!response.data.results,
+          resultsCount: response.data.results?.length || 0
+        });
+      }
       
       let availableOrders: Order[] = [];
       
       if (response.success && response.data) {
-        availableOrders = (response.data || []).map(ApiTransformers.transformOrder);
-        console.log('[API] Successfully fetched', availableOrders.length, 'available orders from primary endpoint');
+        // Handle both array and paginated responses
+        const orderData = Array.isArray(response.data) 
+          ? response.data 
+          : (response.data.orders || response.data.results || response.data.data || []);
+        
+        console.log('[API] Order data extracted:', {
+          isArray: Array.isArray(orderData),
+          count: orderData.length,
+          firstItem: orderData[0] ? {
+            id: orderData[0].id,
+            status: orderData[0].status,
+            driver: orderData[0].driver,
+            order: orderData[0].order ? 'has order' : 'no order'
+          } : null
+        });
+        
+        if (Array.isArray(orderData)) {
+          availableOrders = orderData.map(item => {
+            try {
+              return ApiTransformers.transformOrder(item);
+            } catch (error) {
+              console.error('❌ [API] Failed to transform order:', error);
+              console.error('📋 [API] Problematic order data:', item);
+              throw error;
+            }
+          });
+          console.log('[API] Successfully fetched', availableOrders.length, 'available orders from primary endpoint');
+          
+          // Log transformed first order
+          if (availableOrders.length > 0) {
+            console.log('🎯 [API] First transformed order:', {
+              id: availableOrders[0].id,
+              orderNumber: availableOrders[0].order_number,
+              status: availableOrders[0].status,
+              customer: availableOrders[0].customer?.name,
+              pickup: `${availableOrders[0].pickup_latitude}, ${availableOrders[0].pickup_longitude}`,
+              delivery: `${availableOrders[0].delivery_latitude}, ${availableOrders[0].delivery_longitude}`
+            });
+          }
+        } else {
+          console.warn('[API] Unexpected data format from available_orders endpoint:', response.data);
+        }
+      } else {
+        console.error('❌ [API] Failed to get available orders:', response.error);
       }
       
       // Also get assigned orders for this driver from by_driver endpoint
       try {
         console.log('[API] Fetching assigned orders that need acceptance...');
-        const byDriverResponse = await this.client.get<BackendDelivery[]>('/api/v1/delivery/deliveries/by_driver/');
+        const byDriverResponse = await this.client.get<any>('/api/v1/delivery/deliveries/by_driver/');
         
         if (byDriverResponse.success && byDriverResponse.data) {
-          // Get only pending orders that belong in Available Orders
-          // 'assigned' status means the driver has already accepted it
-          const pendingOrders = (byDriverResponse.data || [])
-            .filter(delivery => {
-              const status = delivery.status?.toLowerCase();
-              return status === 'pending';
-            })
-            .map(ApiTransformers.transformOrder);
+          // Handle both array and paginated responses
+          const driverDeliveryData = Array.isArray(byDriverResponse.data) 
+            ? byDriverResponse.data 
+            : (byDriverResponse.data.results || byDriverResponse.data.data || []);
           
-          console.log('[API] Found', pendingOrders.length, 'pending orders to add to available orders');
+          if (Array.isArray(driverDeliveryData)) {
+            // Get only pending orders that belong in Available Orders
+            // 'assigned' status means the driver has already accepted it
+            const pendingOrders = driverDeliveryData
+              .filter(delivery => {
+                const status = delivery.status?.toLowerCase();
+                return status === 'pending';
+              })
+              .map(ApiTransformers.transformOrder);
           
-          // Merge pending orders with available orders, avoiding duplicates
-          pendingOrders.forEach(pendingOrder => {
-            const exists = availableOrders.some(order => order.id === pendingOrder.id);
-            if (!exists) {
-              availableOrders.push(pendingOrder);
-            }
-          });
+            console.log('[API] Found', pendingOrders.length, 'pending orders to add to available orders');
+            
+            // Merge pending orders with available orders, avoiding duplicates
+            pendingOrders.forEach(pendingOrder => {
+              const exists = availableOrders.some(order => order.id === pendingOrder.id);
+              if (!exists) {
+                availableOrders.push(pendingOrder);
+              }
+            });
+          }
         }
       } catch (assignedError) {
         console.warn('[API] Could not fetch assigned orders:', assignedError);
@@ -389,30 +534,44 @@ export class ApiEndpoints {
         console.log('[API] Trying fallback endpoints for available orders...');
         
         // 1. Try pending-deliveries endpoint
-        const pendingResponse = await this.client.get<BackendDelivery[]>('/api/v1/delivery/deliveries/pending-deliveries/');
+        const pendingResponse = await this.client.get<any>('/api/v1/delivery/deliveries/pending-deliveries/');
         if (pendingResponse.success && pendingResponse.data) {
-          const orders: Order[] = (pendingResponse.data || []).map(ApiTransformers.transformOrder);
-          console.log('[API] Got', orders.length, 'orders from pending-deliveries fallback');
-          return {
-            success: true,
-            data: orders,
-            message: 'Retrieved via pending-deliveries fallback'
-          };
+          // Handle both array and paginated responses
+          const deliveryData = Array.isArray(pendingResponse.data) 
+            ? pendingResponse.data 
+            : (pendingResponse.data.results || pendingResponse.data.data || []);
+          
+          if (Array.isArray(deliveryData)) {
+            const orders: Order[] = deliveryData.map(ApiTransformers.transformOrder);
+            console.log('[API] Got', orders.length, 'orders from pending-deliveries fallback');
+            return {
+              success: true,
+              data: orders,
+              message: 'Retrieved via pending-deliveries fallback'
+            };
+          }
         }
         
         // 2. Try general deliveries endpoint
-        const generalResponse = await this.client.get<BackendDelivery[]>('/api/v1/delivery/deliveries/');
+        const generalResponse = await this.client.get<any>('/api/v1/delivery/deliveries/');
         if (generalResponse.success && generalResponse.data) {
-          // Filter for unassigned orders
-          const unassignedOrders = (generalResponse.data || [])
-            .filter(delivery => !delivery.assigned_driver || delivery.status === 'pending')
-            .map(ApiTransformers.transformOrder);
-          console.log('[API] Got', unassignedOrders.length, 'orders from general deliveries fallback');
-          return {
-            success: true,
-            data: unassignedOrders,
-            message: 'Retrieved via general deliveries fallback'
-          };
+          // Handle both array and paginated responses
+          const deliveryData = Array.isArray(generalResponse.data) 
+            ? generalResponse.data 
+            : (generalResponse.data.results || generalResponse.data.data || []);
+          
+          if (Array.isArray(deliveryData)) {
+            // Filter for unassigned orders
+            const unassignedOrders = deliveryData
+              .filter(delivery => !delivery.assigned_driver || delivery.status === 'pending')
+              .map(ApiTransformers.transformOrder);
+            console.log('[API] Got', unassignedOrders.length, 'orders from general deliveries fallback');
+            return {
+              success: true,
+              data: unassignedOrders,
+              message: 'Retrieved via general deliveries fallback'
+            };
+          }
         }
         
       } catch (fallbackError) {
@@ -484,16 +643,22 @@ export class ApiEndpoints {
     
     try {
       console.log('[API] Fetching driver orders from /api/v1/delivery/deliveries/by_driver/');
-      const response = await this.client.get<BackendDelivery[]>('/api/v1/delivery/deliveries/by_driver/');
+      const response = await this.client.get<any>('/api/v1/delivery/deliveries/by_driver/');
       console.log('[API] Driver orders response:', response);
       
       if (response.success && response.data) {
-        console.log('[API] Processing', response.data.length, 'deliveries');
+        // Handle both array and paginated responses
+        const deliveryData = Array.isArray(response.data) 
+          ? response.data 
+          : (response.data.results || response.data.data || []);
         
-        // Include orders that the driver has accepted and is working on
-        // Filter out only 'pending' orders - 'assigned' means driver accepted it
-        // Valid statuses for active deliveries: assigned, accepted, picked_up, in_transit, etc.
-        const acceptedDeliveries = (response.data || []).filter(delivery => {
+        if (Array.isArray(deliveryData)) {
+          console.log('[API] Processing', deliveryData.length, 'deliveries');
+          
+          // Include orders that the driver has accepted and is working on
+          // Filter out only 'pending' orders - 'assigned' means driver accepted it
+          // Valid statuses for active deliveries: assigned, accepted, picked_up, in_transit, etc.
+          const acceptedDeliveries = deliveryData.filter(delivery => {
           const status = delivery.status?.toLowerCase();
           // Only exclude pending orders - all other statuses are active deliveries
           const isActiveDelivery = status !== 'pending';
@@ -505,7 +670,7 @@ export class ApiEndpoints {
           return isActiveDelivery;
         });
         
-        console.log('[API] Filtered to', acceptedDeliveries.length, 'accepted deliveries from', response.data.length, 'total');
+          console.log('[API] Filtered to', acceptedDeliveries.length, 'accepted deliveries from', deliveryData.length, 'total');
         
         const orders: Order[] = acceptedDeliveries.map((backendItem, index) => {
           try {
@@ -519,16 +684,21 @@ export class ApiEndpoints {
           }
         });
         
-        console.log('[API] Successfully transformed', orders.length, 'orders');
-        
-        return {
-          success: true,
-          data: orders,
-          message: response.message
-        };
+          console.log('[API] Successfully transformed', orders.length, 'orders');
+          
+          return {
+            success: true,
+            data: orders,
+            message: response.message
+          };
+        }
       }
 
-      return response as ApiResponse<Order[]>;
+      return {
+        success: false,
+        data: [],
+        message: 'No order data available'
+      };
       
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -543,19 +713,22 @@ export class ApiEndpoints {
       if (errorMessage.includes('429') || errorMessage.includes('404') || errorMessage.includes('403')) {
         
         try {
-          const fallbackResponse = await this.client.get<BackendDelivery[]>('/api/v1/delivery/deliveries/ongoing_deliveries/');
+          const fallbackResponse = await this.client.get<any>('/api/v1/delivery/deliveries/ongoing_deliveries/');
           
           if (fallbackResponse.success && fallbackResponse.data) {
-            // Extract deliveries array from the response
-            const deliveriesData = fallbackResponse.data;
-            const ordersArray = Array.isArray(deliveriesData) ? deliveriesData : [deliveriesData];
+            // Handle both array and paginated responses
+            const deliveriesData = Array.isArray(fallbackResponse.data) 
+              ? fallbackResponse.data 
+              : (fallbackResponse.data.results || fallbackResponse.data.data || []);
             
-            const orders: Order[] = ordersArray.map(ApiTransformers.transformOrder);
-            return {
-              success: true,
-              data: orders,
-              message: 'Retrieved via fallback endpoint (incomplete order data)'
-            };
+            if (Array.isArray(deliveriesData)) {
+              const orders: Order[] = deliveriesData.map(ApiTransformers.transformOrder);
+              return {
+                success: true,
+                data: orders,
+                message: 'Retrieved via fallback endpoint (incomplete order data)'
+              };
+            }
           }
           
           return fallbackResponse as ApiResponse<Order[]>;

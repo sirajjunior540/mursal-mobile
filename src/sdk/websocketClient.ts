@@ -272,7 +272,7 @@ export class WebSocketClient {
   }
 
   /**
-   * Check if WebSocket is connected
+   * Check if client is connected
    */
   isConnected(): boolean {
     return this.connected && this.websocket?.readyState === WebSocket.OPEN;
@@ -295,13 +295,6 @@ export class WebSocketClient {
       console.error('[WebSocketClient] Error sending message:', error);
       this.callbacks.onError?.(`Error sending message: ${error}`);
     }
-  }
-
-  /**
-   * Check if client is connected
-   */
-  isConnected(): boolean {
-    return this.connected;
   }
 
   /**
