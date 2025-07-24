@@ -16,7 +16,6 @@ import { Order, BatchOrder, extractOrderApiIds, getOrderDisplayId, isBatchOrder 
 import { /* COLORS, FONTS */ } from '../constants';
 import { haptics } from '../utils/haptics';
 import { soundService } from '../services/soundService';
-import { notificationService } from '../services/notificationService';
 import { flatColors } from '../design/dashboard/flatColors';
 import { premiumTypography } from '../design/dashboard/premiumTypography';
 import { premiumShadows } from '../design/dashboard/premiumShadows';
@@ -56,7 +55,6 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
   const [timeRemaining, setTimeRemaining] = useState(timerDuration);
   const [isTimerActive, setIsTimerActive] = useState(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
-  const ringingRef = useRef<NodeJS.Timeout | null>(null);
   
   // Batch order state
   const [/* selectedOrders, setSelectedOrders */] = useState<string[]>([]);
@@ -148,34 +146,6 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
     }, 1000);
   }, [visible, order, timerDuration, onSkip]);
   
-  // Start persistent ringing
-  const startRinging = useCallback(() => {
-    if (!visible || !order) return;
-    
-    // Clear any existing ringing interval first
-    stopRinging();
-    
-    // Play initial sound
-    notificationService.playOrderSound();
-    notificationService.vibrateForOrder();
-    
-    // Set up repeating ring every 3 seconds for 30 seconds
-    let ringCount = 0;
-    const maxRings = 10; // Ring for 30 seconds
-    
-    ringingRef.current = setInterval(() => {
-      ringCount++;
-      if (ringCount >= maxRings) {
-        stopRinging();
-        return;
-      }
-      
-      notificationService.playOrderSound();
-      if (ringCount % 2 === 0) { // Vibrate every other ring
-        notificationService.vibrateForOrder();
-      }
-    }, 3000);
-  }, [visible, order, stopRinging]);
 
   // Stop timer
   const stopTimer = useCallback(() => {
@@ -186,21 +156,12 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
     setIsTimerActive(false);
   }, []);
   
-  // Stop ringing
-  const stopRinging = useCallback(() => {
-    if (ringingRef.current) {
-      clearInterval(ringingRef.current);
-      ringingRef.current = null;
-    }
-    // Also stop any ongoing vibrations
-    notificationService.stopVibration();
-  }, []);
 
   // Handle actions
   const handleAccept = useCallback(() => {
     if (!order) return;
     stopTimer();
-    stopRinging();
+    soundService.stopRinging();
     haptics.success();
     
     if (isBatchOrder && onAcceptRoute && order.current_batch?.id) {
@@ -219,29 +180,29 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
       console.log('🔍 Using delivery ID for API call:', apiIds.deliveryId);
       onAccept(apiIds.deliveryId);
     }
-  }, [order, stopTimer, stopRinging, isBatchOrder, onAcceptRoute, batchProperties, onAccept]);
+  }, [order, stopTimer, isBatchOrder, onAcceptRoute, batchProperties, onAccept]);
 
   const handleDecline = useCallback(() => {
     if (!order) return;
     stopTimer();
-    stopRinging();
+    soundService.stopRinging();
     haptics.warning();
     const apiIds = extractOrderApiIds(order);
     console.log('❌ Driver declined order:', getOrderDisplayId(order));
     console.log('🔍 Using delivery ID for API call:', apiIds.deliveryId);
     onDecline(apiIds.deliveryId);
-  }, [order, stopTimer, stopRinging, onDecline]);
+  }, [order, stopTimer, onDecline]);
 
   const handleSkip = useCallback(() => {
     if (!order) return;
     stopTimer();
-    stopRinging();
+    soundService.stopRinging();
     haptics.light();
     const apiIds = extractOrderApiIds(order);
     console.log('⏭️ Driver skipped order:', getOrderDisplayId(order));
     console.log('🔍 Using delivery ID for API call:', apiIds.deliveryId);
     onSkip(apiIds.deliveryId);
-  }, [order, stopTimer, stopRinging, onSkip]);
+  }, [order, stopTimer, onSkip]);
   
   // Handle batch order selection
   // const toggleOrderSelection = useCallback((orderId: string) => {
@@ -260,17 +221,17 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
       if (nextAppState === 'active' && wasInBackground && visible) {
         // App was woken from background due to notification
         console.log('📱 App woken from background for order notification');
-        startRinging(); // Resume ringing if order is still visible
+        soundService.startRinging(); // Resume ringing if order is still visible
         setWasInBackground(false);
       } else if (nextAppState === 'background') {
         setWasInBackground(true);
-        stopRinging(); // Stop ringing when app goes to background
+        soundService.stopRinging(); // Stop ringing when app goes to background
       }
     };
     
     const subscription = AppState.addEventListener('change', handleAppStateChange);
     return () => subscription?.remove();
-  }, [wasInBackground, visible, startRinging, stopRinging]);
+  }, [wasInBackground, visible]);
 
   // Timer progress animation
   // const timerProgress = timeRemaining / timerDuration;
@@ -284,10 +245,9 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
         setShowRouteDetails(true);
       }
       
-      // Play notification sound and start ringing
-      soundService.playOrderNotification();
+      // Start persistent ringing
+      soundService.startRinging();
       haptics.notification();
-      startRinging();
 
       // Start entrance animation
       Animated.parallel([
@@ -332,7 +292,7 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
 
       return () => {
         stopTimer();
-        stopRinging();
+        soundService.stopRinging();
         pulseAnimation.stop();
       };
     } else {
@@ -351,9 +311,9 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
       ]).start();
       
       stopTimer();
-      stopRinging();
+      soundService.stopRinging();
     }
-  }, [visible, order, startTimer, stopTimer, startRinging, stopRinging, isBatchOrder, batchProperties]);
+  }, [visible, order, startTimer, stopTimer, isBatchOrder]);
 
   if (!order) return null;
 
@@ -526,7 +486,15 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
           )}
 
           {/* Order Summary */}
-          <ScrollView style={styles.orderSummary} showsVerticalScrollIndicator={false}>
+          <ScrollView 
+            style={styles.orderSummary} 
+            contentContainerStyle={styles.orderSummaryContent}
+            showsVerticalScrollIndicator={true}
+            bounces={true}
+            scrollEnabled={true}
+            nestedScrollEnabled={true}
+            keyboardShouldPersistTaps="handled"
+          >
             <Text style={styles.orderNumber}>
               {isBatchOrder ? `Route #${batchProperties?.batchId || getOrderDisplayId(order)}` : getOrderDisplayId(order)}
             </Text>
@@ -787,6 +755,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     width: '100%',
     maxWidth: 380,
+    maxHeight: SCREEN_HEIGHT * 0.85, // Limit modal height to 85% of screen
     overflow: 'hidden',
     ...premiumShadows.large,
     borderWidth: 1,
@@ -891,8 +860,13 @@ const styles = StyleSheet.create({
     color: flatColors.neutral[800],
   },
   orderSummary: {
+    flex: 1,
+    maxHeight: SCREEN_HEIGHT * 0.45, // Limit height to 45% of screen
+  },
+  orderSummaryContent: {
     paddingHorizontal: 20,
     paddingVertical: 16,
+    paddingBottom: 100, // Account for fixed action buttons
   },
   orderNumber: {
     ...premiumTypography.callout,
@@ -960,6 +934,10 @@ const styles = StyleSheet.create({
     backgroundColor: flatColors.backgrounds.secondary,
     borderTopWidth: 1,
     borderTopColor: flatColors.neutral[200],
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
   },
   declineButton: {
     flex: 1,
