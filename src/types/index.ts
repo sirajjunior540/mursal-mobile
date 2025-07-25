@@ -241,6 +241,21 @@ export interface Order {
     name: string;
     status: string;
     batch_type: string;
+    is_consolidated?: boolean;
+    delivery_address_info?: {
+      address: string;
+      latitude?: number;
+      longitude?: number;
+      is_warehouse: boolean;
+      delivery_type: string;
+    };
+    warehouse_info?: {
+      consolidate_to_warehouse: boolean;
+      warehouse_id?: number;
+      warehouse_address?: string;
+      warehouse_latitude?: number;
+      warehouse_longitude?: number;
+    };
   } | null;
   consolidation_warehouse_id?: string;
   consolidation_batch_id?: string;

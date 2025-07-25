@@ -19,6 +19,15 @@ export class HttpClient {
   constructor() {
     this.tenantHost = getTenantHost();
     this.baseUrl = ENV.API_BASE_URL;
+    
+    // Log the configuration for debugging
+    console.log('[HttpClient] Initialized with:', {
+      baseUrl: this.baseUrl,
+      tenantHost: this.tenantHost,
+      serverIP: ENV.SERVER_IP,
+      serverPort: ENV.SERVER_PORT,
+      protocol: ENV.SERVER_PROTOCOL
+    });
   }
 
   private async getAuthHeaders(): Promise<HeadersInit> {
@@ -48,17 +57,28 @@ export class HttpClient {
   private handleError(error: unknown): ApiResponse<never> {
     if (error instanceof Error) {
       // Network error or fetch failure
+      console.error('[HttpClient] Network error:', {
+        message: error.message,
+        name: error.name,
+        stack: error.stack
+      });
+      
       return {
         success: false,
         error: error.message || 'Network error occurred',
-        data: null as never
+        data: null as never,
+        statusCode: 0, // Network error, no HTTP status
+        message: `Network Error: ${error.message}`
       };
     }
     
+    console.error('[HttpClient] Unexpected error:', error);
     return {
       success: false,
       error: 'An unexpected error occurred',
-      data: null as never
+      data: null as never,
+      statusCode: 0,
+      message: 'Unexpected error'
     };
   }
 
@@ -99,6 +119,9 @@ export class HttpClient {
     try {
       const url = `${this.baseUrl}${endpoint}`;
       const headers = await this.getAuthHeaders();
+      
+      // Log the full URL for debugging
+      console.log(`[HttpClient] Making ${options.method || 'GET'} request to: ${url}`);
 
 
       const response = await fetch(url, {
@@ -141,11 +164,25 @@ export class HttpClient {
       }
 
       if (!response.ok) {
-        return {
+        // Enhanced error information for debugging
+        const errorInfo = {
           success: false,
           data: null as T,
-          error: (data as { detail?: string; error?: string })?.detail || (data as { detail?: string; error?: string })?.error || `Request failed with status ${response.status}`
+          error: (data as { detail?: string; error?: string })?.detail || (data as { detail?: string; error?: string })?.error || `Request failed with status ${response.status}`,
+          statusCode: response.status,
+          message: `HTTP ${response.status}: ${response.statusText}`
         };
+        
+        // Log additional error details
+        console.error('[HttpClient] Request failed:', {
+          url,
+          status: response.status,
+          statusText: response.statusText,
+          endpoint,
+          responseData: data
+        });
+        
+        return errorInfo;
       }
 
       return {

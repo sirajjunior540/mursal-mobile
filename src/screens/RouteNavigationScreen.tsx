@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -254,14 +254,34 @@ const RouteNavigationScreen: React.FC = () => {
           });
         }
 
-        // Add delivery
+        // Add delivery - check for warehouse consolidation
         if (order.delivery_latitude && order.delivery_longitude) {
+          // Check if this is a consolidated batch going to warehouse
+          const isConsolidatedToWarehouse = order.current_batch?.is_consolidated && 
+            order.current_batch?.delivery_address_info?.is_warehouse;
+          
+          let deliveryAddress = order.delivery_address || 'Delivery Location';
+          let deliveryLat = Number(order.delivery_latitude);
+          let deliveryLng = Number(order.delivery_longitude);
+          
+          // If consolidated batch, use warehouse address from batch info
+          if (isConsolidatedToWarehouse && order.current_batch?.delivery_address_info) {
+            const warehouseInfo = order.current_batch.delivery_address_info;
+            if (warehouseInfo.address) {
+              deliveryAddress = `🏭 ${warehouseInfo.address}`;
+            }
+            if (warehouseInfo.latitude && warehouseInfo.longitude) {
+              deliveryLat = warehouseInfo.latitude;
+              deliveryLng = warehouseInfo.longitude;
+            }
+          }
+          
           points.push({
             id: `delivery-${order.id}`,
             order,
-            latitude: Number(order.delivery_latitude),
-            longitude: Number(order.delivery_longitude),
-            address: order.delivery_address || 'Delivery Location',
+            latitude: deliveryLat,
+            longitude: deliveryLng,
+            address: deliveryAddress,
             type: 'delivery',
             sequenceNumber: sequenceNumber++,
           });
@@ -294,38 +314,68 @@ const RouteNavigationScreen: React.FC = () => {
 
   const upcomingStops = optimizedRoute?.points?.slice(currentStopIndex + 1) || [];
 
+  // Add request tracking to prevent duplicate calls
+  const loadingRef = useRef(false);
+  const lastLoadTimeRef = useRef(0);
+  
   // Load route data
   useFocusEffect(
     useCallback(() => {
       const loadData = async () => {
+        // Prevent duplicate calls within 2 seconds
+        const now = Date.now();
+        if (loadingRef.current || (now - lastLoadTimeRef.current) < 2000) {
+          console.log('[RouteNav] Skipping duplicate load request');
+          return;
+        }
+        
         if (driver?.id) {
-          await Promise.all([
-            loadBackendRoute(),
-            getDriverOrders(),
-            refreshOrders(),
-          ]);
+          loadingRef.current = true;
+          lastLoadTimeRef.current = now;
+          
+          try {
+            // Don't call refreshOrders here - OrderProvider already handles it
+            await Promise.all([
+              loadBackendRoute(),
+              getDriverOrders(),
+              // refreshOrders(), // REMOVED: This is already handled by OrderProvider
+            ]);
+          } finally {
+            loadingRef.current = false;
+          }
         }
       };
       
       loadData();
-    }, [driver?.id, loadBackendRoute, getDriverOrders, refreshOrders])
+    }, [driver?.id, loadBackendRoute, getDriverOrders]) // Removed refreshOrders from deps
   );
 
   // Handlers
   const handleRefresh = useCallback(async () => {
+    // Prevent duplicate refresh within 2 seconds
+    const now = Date.now();
+    if ((now - lastLoadTimeRef.current) < 2000) {
+      console.log('[RouteNav] Skipping duplicate refresh request');
+      setRefreshing(false);
+      return;
+    }
+    
     setRefreshing(true);
+    lastLoadTimeRef.current = now;
+    
     try {
+      // Don't call refreshOrders here - OrderProvider already handles it
       await Promise.all([
         loadBackendRoute(),
         getDriverOrders(),
-        refreshOrders(),
+        // refreshOrders(), // REMOVED: This is already handled by OrderProvider
       ]);
     } catch (error) {
       console.error('Error refreshing:', error);
     } finally {
       setRefreshing(false);
     }
-  }, [loadBackendRoute, getDriverOrders, refreshOrders]);
+  }, [loadBackendRoute, getDriverOrders]); // Removed refreshOrders from deps
 
   const handleNavigateToOrder = useCallback((order: Order) => {
     let lat: number | null = null;

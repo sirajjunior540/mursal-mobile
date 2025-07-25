@@ -27,6 +27,8 @@ export class WebSocketClient {
   private connected: boolean = false;
   private reconnectAttempts: number = 0;
   private reconnectTimer: NodeJS.Timeout | null = null;
+  private baseReconnectInterval: number = 5000; // Start with 5 seconds
+  private maxReconnectInterval: number = 300000; // Max 5 minutes
 
   /**
    * Constructor
@@ -81,13 +83,15 @@ export class WebSocketClient {
 
     try {
       const wsUrl = this.getWebSocketUrl();
-      console.log(`[WebSocketClient] Connecting to ${wsUrl}`);
-      console.log('[WebSocketClient] Config:', {
-        baseUrl: this.config.baseUrl,
-        endpoint: this.config.endpoint,
-        hasToken: !!this.config.authToken,
-        tenantId: this.config.tenantId
-      });
+      if (__DEV__) {
+        console.log(`[WebSocketClient] Connecting to ${wsUrl}`);
+        console.log('[WebSocketClient] Config:', {
+          baseUrl: this.config.baseUrl,
+          endpoint: this.config.endpoint,
+          hasToken: !!this.config.authToken,
+          tenantId: this.config.tenantId
+        });
+      }
 
       this.websocket = new WebSocket(wsUrl);
 
@@ -190,11 +194,20 @@ export class WebSocketClient {
     // Increment reconnect attempts
     this.reconnectAttempts++;
 
-    // Calculate backoff time (with jitter to prevent thundering herd)
-    const jitter = Math.random() * 0.5 + 0.75; // 0.75-1.25 multiplier
-    const backoff = this.config.reconnectInterval * jitter;
+    // Calculate exponential backoff with jitter
+    // Double the interval for each attempt, up to the max interval
+    const exponentialInterval = Math.min(
+      this.baseReconnectInterval * Math.pow(2, this.reconnectAttempts - 1),
+      this.maxReconnectInterval
+    );
+    
+    // Add jitter to prevent thundering herd (0.75-1.25 multiplier)
+    const jitter = Math.random() * 0.5 + 0.75;
+    const backoff = exponentialInterval * jitter;
 
-    console.log(`[WebSocketClient] Reconnecting in ${Math.round(backoff)}ms (attempt ${this.reconnectAttempts}/${this.config.maxReconnectAttempts})`);
+    if (__DEV__) {
+      console.log(`[WebSocketClient] Reconnecting in ${Math.round(backoff / 1000)}s (attempt ${this.reconnectAttempts}/${this.config.maxReconnectAttempts})`);
+    }
 
     // Schedule reconnect
     this.reconnectTimer = setTimeout(() => {
@@ -233,7 +246,9 @@ export class WebSocketClient {
       : this.config.endpoint;
 
     const fullUrl = `${wsUrl}${endpoint}`;
-    console.log('[WebSocketClient] WebSocket URL:', fullUrl);
+    if (__DEV__) {
+      console.log('[WebSocketClient] WebSocket URL:', fullUrl);
+    }
     return fullUrl;
   }
 

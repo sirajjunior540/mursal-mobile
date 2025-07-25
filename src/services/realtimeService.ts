@@ -85,7 +85,7 @@ export interface OrderTrackingStats {
 class RealtimeService {
   private config: RealtimeConfig = {
     mode: 'polling',
-    pollingInterval: 30000, // 30 seconds - reduced for better battery life (FCM handles urgent notifications)
+    pollingInterval: 60000, // 60 seconds - increased from 30s to reduce battery usage
     enabled: true, // ✅ Enable by default
   };
 
@@ -201,7 +201,7 @@ class RealtimeService {
         pollingInterval: this.config.pollingInterval,
         pollingEndpoint: '/api/v1/delivery/deliveries/available_orders/',
         websocketEndpoint: '/ws/driver/orders/',
-        websocketReconnectInterval: 5000,
+        websocketReconnectInterval: 10000, // Start with 10 seconds (exponential backoff in WebSocketClient)
         websocketMaxReconnectAttempts: 5,
         pushEnabled: false,
         logLevel: 'info',

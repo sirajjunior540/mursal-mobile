@@ -19,14 +19,16 @@ class LocationService {
   private watchId: number | null = null;
   private isTracking: boolean = false;
   private lastLocationUpdate: number = 0;
-  private updateInterval: number = 10000; // 10 seconds (more conservative)
-  private backgroundUpdateInterval: number = 30000; // 30 seconds in background
-  private forceUpdateInterval: number = 60000; // Force update every minute regardless of movement
+  private updateInterval: number = 30000; // 30 seconds in foreground (was 10 seconds)
+  private backgroundUpdateInterval: number = 60000; // 60 seconds in background (was 30 seconds)
+  private forceUpdateInterval: number = 120000; // Force update every 2 minutes (was 1 minute)
   private isInBackground: boolean = false;
   private appStateSubscription: any = null;
   private permissionCheckInterval: any = null;
   private forceUpdateTimer: any = null;
   private lastKnownLocation: LocationCoords | null = null;
+  private updateInProgress: boolean = false;
+  private minDistanceFilter: number = 50; // Minimum 50 meters movement before update
 
   /**
    * Request location permissions
@@ -168,7 +170,7 @@ class LocationService {
    * Set up periodic permission checking
    */
   private setupPermissionMonitoring(): void {
-    // Check permissions every 5 minutes
+    // Check permissions every 10 minutes (was 5 minutes)
     this.permissionCheckInterval = setInterval(async () => {
       const permissions = await checkLocationPermissions();
       
@@ -182,7 +184,7 @@ class LocationService {
           [{ text: 'OK' }]
         );
       }
-    }, 5 * 60 * 1000); // 5 minutes
+    }, 10 * 60 * 1000); // 10 minutes
   }
 
   /**
@@ -267,31 +269,54 @@ class LocationService {
         // Store as last known location
         this.lastKnownLocation = location;
 
-        console.log(`📍 Location update: ${location.latitude}, ${location.longitude} (accuracy: ${location.accuracy}m)`);
+        if (__DEV__) {
+          console.log(`📍 Location update: ${location.latitude}, ${location.longitude} (accuracy: ${location.accuracy}m)`);
+        }
+
+        // Calculate distance from last update
+        let distanceMoved = 0;
+        if (this.lastKnownLocation) {
+          distanceMoved = this.calculateDistance(
+            this.lastKnownLocation.latitude,
+            this.lastKnownLocation.longitude,
+            location.latitude,
+            location.longitude
+          ) * 1000; // Convert to meters
+        }
 
         // Always try to update location, with both time and distance checks
         const now = Date.now();
         const timeSinceLastUpdate = now - this.lastLocationUpdate;
         
-        // Update if enough time has passed OR if this is a forced update
+        // Update if enough time has passed OR significant movement OR forced update
         const shouldUpdate = (
           timeSinceLastUpdate >= updateInterval || 
-          timeSinceLastUpdate >= this.forceUpdateInterval
+          timeSinceLastUpdate >= this.forceUpdateInterval ||
+          distanceMoved >= this.minDistanceFilter
         );
         
-        if (shouldUpdate) {
+        if (shouldUpdate && !this.updateInProgress) {
+          this.updateInProgress = true;
           try {
-            console.log(`🚀 Attempting location update (${timeSinceLastUpdate}ms since last)`);
+            if (__DEV__) {
+              console.log(`🚀 Attempting location update (${timeSinceLastUpdate}ms since last, ${Math.round(distanceMoved)}m moved)`);
+            }
             await this.updateLocationOnServer(location);
             this.lastLocationUpdate = now;
-            console.log(`✅ Location sent to server at ${new Date().toLocaleTimeString()}`);
+            if (__DEV__) {
+              console.log(`✅ Location sent to server at ${new Date().toLocaleTimeString()}`);
+            }
           } catch (error) {
-            console.error('❌ Failed to update location on server:', error);
+            if (__DEV__) {
+              console.error('❌ Failed to update location on server:', error);
+            }
             // Still update lastLocationUpdate to avoid spam retries
             this.lastLocationUpdate = now;
+          } finally {
+            this.updateInProgress = false;
           }
-        } else {
-          console.log(`⏱️ Skipping location update (${timeSinceLastUpdate}ms < ${updateInterval}ms)`);
+        } else if (__DEV__) {
+          console.log(`⏱️ Skipping location update (time: ${timeSinceLastUpdate}ms < ${updateInterval}ms, distance: ${Math.round(distanceMoved)}m < ${this.minDistanceFilter}m, inProgress: ${this.updateInProgress})`);
         }
       },
       (error) => {
@@ -319,11 +344,11 @@ class LocationService {
       },
       {
         enableHighAccuracy: false, // Start with low accuracy for faster fix
-        distanceFilter: this.isInBackground ? 50 : 10, // Less frequent updates in background
+        distanceFilter: this.isInBackground ? 100 : 50, // Increased distance filter
         interval: updateInterval,
-        fastestInterval: Math.min(updateInterval / 2, 3000),
+        fastestInterval: Math.max(updateInterval / 2, 15000), // Minimum 15 seconds
         timeout: 30000, // Increase timeout to 30 seconds
-        maximumAge: 10000,
+        maximumAge: 30000, // Accept older positions
       }
     );
     
@@ -351,18 +376,20 @@ class LocationService {
    * Start the forced update timer (backup to ensure regular updates)
    */
   private startForceUpdateTimer(): void {
-    if (__DEV__) console.log('🕒 Starting forced update timer (every 2 minutes)');
+    if (__DEV__) console.log('🕒 Starting forced update timer (every 5 minutes)');
     
     this.forceUpdateTimer = setInterval(async () => {
-      if (this.isTracking) {
+      if (this.isTracking && !this.updateInProgress) {
         if (__DEV__) console.log('🔄 Forced update timer triggered');
         try {
           await this.forceLocationUpdate();
         } catch (error) {
-          console.error('⚠️ Forced update timer error:', error);
+          if (__DEV__) {
+            console.error('⚠️ Forced update timer error:', error);
+          }
         }
       }
-    }, 120000); // Every 2 minutes
+    }, 300000); // Every 5 minutes (was 2 minutes)
   }
   
   /**
@@ -404,7 +431,9 @@ class LocationService {
    */
   private async updateLocationOnServer(location: LocationCoords): Promise<void> {
     try {
-      console.log(`🌍 Sending location to server: ${location.latitude}, ${location.longitude}`);
+      if (__DEV__) {
+        console.log(`🌍 Sending location to server: ${location.latitude}, ${location.longitude}`);
+      }
       
       const response = await apiService.updateLocation(
         location.latitude,

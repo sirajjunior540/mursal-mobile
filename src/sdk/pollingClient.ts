@@ -26,6 +26,10 @@ export class PollingClient {
   private lastPollTime: number = 0;
   private consecutiveErrors: number = 0;
   private maxConsecutiveErrors: number = 5;
+  private isPollInProgress: boolean = false;
+  private lastPollData: Order[] | null = null;
+  private lastPollDataTime: number = 0;
+  private pollDataCacheDuration: number = 10000; // Cache poll results for 10 seconds
 
   /**
    * Constructor
@@ -83,12 +87,32 @@ export class PollingClient {
    * Poll for orders
    */
   private async poll(): Promise<void> {
+    // Prevent concurrent polls
+    if (this.isPollInProgress) {
+      if (__DEV__) {
+        console.log('[PollingClient] Poll already in progress, skipping');
+      }
+      return;
+    }
+
+    // Check if we have recent cached data
+    const now = Date.now();
+    if (this.lastPollData && (now - this.lastPollDataTime) < this.pollDataCacheDuration) {
+      if (__DEV__) {
+        console.log('[PollingClient] Using cached data from', Math.floor((now - this.lastPollDataTime) / 1000), 'seconds ago');
+      }
+      this.callbacks.onData?.(this.lastPollData);
+      return;
+    }
+
+    this.isPollInProgress = true;
+    
     try {
       // Only log in development
       if (__DEV__) {
         console.log('[PollingClient] Polling for orders...');
       }
-      this.lastPollTime = Date.now();
+      this.lastPollTime = now;
 
       const orders = await this.fetchOrders();
 
@@ -100,6 +124,10 @@ export class PollingClient {
         this.isConnected = true;
         this.callbacks.onConnectionChange?.(true);
       }
+
+      // Cache the poll data
+      this.lastPollData = orders;
+      this.lastPollDataTime = now;
 
       // Notify callback with orders
       if (orders && orders.length > 0) {
@@ -124,6 +152,8 @@ export class PollingClient {
         this.isConnected = false;
         this.callbacks.onConnectionChange?.(false);
       }
+    } finally {
+      this.isPollInProgress = false;
     }
   }
 
@@ -216,11 +246,19 @@ export class PollingClient {
    * @param interval New polling interval in milliseconds
    */
   updateInterval(interval: number): void {
-    if (interval === this.config.interval) {
+    // Enforce minimum interval to prevent excessive polling
+    const minInterval = 30000; // 30 seconds minimum
+    const safeInterval = Math.max(interval, minInterval);
+    
+    if (safeInterval === this.config.interval) {
       return;
     }
 
-    this.config.interval = interval;
+    this.config.interval = safeInterval;
+    
+    if (__DEV__ && interval < minInterval) {
+      console.log(`[PollingClient] Interval ${interval}ms too low, using minimum ${minInterval}ms`);
+    }
 
     // Restart polling with new interval if currently running
     if (this.pollingTimer) {

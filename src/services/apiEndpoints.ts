@@ -57,6 +57,16 @@ interface HttpClient {
  * This class contains all the API endpoint methods organized by feature area.
  * It uses the HttpClient for making requests and ApiTransformers for data transformation.
  */
+
+// Request tracking to prevent duplicate calls
+const requestTracker = {
+  lastAvailableOrdersCall: 0,
+  lastRouteOptimizationCall: 0,
+  minRequestInterval: 2000, // 2 seconds
+  pendingAvailableOrders: null as Promise<ApiResponse<Order[]>> | null,
+  pendingRouteOptimization: null as Promise<ApiResponse<any>> | null,
+};
+
 export class ApiEndpoints {
   constructor(protected client: HttpClient) {}
 
@@ -340,8 +350,22 @@ export class ApiEndpoints {
   // ==================== Orders & Deliveries ====================
 
   async getAvailableOrders(): Promise<ApiResponse<Order[]>> {
+    // Prevent duplicate calls within 2 seconds
+    const now = Date.now();
+    const timeSinceLastCall = now - requestTracker.lastAvailableOrdersCall;
+    
+    if (timeSinceLastCall < requestTracker.minRequestInterval) {
+      if (requestTracker.pendingAvailableOrders) {
+        console.log('[API] Returning pending available_orders request');
+        return requestTracker.pendingAvailableOrders;
+      }
+      console.log('[API] Skipping duplicate available_orders request');
+      return { success: true, data: [] };
+    }
+    
     // Get available orders for the driver to accept (unassigned/broadcast orders + assigned orders)
-    try {
+    const promise = (async () => {
+      try {
       let apiUrl = '/api/v1/delivery/deliveries/available_orders/';
       
       // Try to get current location for nearby orders (optional)
@@ -476,7 +500,17 @@ export class ApiEndpoints {
           console.warn('[API] Unexpected data format from available_orders endpoint:', response.data);
         }
       } else {
-        console.error('❌ [API] Failed to get available orders:', response.error);
+        console.error('❌ [API] Failed to get available orders:', {
+          error: response.error,
+          message: response.message,
+          statusCode: response.statusCode,
+          url: apiUrl,
+          data: response.data
+        });
+        // Log more details if available
+        if (response.error && typeof response.error === 'object') {
+          console.error('📱 [API] Error details:', response.error);
+        }
       }
       
       // Also get assigned orders for this driver from by_driver endpoint
@@ -583,7 +617,17 @@ export class ApiEndpoints {
         data: [],
         error: error instanceof Error ? error.message : 'Failed to fetch available orders'
       };
+    } finally {
+      // Clear pending promise after completion
+      requestTracker.pendingAvailableOrders = null;
     }
+    })();
+    
+    // Store the promise and update timestamp
+    requestTracker.pendingAvailableOrders = promise;
+    requestTracker.lastAvailableOrdersCall = now;
+    
+    return promise;
   }
 
   async getAvailableOrdersWithDistance(): Promise<ApiResponse<Order[]>> {
@@ -642,7 +686,33 @@ export class ApiEndpoints {
     // Filter out ASSIGNED status deliveries - these should appear in Available Orders until driver accepts them
     
     try {
-      console.log('[API] Fetching driver orders from /api/v1/delivery/deliveries/by_driver/');
+      // Import SmartOrderCache dynamically to avoid circular dependencies
+      const { SmartOrderCache } = await import('./smartOrderCache');
+      
+      // Check if we have valid cached data first
+      const cachedOrders = await SmartOrderCache.getCachedOrders();
+      if (cachedOrders) {
+        console.log('[API] Returning cached driver orders');
+        return {
+          success: true,
+          data: cachedOrders,
+          message: 'Cached driver orders'
+        };
+      }
+      
+      // Get current location for caching purposes
+      let currentLocation: { latitude: number; longitude: number } | undefined;
+      try {
+        const locationService = await import('../services/locationService');
+        const location = locationService.locationService.getLastKnownLocation();
+        if (location && location.latitude && location.longitude) {
+          currentLocation = location;
+        }
+      } catch (error) {
+        console.log('[API] Could not get location for caching:', error);
+      }
+      
+      console.log('[API] Fetching fresh driver orders from /api/v1/delivery/deliveries/by_driver/');
       const response = await this.client.get<any>('/api/v1/delivery/deliveries/by_driver/');
       console.log('[API] Driver orders response:', response);
       
@@ -685,6 +755,9 @@ export class ApiEndpoints {
         });
         
           console.log('[API] Successfully transformed', orders.length, 'orders');
+          
+          // Cache the orders for future use with current location
+          await SmartOrderCache.cacheOrders(orders, currentLocation);
           
           return {
             success: true,
@@ -803,6 +876,9 @@ export class ApiEndpoints {
     const response = await this.client.post<void>(endpoint, {});
     
     if (response.success) {
+      // Invalidate cache when order is accepted
+      const { SmartOrderCache } = await import('./smartOrderCache');
+      await SmartOrderCache.invalidateOnOrderAccepted(deliveryId);
     } else {
     }
     
@@ -819,6 +895,18 @@ export class ApiEndpoints {
     } catch (error) {
       return null;
     }
+  }
+
+  // ==================== Notification Settings ====================
+  
+  async getNotificationChannels(): Promise<ApiResponse<{
+    channels: string[];
+    fcm_configured: boolean;
+    sound_enabled: boolean;
+    vibration_enabled: boolean;
+    persistence_seconds: number;
+  }>> {
+    return this.client.get('/api/v1/tenants/notification-channels/');
   }
 
   // ==================== Batch Leg Operations ====================
@@ -915,7 +1003,15 @@ export class ApiEndpoints {
   }
 
   async declineOrder(orderId: string): Promise<ApiResponse<void>> {
-    return this.client.post<void>(`/api/v1/delivery/deliveries/${orderId}/decline/`, {});
+    const response = await this.client.post<void>(`/api/v1/delivery/deliveries/${orderId}/decline/`, {});
+    
+    if (response.success) {
+      // Invalidate cache when order is declined
+      const { SmartOrderCache } = await import('./smartOrderCache');
+      await SmartOrderCache.invalidateOnOrderDeclined(orderId);
+    }
+    
+    return response;
   }
 
   async getOrderHistory(filter?: 'today' | 'week' | 'month' | 'all'): Promise<ApiResponse<Order[]>> {
@@ -1009,7 +1105,15 @@ export class ApiEndpoints {
     }
 
     // Use smart_update_status endpoint for better handling
-    return this.smartUpdateStatus(orderId, locationData);
+    const response = await this.smartUpdateStatus(orderId, locationData);
+    
+    if (response.success) {
+      // Invalidate cache when order status changes
+      const { SmartOrderCache } = await import('./smartOrderCache');
+      await SmartOrderCache.invalidateOnStatusChange(orderId, statusMap[status] || status);
+    }
+    
+    return response;
   }
 
   async updateBatchStatus(batchId: string, status: string, data?: Record<string, unknown>): Promise<ApiResponse<void>> {
@@ -1116,12 +1220,35 @@ export class ApiEndpoints {
   }
 
   async getRouteOptimization(latitude?: number, longitude?: number): Promise<ApiResponse<any>> {
-    try {
+    // Prevent duplicate calls within 2 seconds
+    const now = Date.now();
+    const timeSinceLastCall = now - requestTracker.lastRouteOptimizationCall;
+    
+    if (timeSinceLastCall < requestTracker.minRequestInterval) {
+      if (requestTracker.pendingRouteOptimization) {
+        console.log('[API] Returning pending route-optimization request');
+        return requestTracker.pendingRouteOptimization;
+      }
+      console.log('[API] Skipping duplicate route-optimization request');
+      return { success: true, data: null };
+    }
+    
+    const promise = (async () => {
+      try {
       // Use the correct endpoint from backend
       const params = latitude && longitude ? `?latitude=${latitude}&longitude=${longitude}` : '';
       const response = await this.client.get<any>(`/api/v1/delivery/deliveries/route-optimization/${params}`);
       
       if (response.success && response.data) {
+        // Update driver location in cache if coordinates were provided
+        if (latitude && longitude) {
+          const { SmartOrderCache } = await import('./smartOrderCache');
+          const hasLocationChanged = await SmartOrderCache.hasLocationChangedSignificantly({ latitude, longitude });
+          if (hasLocationChanged) {
+            console.log('[API] Driver location changed significantly, cache will be invalidated on next getDriverOrders call');
+          }
+        }
+        
         return {
           success: true,
           data: response.data,
@@ -1177,7 +1304,17 @@ export class ApiEndpoints {
       }
       
       return this.getOngoingDeliveries();
+    } finally {
+      // Clear pending promise after completion
+      requestTracker.pendingRouteOptimization = null;
     }
+    })();
+    
+    // Store the promise and update timestamp
+    requestTracker.pendingRouteOptimization = promise;
+    requestTracker.lastRouteOptimizationCall = now;
+    
+    return promise;
   }
 
   // ==================== Financial & Earnings ====================

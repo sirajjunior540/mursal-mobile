@@ -169,4 +169,14 @@ export const haptics = {
       Vibration.vibrate([0, 200, 100, 200]);
     }
   },
+
+  // Stop all vibrations
+  stop: () => {
+    try {
+      // Cancel any ongoing vibration patterns
+      Vibration.cancel();
+    } catch (error) {
+      console.warn('Error stopping vibration:', error);
+    }
+  },
 };

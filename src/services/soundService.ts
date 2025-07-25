@@ -100,18 +100,38 @@ class SoundService {
   /**
    * Start persistent ringing for incoming orders
    */
-  startRinging = (): void => {
+  startRinging = async (): Promise<void> => {
     this.stopRinging(); // Stop any existing ringing
+    
+    // Check notification settings
+    let persistenceSeconds = 30; // Default
+    try {
+      const { Storage } = await import('../utils');
+      const settings = await Storage.getItem('notification_settings') as any;
+      if (settings?.persistence_seconds) {
+        persistenceSeconds = settings.persistence_seconds;
+      }
+    } catch (error) {
+      // Use default if settings not available
+    }
     
     // Play immediate sound
     this.playOrderNotification();
     
-    // Set up repeating sound every 3 seconds
+    // Set up repeating sound every 3 seconds for the configured duration
+    let ringCount = 0;
+    const maxRings = Math.floor(persistenceSeconds / 3); // Ring every 3 seconds
+    
     this.ringingInterval = setInterval(() => {
+      ringCount++;
+      if (ringCount >= maxRings) {
+        this.stopRinging();
+        return;
+      }
       this.playOrderNotification();
     }, 3000);
     
-    console.log('📞 Started ringing for incoming order');
+    console.log(`📞 Started ringing for incoming order (${persistenceSeconds}s persistence)`);
   }
   
   /**

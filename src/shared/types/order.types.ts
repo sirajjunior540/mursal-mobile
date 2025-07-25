@@ -107,6 +107,22 @@ export interface Order {
   is_batch?: boolean;
   batch_id?: string;
   batch_info?: BatchOrderInfo;
+  
+  // Warehouse consolidation
+  is_consolidated?: boolean;
+  warehouse_info?: {
+    warehouse_id?: number;
+    warehouse_address?: string;
+    warehouse_latitude?: number;
+    warehouse_longitude?: number;
+  };
+  delivery_address_info?: {
+    address: string;
+    latitude?: number;
+    longitude?: number;
+    is_warehouse: boolean;
+    delivery_type: string;
+  };
 }
 
 export interface OrderFilters {
@@ -249,6 +265,23 @@ export interface BatchOrderInfo {
   
   // Orders in this batch
   orders: BatchOrder[];
+  
+  // Warehouse consolidation
+  is_consolidated?: boolean;
+  delivery_address_info?: {
+    address: string;
+    latitude?: number;
+    longitude?: number;
+    is_warehouse: boolean;
+    delivery_type: string;
+  };
+  warehouse_info?: {
+    consolidate_to_warehouse: boolean;
+    warehouse_id?: number;
+    warehouse_address?: string;
+    warehouse_latitude?: number;
+    warehouse_longitude?: number;
+  };
 }
 
 export interface BatchOrder {

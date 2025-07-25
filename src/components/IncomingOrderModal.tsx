@@ -16,6 +16,7 @@ import { Order, BatchOrder, extractOrderApiIds, getOrderDisplayId, isBatchOrder 
 import { /* COLORS, FONTS */ } from '../constants';
 import { haptics } from '../utils/haptics';
 import { soundService } from '../services/soundService';
+import { Storage } from '../utils';
 import { flatColors } from '../design/dashboard/flatColors';
 import { premiumTypography } from '../design/dashboard/premiumTypography';
 import { premiumShadows } from '../design/dashboard/premiumShadows';
@@ -68,17 +69,47 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
   const isBatchOrder = order && checkIsBatchOrder(order);
   const batchProperties = order ? getBatchProperties(order) : null;
   
-  // Determine batch type
+  // Determine batch type and consolidation status
+  const isWarehouseConsolidation = React.useMemo(() => {
+    if (!order) return false;
+    // Check if this is a warehouse consolidation batch
+    return order.is_consolidated || 
+           (order as any).current_batch?.is_consolidated || 
+           (order as any).delivery_address_info?.is_warehouse ||
+           false;
+  }, [order]);
+  
   const isDistributionBatch = React.useMemo(() => {
     if (!isBatchOrder || !batchProperties?.orders) return false;
+    // Skip if this is warehouse consolidation
+    if (isWarehouseConsolidation) return false;
     // Distribution batch has multiple unique delivery addresses
     const uniqueDeliveryAddresses = new Set(
       batchProperties.orders.map(o => o.delivery_address).filter(Boolean)
     );
     return uniqueDeliveryAddresses.size > 1;
-  }, [isBatchOrder, batchProperties]);
+  }, [isBatchOrder, batchProperties, isWarehouseConsolidation]);
   
-  const isConsolidatedBatch = isBatchOrder && !isDistributionBatch && (batchProperties?.orders?.length || 0) > 1;
+  const isConsolidatedBatch = (isBatchOrder && !isDistributionBatch && (batchProperties?.orders?.length || 0) > 1) || isWarehouseConsolidation;
+  
+  // Get delivery address based on consolidation
+  const getDeliveryAddress = React.useCallback(() => {
+    if (!order) return 'Delivery location';
+    
+    // For warehouse consolidation, show warehouse address
+    if (isWarehouseConsolidation) {
+      const warehouseInfo = (order as any).warehouse_info || (order as any).current_batch?.warehouse_info;
+      const deliveryInfo = (order as any).delivery_address_info || (order as any).current_batch?.delivery_address_info;
+      
+      if (deliveryInfo?.is_warehouse && deliveryInfo?.address) {
+        return `🏭 Warehouse: ${deliveryInfo.address}`;
+      } else if (warehouseInfo?.warehouse_address) {
+        return `🏭 Warehouse: ${warehouseInfo.warehouse_address}`;
+      }
+    }
+    
+    return order.delivery_address || 'Delivery location';
+  }, [order, isWarehouseConsolidation]);
 
   // Generate route stops for batch orders
   const routeStops = React.useMemo(() => {
@@ -160,8 +191,13 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
   // Handle actions
   const handleAccept = useCallback(() => {
     if (!order) return;
+    
+    // Stop all notifications immediately
     stopTimer();
     soundService.stopRinging();
+    haptics.stop(); // Stop any ongoing vibrations
+    
+    // Give success feedback
     haptics.success();
     
     if (isBatchOrder && onAcceptRoute && order.current_batch?.id) {
@@ -186,6 +222,7 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
     if (!order) return;
     stopTimer();
     soundService.stopRinging();
+    haptics.stop(); // Stop any ongoing vibrations
     haptics.warning();
     const apiIds = extractOrderApiIds(order);
     console.log('❌ Driver declined order:', getOrderDisplayId(order));
@@ -197,6 +234,7 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
     if (!order) return;
     stopTimer();
     soundService.stopRinging();
+    haptics.stop(); // Stop any ongoing vibrations
     haptics.light();
     const apiIds = extractOrderApiIds(order);
     console.log('⏭️ Driver skipped order:', getOrderDisplayId(order));
@@ -245,9 +283,20 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
         setShowRouteDetails(true);
       }
       
-      // Start persistent ringing
-      soundService.startRinging();
-      haptics.notification();
+      // Check notification settings and start ringing accordingly
+      Storage.getItem('notification_settings').then(settings => {
+        const notificationSettings = settings as any;
+        if (notificationSettings?.sound_enabled !== false) {
+          soundService.startRinging();
+        }
+        if (notificationSettings?.vibration_enabled !== false) {
+          haptics.notification();
+        }
+      }).catch(() => {
+        // Default behavior if settings not available
+        soundService.startRinging();
+        haptics.notification();
+      });
 
       // Start entrance animation
       Animated.parallel([
@@ -312,6 +361,7 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
       
       stopTimer();
       soundService.stopRinging();
+      haptics.stop(); // Stop any ongoing vibrations
     }
   }, [visible, order, startTimer, stopTimer, isBatchOrder]);
 
@@ -387,10 +437,14 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
           {/* Order Type Badge */}
           <View style={styles.orderTypeContainer}>
             {isBatchOrder ? (
-              <View style={[styles.orderTypeBadge, styles.batchBadge]}>
-                <Ionicons name={isDistributionBatch ? "git-branch" : "layers"} size={16} color="#FF6B6B" />
+              <View style={[styles.orderTypeBadge, styles.batchBadge, isWarehouseConsolidation && styles.warehouseBadge]}>
+                <Ionicons 
+                  name={isWarehouseConsolidation ? "business" : (isDistributionBatch ? "git-branch" : "layers")} 
+                  size={16} 
+                  color={isWarehouseConsolidation ? "#FF9F43" : "#FF6B6B"} 
+                />
                 <Text style={[styles.orderTypeText, styles.batchOrderTypeText]}>
-                  {isDistributionBatch ? 'DISTRIBUTION' : 'CONSOLIDATED'} ({batchTotalOrders} ORDERS)
+                  {isWarehouseConsolidation ? 'WAREHOUSE CONSOLIDATION' : (isDistributionBatch ? 'DISTRIBUTION' : 'CONSOLIDATED')} ({batchTotalOrders} ORDERS)
                 </Text>
               </View>
             ) : (
@@ -530,12 +584,18 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
                 {/* Single Order or Single-Order Batch - Drop-off Info */}
                 <View style={styles.locationSection}>
                   <View style={styles.locationIcon}>
-                    <Ionicons name="home-outline" size={20} color={flatColors.accent.green} />
+                    <Ionicons 
+                      name={isWarehouseConsolidation ? "business-outline" : "home-outline"} 
+                      size={20} 
+                      color={isWarehouseConsolidation ? flatColors.accent.orange : flatColors.accent.green} 
+                    />
                   </View>
                   <View style={styles.locationInfo}>
-                    <Text style={styles.locationLabel}>DELIVERY</Text>
+                    <Text style={styles.locationLabel}>
+                      {isWarehouseConsolidation ? 'DELIVER TO WAREHOUSE' : 'DELIVERY'}
+                    </Text>
                     <Text style={styles.locationAddress} numberOfLines={2}>
-                      {order.delivery_address || 'Delivery location'}
+                      {getDeliveryAddress()}
                     </Text>
                   </View>
                 </View>
@@ -755,11 +815,12 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     width: '100%',
     maxWidth: 380,
-    maxHeight: SCREEN_HEIGHT * 0.85, // Limit modal height to 85% of screen
+    maxHeight: SCREEN_HEIGHT * 0.9, // Increased to 90% of screen
     overflow: 'hidden',
     ...premiumShadows.large,
     borderWidth: 1,
     borderColor: flatColors.neutral[200],
+    paddingBottom: 88, // Space for action buttons (68px height + 20px padding)
   },
   timerHeader: {
     backgroundColor: flatColors.backgrounds.secondary,
@@ -861,12 +922,12 @@ const styles = StyleSheet.create({
   },
   orderSummary: {
     flex: 1,
-    maxHeight: SCREEN_HEIGHT * 0.45, // Limit height to 45% of screen
+    minHeight: 200, // Ensure minimum height
+    maxHeight: SCREEN_HEIGHT * 0.5, // Increased to 50% of screen
   },
   orderSummaryContent: {
     paddingHorizontal: 20,
     paddingVertical: 16,
-    paddingBottom: 100, // Account for fixed action buttons
   },
   orderNumber: {
     ...premiumTypography.callout,
@@ -995,6 +1056,10 @@ const styles = StyleSheet.create({
   batchBadge: {
     backgroundColor: flatColors.cards.red.background,
     borderColor: flatColors.accent.red,
+  },
+  warehouseBadge: {
+    backgroundColor: `${flatColors.accent.orange}15`, // 15% opacity orange
+    borderColor: flatColors.accent.orange,
   },
   batchOrderTypeText: {
     color: flatColors.accent.red,

@@ -109,54 +109,74 @@ export const DriverProvider: React.FC<DriverProviderProps> = ({ children }) => {
           console.error('❌ Error initializing location service:', error);
         }
 
-        // Initialize push notifications
+        // Check notification settings from backend
+        let fcmEnabled = false;
         try {
-          const { PushNotificationClient } = await import('../sdk/pushNotificationClient');
-          const pushClient = new PushNotificationClient({});
+          const channelsResponse = await apiService.getNotificationChannels();
+          if (channelsResponse.success && channelsResponse.data) {
+            fcmEnabled = channelsResponse.data.fcm_configured && 
+                        channelsResponse.data.channels.includes('fcm');
+            console.log(`📱 FCM Configuration: ${fcmEnabled ? 'Enabled' : 'Disabled'} by tenant`);
+            
+            // Store notification settings for later use
+            await Storage.setItem('notification_settings', channelsResponse.data);
+          }
+        } catch (error) {
+          console.warn('⚠️ Could not fetch notification settings, using defaults');
+        }
 
-          pushClient.setCallbacks({
-            onNotification: (data) => {
-              console.log('🔔 Push notification received:', data);
-            },
-            onRegistration: async (token) => {
-              console.log('📱 FCM token received:', token);
+        // Initialize push notifications only if enabled by tenant
+        if (fcmEnabled) {
+          try {
+            const { PushNotificationClient } = await import('../sdk/pushNotificationClient');
+            const pushClient = new PushNotificationClient({});
 
-              // Send token to backend (only if the API endpoint exists)
-              try {
-                const response = await apiService.updateFCMToken(token);
-                if (response.success) {
-                  console.log('✅ FCM token sent to backend');
-                } else {
-                  // Check if it's a 404 (endpoint doesn't exist) or 405 (method not allowed)
-                  const errorMsg = response.error || '';
+            pushClient.setCallbacks({
+              onNotification: (data) => {
+                console.log('🔔 Push notification received:', data);
+              },
+              onRegistration: async (token) => {
+                console.log('📱 FCM token received:', token);
+
+                // Send token to backend (only if the API endpoint exists)
+                try {
+                  const response = await apiService.updateFCMToken(token);
+                  if (response.success) {
+                    console.log('✅ FCM token sent to backend');
+                  } else {
+                    // Check if it's a 404 (endpoint doesn't exist) or 405 (method not allowed)
+                    const errorMsg = response.error || '';
+                    if (errorMsg.includes('404') || errorMsg.includes('Not Found') || 
+                        errorMsg.includes('405') || errorMsg.includes('Method Not Allowed')) {
+                      console.warn('⚠️ FCM token endpoint not implemented on backend yet - this is expected during development');
+                    } else {
+                      console.error('❌ Failed to send FCM token to backend:', response.error);
+                    }
+                  }
+                } catch (error) {
+                  // Gracefully handle network or other errors
+                  const errorMsg = error instanceof Error ? error.message : String(error);
                   if (errorMsg.includes('404') || errorMsg.includes('Not Found') || 
                       errorMsg.includes('405') || errorMsg.includes('Method Not Allowed')) {
                     console.warn('⚠️ FCM token endpoint not implemented on backend yet - this is expected during development');
                   } else {
-                    console.error('❌ Failed to send FCM token to backend:', response.error);
+                    console.error('❌ Error sending FCM token to backend:', errorMsg);
                   }
                 }
-              } catch (error) {
-                // Gracefully handle network or other errors
-                const errorMsg = error instanceof Error ? error.message : String(error);
-                if (errorMsg.includes('404') || errorMsg.includes('Not Found') || 
-                    errorMsg.includes('405') || errorMsg.includes('Method Not Allowed')) {
-                  console.warn('⚠️ FCM token endpoint not implemented on backend yet - this is expected during development');
-                } else {
-                  console.error('❌ Error sending FCM token to backend:', errorMsg);
-                }
+              },
+              onRegistrationError: (error) => {
+                console.warn('⚠️ Push notification registration error (this is expected if Firebase is not fully configured):', error);
               }
-            },
-            onRegistrationError: (error) => {
-              console.warn('⚠️ Push notification registration error (this is expected if Firebase is not fully configured):', error);
-            }
-          });
+            });
 
-          await pushClient.start();
-          console.log('✅ Push notification client initialized');
-        } catch (error) {
-          console.warn('⚠️ Push notifications not available (this is expected if Firebase is not fully configured):', error);
-          // Continue without push notifications - the app will use polling/websocket instead
+            await pushClient.start();
+            console.log('✅ Push notification client initialized');
+          } catch (error) {
+            console.warn('⚠️ Push notifications not available (this is expected if Firebase is not fully configured):', error);
+            // Continue without push notifications - the app will use polling/websocket instead
+          }
+        } else {
+          console.log('📵 Push notifications disabled by tenant settings - using polling/websocket only');
         }
       } else {
         console.log('🚪 Clearing driver data and stopping location tracking...');
