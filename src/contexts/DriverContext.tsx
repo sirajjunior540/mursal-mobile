@@ -171,6 +171,13 @@ export const DriverProvider: React.FC<DriverProviderProps> = ({ children }) => {
 
             await pushClient.start();
             console.log('✅ Push notification client initialized');
+            
+            // Subscribe to tenant-specific topics
+            const tenantId = await Storage.getItem(STORAGE_KEYS.TENANT_ID);
+            if (tenantId && typeof tenantId === 'string') {
+              await pushClient.subscribeToTenantTopics(tenantId);
+              console.log(`✅ Subscribed to tenant topics for: ${tenantId}`);
+            }
           } catch (error) {
             console.warn('⚠️ Push notifications not available (this is expected if Firebase is not fully configured):', error);
             // Continue without push notifications - the app will use polling/websocket instead

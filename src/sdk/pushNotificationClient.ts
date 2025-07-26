@@ -64,6 +64,45 @@ export class PushNotificationClient {
   }
   
   /**
+   * Subscribe to tenant-specific topics
+   * @param tenantId Current tenant ID
+   */
+  async subscribeToTenantTopics(tenantId: string): Promise<void> {
+    if (!messaging) {
+      console.warn('[PushNotificationClient] Firebase messaging not available');
+      return;
+    }
+    
+    try {
+      // Subscribe to tenant-specific topics
+      await messaging().subscribeToTopic(`tenant_${tenantId}`);
+      await messaging().subscribeToTopic(`tenant_${tenantId}_drivers`);
+      console.log(`[PushNotificationClient] Subscribed to tenant topics for ${tenantId}`);
+    } catch (error) {
+      console.error('[PushNotificationClient] Error subscribing to topics:', error);
+    }
+  }
+  
+  /**
+   * Unsubscribe from tenant-specific topics
+   * @param tenantId Tenant ID to unsubscribe from
+   */
+  async unsubscribeFromTenantTopics(tenantId: string): Promise<void> {
+    if (!messaging) {
+      console.warn('[PushNotificationClient] Firebase messaging not available');
+      return;
+    }
+    
+    try {
+      await messaging().unsubscribeFromTopic(`tenant_${tenantId}`);
+      await messaging().unsubscribeFromTopic(`tenant_${tenantId}_drivers`);
+      console.log(`[PushNotificationClient] Unsubscribed from tenant topics for ${tenantId}`);
+    } catch (error) {
+      console.error('[PushNotificationClient] Error unsubscribing from topics:', error);
+    }
+  }
+  
+  /**
    * Start push notification client
    */
   async start(): Promise<void> {

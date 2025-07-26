@@ -84,8 +84,17 @@ class NotificationService {
     }
   }
 
-  private handlePushNotification(data: any) {
+  private async handlePushNotification(data: any) {
     try {
+      // Check if notification is for current tenant
+      const currentTenantId = await this.getCurrentTenantId();
+      const notificationTenantId = data.tenant_id || data.tenantId || data.tenant;
+      
+      // Only process notifications for the current tenant
+      if (notificationTenantId && currentTenantId && notificationTenantId !== currentTenantId) {
+        console.log(`[NotificationService] Ignoring notification for different tenant: ${notificationTenantId}`);
+        return;
+      }
       
       // Check if this is a new order notification
       if (data.type === 'new_order' && data.order) {
@@ -105,6 +114,18 @@ class NotificationService {
         this.vibrateForOrder();
       }
     } catch (error) {
+      console.error('[NotificationService] Error handling push notification:', error);
+    }
+  }
+  
+  private async getCurrentTenantId(): Promise<string | null> {
+    try {
+      const { Storage, STORAGE_KEYS } = await import('../utils');
+      const tenantId = await Storage.getItem(STORAGE_KEYS.TENANT_ID);
+      return tenantId as string | null;
+    } catch (error) {
+      console.error('[NotificationService] Error getting tenant ID:', error);
+      return null;
     }
   }
 

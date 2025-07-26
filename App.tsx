@@ -52,6 +52,7 @@ import { soundService } from './src/services/soundService';
 import { notificationService } from './src/services/notificationService';
 import { haptics } from './src/utils/haptics';
 import { ENV, getTenantHost } from './src/config/environment';
+import { appStateService } from './src/services/appStateService';
 
 // Environment configuration
 const API_BASE_URL = ENV.API_BASE_URL;
@@ -385,6 +386,10 @@ function App() {
       soundService.playOrderNotification();
       
       try {
+        // Initialize app state service for WebSocket management
+        logger.debug('🔄 Initializing app state service');
+        appStateService.initialize();
+        
         // Request location permissions
         logger.debug('📍 Requesting location permissions');
         const locationPermissionGranted = await locationService.requestLocationPermissions();
@@ -418,6 +423,24 @@ function App() {
           
           if (backgroundEnabled) {
             logger.info('✅ Background notifications enabled');
+            
+            // Check if we have an FCM token and send it to backend
+            if (global.fcmToken) {
+              logger.info('🔑 Sending FCM token to backend...');
+              try {
+                const { apiService } = await import('./src/services/api');
+                const result = await apiService.updateFcmToken(global.fcmToken);
+                if (result.success) {
+                  logger.info('✅ FCM token sent to backend successfully');
+                } else {
+                  logger.error('❌ Failed to send FCM token to backend:', result.error);
+                }
+              } catch (error) {
+                logger.error('❌ Error sending FCM token to backend:', error as Error);
+              }
+            } else {
+              logger.warn('⚠️ No FCM token available to send to backend');
+            }
             
             // Set up notification callbacks for background actions
             notificationService.setNotificationCallbacks({
@@ -482,6 +505,8 @@ function App() {
     return () => {
       clearTimeout(initTimer);
       subscription?.remove();
+      // Cleanup app state service
+      appStateService.cleanup();
     };
   }, []);
 
