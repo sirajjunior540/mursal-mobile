@@ -140,8 +140,22 @@ export class ApiTransformers {
           name: `Batch ${data.batch_number}`,
           status: 'pending',
           batch_type: data.batch_type || 'regular',
-          orders: data.orders.map((d: any) => this.transformOrder(d))
+          orders: data.orders.map((d: any) => this.transformOrder(d)),
+          is_consolidated: data.is_consolidated || false,
+          warehouse_info: data.warehouse_info || null,
+          delivery_address_info: data.delivery_address_info || null
         };
+        
+        // Also add warehouse info to the order itself for easier access
+        if (data.warehouse_info) {
+          transformedOrder.warehouse_info = data.warehouse_info;
+        }
+        if (data.is_consolidated) {
+          transformedOrder.is_consolidated = data.is_consolidated;
+        }
+        if (data.delivery_address_info) {
+          transformedOrder.delivery_address_info = data.delivery_address_info;
+        }
         
         // Override some fields with batch-level data
         transformedOrder.pickup_address = data.pickup_address || transformedOrder.pickup_address;

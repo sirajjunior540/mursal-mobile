@@ -164,6 +164,9 @@ export class PushNotificationClient {
       return;
     }
     
+    // Create high priority notification channel for Android
+    this.createHighPriorityChannel();
+    
     PushNotification.configure({
       // (optional) Called when Token is generated
       onRegister: (token) => {
@@ -179,6 +182,16 @@ export class PushNotificationClient {
         const data = Platform.OS === 'ios'
           ? notification.data
           : notification.data || {};
+        
+        // Handle high priority notifications (wake screen)
+        if (data.wake_screen === 'true' || data.priority === 'high') {
+          console.log('[PushNotificationClient] High priority notification - attempting to wake screen');
+          
+          // For Android, create a local notification to ensure it wakes the screen
+          if (Platform.OS === 'android') {
+            this.createWakeUpNotification(notification.title || 'New Order', notification.message || notification.body || '');
+          }
+        }
         
         // Process notification data
         this.processNotification(data);
@@ -200,6 +213,19 @@ export class PushNotificationClient {
       
       // Request permissions on iOS
       requestPermissions: false,
+      
+      // Android specific settings for wake-up capability
+      senderID: '1234567890', // Replace with your actual sender ID from Firebase project
+      permissions: {
+        alert: true,
+        badge: true,
+        sound: true,
+      },
+      
+      // iOS specific settings for wake-up
+      ...(Platform.OS === 'ios' && {
+        requestPermissions: true,
+      }),
     });
   }
   
@@ -275,6 +301,15 @@ export class PushNotificationClient {
       console.log('[PushNotificationClient] Foreground message received:', remoteMessage);
       this.processNotification(remoteMessage.data || {});
     });
+    
+    // Note: Background message handler is set up in index.js to ensure it works correctly
+    // Check if there's a pending notification from background
+    if (global.pendingNotification) {
+      console.log('[PushNotificationClient] Processing pending background notification');
+      this.processNotification(global.pendingNotification);
+      // Clear the pending notification
+      global.pendingNotification = null;
+    }
   }
   
   /**
@@ -374,6 +409,111 @@ export class PushNotificationClient {
       console.log(`[PushNotificationClient] Unsubscribed from topic: ${topic}`);
     } catch (error) {
       console.error(`[PushNotificationClient] Error unsubscribing from topic ${topic}:`, error);
+    }
+  }
+  
+  /**
+   * Create high priority notification channel for Android
+   */
+  private createHighPriorityChannel(): void {
+    if (!PushNotification || Platform.OS !== 'android') {
+      return;
+    }
+    
+    try {
+      PushNotification.createChannel(
+        {
+          channelId: 'delivery_orders',
+          channelName: 'Delivery Orders',
+          channelDescription: 'High priority notifications for new delivery orders',
+          playSound: true,
+          soundName: 'default',
+          importance: 4, // IMPORTANCE_HIGH
+          vibrate: true,
+          vibration: 1000,
+          led: true,
+          ledColor: '#FF6B35',
+          showBadge: true,
+          bypassDnd: true, // Bypass Do Not Disturb
+          enableLights: true,
+          enableVibration: true,
+          lockscreenVisibility: 1, // VISIBILITY_PUBLIC
+          groupKey: 'delivery-orders-group'
+        },
+        (created) => {
+          console.log(`[PushNotificationClient] High priority channel created: ${created}`);
+        }
+      );
+    } catch (error) {
+      console.error('[PushNotificationClient] Error creating notification channel:', error);
+    }
+  }
+  
+  /**
+   * Create a wake-up notification for high priority orders
+   */
+  private createWakeUpNotification(title: string, message: string): void {
+    if (!PushNotification || Platform.OS !== 'android') {
+      return;
+    }
+    
+    try {
+      PushNotification.localNotification({
+        title,
+        message,
+        channelId: 'delivery_orders',
+        priority: 'high',
+        importance: 'high',
+        vibrate: true,
+        vibration: 1000,
+        playSound: true,
+        soundName: 'default',
+        ongoing: false,
+        invokeApp: true,
+        when: null,
+        usesChronometer: false,
+        timeoutAfter: 30000, // Auto dismiss after 30 seconds
+        ignoreInForeground: false,
+        showWhen: true,
+        autoCancel: true,
+        largeIcon: 'ic_launcher',
+        smallIcon: 'ic_notification',
+        bigText: message,
+        subText: '📱 Tap to view order details',
+        bigPictureUrl: 'https://via.placeholder.com/400x200/FF6B35/FFFFFF?text=New+Order',
+        bigLargeIcon: 'https://via.placeholder.com/128x128/FF6B35/FFFFFF?text=🚚',
+        color: '#FF6B35',
+        id: Math.floor(Math.random() * 1000000), // Random notification ID
+        tag: 'delivery_order',
+        group: 'delivery_orders',
+        groupSummary: false,
+        category: 'DELIVERY_ORDER',
+        actions: [
+          {
+            identifier: 'ACCEPT_ACTION',
+            title: '✅ Accept',
+            activationMode: 'foreground',
+            destructive: false,
+            authenticationRequired: false
+          },
+          {
+            identifier: 'VIEW_ACTION', 
+            title: '👁️ View Details',
+            activationMode: 'foreground',
+            destructive: false,
+            authenticationRequired: false
+          }
+        ],
+        userInfo: {
+          wake_screen: 'true',
+          priority: 'high',
+          style: 'big_picture'
+        },
+      });
+      
+      console.log('[PushNotificationClient] Wake-up notification created');
+    } catch (error) {
+      console.error('[PushNotificationClient] Error creating wake-up notification:', error);
     }
   }
   

@@ -27,7 +27,6 @@ import IncomingOrderModal from './src/components/IncomingOrderModal';
 // Screens
 import { SplashScreen } from './src/screens/SplashScreen';
 import LoginScreen from './src/screens/auth/LoginScreen';
-import OrderDetailsScreen from './src/screens/OrderDetailsScreen';
 import AcceptedOrdersScreen from './src/screens/AcceptedOrdersScreen';
 import AvailableOrdersScreen from './src/screens/AvailableOrdersScreen';
 import RouteNavigationScreen from './src/screens/RouteNavigationScreen';
@@ -63,7 +62,6 @@ interface RootStackParamList extends Record<string, object | undefined> {
   Splash: undefined;
   Login: undefined;
   Main: undefined;
-  OrderDetails: { orderId: string; autoNavigate?: boolean };
   DriverProfileSettings: undefined;
   AvailableOrders: undefined;
   AcceptedOrders: undefined;
@@ -160,13 +158,27 @@ const MainTabs = () => {
 
 // Incoming Order Modal Manager Component
 const IncomingOrderManager = () => {
+  // Wrap useOrders in try-catch to handle context errors gracefully
+  let orderContext;
+  try {
+    orderContext = useOrders();
+  } catch (error) {
+    console.error('IncomingOrderManager: Failed to access OrderContext:', error);
+    return null;
+  }
+  
+  if (!orderContext) {
+    console.error('IncomingOrderManager: OrderContext is undefined');
+    return null;
+  }
+  
   const { 
     acceptOrder, 
     declineOrder, 
     setOrderNotificationCallback,
     getDriverOrders,
     refreshOrders
-  } = useOrders();
+  } = orderContext;
   const [incomingOrder, setIncomingOrder] = useState<Order | null>(null);
   const [showModal, setShowModal] = useState(false);
 
@@ -314,15 +326,6 @@ const AppNavigator = () => {
           <>
             <Stack.Screen name="Main" component={MainTabs} />
             <Stack.Screen 
-              name="OrderDetails" 
-              component={OrderDetailsScreen} 
-              options={{ 
-                headerShown: false,
-                presentation: 'modal',
-                animation: 'slide_from_bottom'
-              }}
-            />
-            <Stack.Screen 
               name="DriverProfileSettings" 
               component={DriverProfileSettingsScreen} 
               options={{ 
@@ -382,6 +385,11 @@ function App() {
     const initializeApp = async () => {
       logger.info('🚀 Initializing Mursal Driver App');
       
+      // Check if app was launched from a notification
+      if (global.pendingNotification) {
+        logger.info('📱 App launched with pending notification:', global.pendingNotification);
+      }
+      
       // Play startup sound
       soundService.playOrderNotification();
       
@@ -429,7 +437,7 @@ function App() {
               logger.info('🔑 Sending FCM token to backend...');
               try {
                 const { apiService } = await import('./src/services/api');
-                const result = await apiService.updateFcmToken(global.fcmToken);
+                const result = await apiService.updateFCMToken(global.fcmToken);
                 if (result.success) {
                   logger.info('✅ FCM token sent to backend successfully');
                 } else {

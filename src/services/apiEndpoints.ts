@@ -676,12 +676,12 @@ export class ApiEndpoints {
   }
 
 
-  async getActiveOrders(): Promise<ApiResponse<Order[]>> {
+  async getActiveOrders(forceRefresh: boolean = false): Promise<ApiResponse<Order[]>> {
     // Alias for getDriverOrders for backward compatibility
-    return this.getDriverOrders();
+    return this.getDriverOrders(forceRefresh);
   }
 
-  async getDriverOrders(): Promise<ApiResponse<Order[]>> {
+  async getDriverOrders(forceRefresh: boolean = false): Promise<ApiResponse<Order[]>> {
     // Use by_driver endpoint as primary since it has complete order data
     // Filter out ASSIGNED status deliveries - these should appear in Available Orders until driver accepts them
     
@@ -689,15 +689,21 @@ export class ApiEndpoints {
       // Import SmartOrderCache dynamically to avoid circular dependencies
       const { SmartOrderCache } = await import('./smartOrderCache');
       
-      // Check if we have valid cached data first
-      const cachedOrders = await SmartOrderCache.getCachedOrders();
-      if (cachedOrders) {
-        console.log('[API] Returning cached driver orders');
-        return {
-          success: true,
-          data: cachedOrders,
-          message: 'Cached driver orders'
-        };
+      // Check if we have valid cached data first (unless force refresh is requested)
+      if (!forceRefresh) {
+        const cachedOrders = await SmartOrderCache.getCachedOrders();
+        if (cachedOrders) {
+          console.log('[API] Returning cached driver orders');
+          return {
+            success: true,
+            data: cachedOrders,
+            message: 'Cached driver orders'
+          };
+        }
+      } else {
+        console.log('[API] Force refresh requested, skipping cache');
+        // Clear the cache when force refresh is requested
+        await SmartOrderCache.clearCache();
       }
       
       // Get current location for caching purposes
@@ -1179,6 +1185,59 @@ export class ApiEndpoints {
   async acceptBatchOrder(batchId: string): Promise<ApiResponse<void>> {
     return this.client.post<void>(`/api/v1/delivery/batches/${batchId}/accept/`, {});
   }
+  
+  async confirmItemPickup(batchId: string, data: {
+    order_id: string;
+    item_id: string;
+    qr_code?: string;
+  }): Promise<ApiResponse<{
+    item_id: string;
+    item_name: string;
+    is_picked_up: boolean;
+    pickup_confirmed_at: string;
+    order_items_remaining: number;
+    batch_progress: {
+      total_items: number;
+      picked_items: number;
+      percentage: number;
+    };
+    batch_status_updated?: boolean;
+    new_batch_status?: string;
+  }>> {
+    return this.client.post(`/api/v1/delivery/batches/${batchId}/confirm-item-pickup/`, data);
+  }
+  
+  async getPickupProgress(batchId: string): Promise<ApiResponse<{
+    batch_id: string;
+    batch_number: string;
+    orders: Array<{
+      order_id: string;
+      order_number: string;
+      customer_name: string;
+      items: Array<{
+        item_id: string;
+        item_name: string;
+        quantity: number;
+        is_picked_up: boolean;
+        pickup_confirmed_at: string | null;
+        pickup_confirmed_by: string | null;
+        has_qr_code: boolean;
+      }>;
+      order_progress: {
+        total_items: number;
+        picked_items: number;
+        is_complete: boolean;
+      };
+    }>;
+    overall_progress: {
+      total_items: number;
+      picked_items: number;
+      percentage: number;
+      is_complete: boolean;
+    };
+  }>> {
+    return this.client.get(`/api/v1/delivery/batches/${batchId}/pickup-progress/`);
+  }
 
   // ==================== Smart Assignment ====================
 
@@ -1658,7 +1717,7 @@ export class ApiEndpoints {
   }
 
   async getTenantSettings(): Promise<ApiResponse<TenantSettings>> {
-    return this.client.get<TenantSettings>('/api/v1/tenant/settings/');
+    return this.client.get<TenantSettings>('/api/v1/tenants/settings/');
   }
 
   // ==================== Nearby Drivers ====================

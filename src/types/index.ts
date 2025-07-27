@@ -178,6 +178,15 @@ export type PaymentMethod = 'cash' | 'card' | 'digital_wallet';
 export type PackageSize = 'small' | 'medium' | 'large' | 'extra_large';
 export type Priority = 'low' | 'normal' | 'high' | 'urgent';
 export type SpecialHandling = 'none' | 'fragile' | 'perishable' | 'temperature_controlled' | 'liquid' | 'hazardous';
+
+// Special handling object type used in some API responses
+export interface SpecialHandlingObject {
+  fragile?: boolean;
+  temperature_controlled?: boolean;
+  hazardous?: boolean;
+  liquid?: boolean;
+  perishable?: boolean;
+}
 export type DeliveryType = 'regular' | 'food' | 'fast';
 
 export interface Order {
@@ -213,7 +222,7 @@ export interface Order {
   package_size?: PackageSize;
   package_weight?: number;
   priority?: Priority;
-  special_handling?: SpecialHandling;
+  special_handling?: SpecialHandling | SpecialHandlingObject;
   
   // Time constraints
   pickup_time_window_start?: string;
@@ -258,6 +267,7 @@ export interface Order {
     };
   } | null;
   consolidation_warehouse_id?: string;
+  consolidation_warehouse_address?: string;
   consolidation_batch_id?: string;
   final_delivery_address?: string;
   final_delivery_latitude?: number;
@@ -283,13 +293,50 @@ export interface Order {
 // Extended interface for batch orders
 export interface BatchOrder extends Order {
   batch_number?: string;  // Added for apiTransformers.ts compatibility
+  type?: 'batch' | 'single';
+  is_consolidated?: boolean;
+  delivery_address_info?: {
+    address: string;
+    latitude?: number;
+    longitude?: number;
+    is_warehouse: boolean;
+    delivery_type: string;
+  };
+  warehouse_info?: {
+    id?: string;
+    name?: string;
+    address?: string;
+    warehouse_address?: string;
+    consolidate_to_warehouse?: boolean;
+    warehouse_id?: number;
+    warehouse_latitude?: number;
+    warehouse_longitude?: number;
+    latitude?: number;
+    longitude?: number;
+  };
+  consolidation_warehouse_address?: string;
   current_batch: {
     id: string;
     batch_number: string;
     name: string;
     status: string;
     batch_type: string;
+    is_consolidated?: boolean;
     orders?: Order[]; // Individual orders in the batch
+    delivery_address_info?: {
+      address: string;
+      latitude?: number;
+      longitude?: number;
+      is_warehouse: boolean;
+      delivery_type: string;
+    };
+    warehouse_info?: {
+      consolidate_to_warehouse: boolean;
+      warehouse_id?: number;
+      warehouse_address?: string;
+      warehouse_latitude?: number;
+      warehouse_longitude?: number;
+    };
   };
   warehouseInfo?: {
     id: string;
@@ -405,6 +452,7 @@ export type RootStackParamList = {
   Login: undefined;
   Main: undefined;
   OrderDetails: { orderId: string };
+  ItemPickup: { batchId: string; batchNumber: string };
 };
 
 export type TabParamList = {
@@ -459,6 +507,40 @@ export const getOrderDisplayId = (order: Order): string => {
 };
 
 /**
+ * Check if special handling is an object type
+ * @param specialHandling The special handling value
+ * @returns true if it's an object type
+ */
+export const isSpecialHandlingObject = (specialHandling: any): specialHandling is SpecialHandlingObject => {
+  return specialHandling && typeof specialHandling === 'object' && !Array.isArray(specialHandling);
+};
+
+/**
+ * Get special handling as string
+ * @param specialHandling The special handling value
+ * @returns Special handling as string or undefined
+ */
+export const getSpecialHandlingString = (specialHandling?: SpecialHandling | SpecialHandlingObject): SpecialHandling | undefined => {
+  if (!specialHandling) return undefined;
+  
+  if (typeof specialHandling === 'string') {
+    return specialHandling;
+  }
+  
+  if (isSpecialHandlingObject(specialHandling)) {
+    // Convert object to string based on flags
+    if (specialHandling.fragile) return 'fragile';
+    if (specialHandling.temperature_controlled) return 'temperature_controlled';
+    if (specialHandling.hazardous) return 'hazardous';
+    if (specialHandling.liquid) return 'liquid';
+    if (specialHandling.perishable) return 'perishable';
+    return 'none';
+  }
+  
+  return undefined;
+};
+
+/**
  * Type guard to check if an order is a batch order
  * @param order The order object to check
  * @returns true if the order is a batch order
@@ -484,7 +566,9 @@ export const getBatchProperties = (order: Order) => {
     batchStatus: order.current_batch.status,
     batchType: order.current_batch.batch_type,
     orders: order.current_batch.orders,
-    warehouseInfo: order.warehouseInfo,
+    warehouseInfo: order.current_batch.warehouse_info || order.warehouseInfo,
+    deliveryAddressInfo: order.current_batch.delivery_address_info || order.delivery_address_info,
+    isConsolidated: order.current_batch.is_consolidated || order.is_consolidated,
     routingStrategy: order.routingStrategy,
     batchMetadata: order.batchMetadata,
     consolidationWarehouseId: order.consolidation_warehouse_id,

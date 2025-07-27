@@ -6,6 +6,7 @@ import { Order, isBatchOrder as checkIsBatchOrder, getBatchProperties } from '..
 import { flatModalStyles } from '../../design/orderDetails/flatModalStyles';
 import { flatColors } from '../../design/dashboard/flatColors';
 import { premiumTypography } from '../../design/dashboard/premiumTypography';
+import { premiumShadows } from '../../design/dashboard/premiumShadows';
 import { FlatOrderHeader } from './FlatOrderHeader';
 import { FlatSpecialHandlingBadges } from './FlatSpecialHandlingBadges';
 import { FlatOrderInfoSection } from './FlatOrderInfoSection';
@@ -63,16 +64,25 @@ export const FlatOrderDetailsModal: React.FC<FlatOrderDetailsModalProps> = ({
     return [];
   }, [batchOrders, isBatchOrder, batchProps]);
 
-  // Determine batch type if not provided
+  // Determine batch type from backend data
   const actualBatchType = useMemo(() => {
     if (batchType) return batchType;
     if (!isBatchOrder || !actualBatchOrders.length) return null;
     
-    const uniqueDeliveryAddresses = new Set(
-      actualBatchOrders.map(o => o.delivery_address).filter(Boolean)
+    // Always use backend data to determine batch type
+    // Backend sets is_consolidated and warehouse_info for warehouse consolidation
+    const isConsolidated = order && (
+      order.is_consolidated || 
+      order.current_batch?.is_consolidated || 
+      order.warehouse_info?.consolidate_to_warehouse ||
+      order.current_batch?.warehouse_info?.consolidate_to_warehouse ||
+      false
     );
-    return uniqueDeliveryAddresses.size > 1 ? 'distribution' : 'consolidated';
-  }, [batchType, isBatchOrder, actualBatchOrders]);
+    
+    // If backend says it's consolidated (warehouse or same-address), it's consolidated
+    // Otherwise it's distribution
+    return isConsolidated ? 'consolidated' : 'distribution';
+  }, [batchType, isBatchOrder, actualBatchOrders, order]);
 
   // Override isBatchView if we detect a batch order
   const actualIsBatchView = isBatchView || isBatchOrder;
@@ -163,6 +173,9 @@ export const FlatOrderDetailsModal: React.FC<FlatOrderDetailsModalProps> = ({
                 orders={actualBatchOrders}
                 onOrderSelect={handleOrderSelect}
                 batchType={actualBatchType}
+                onAcceptBatch={onAcceptRoute}
+                order={order}
+                readonly={readonly}
               />
             )}
 
@@ -215,12 +228,18 @@ interface BatchOrdersListProps {
   orders: Order[];
   onOrderSelect: (order: Order) => void;
   batchType?: 'distribution' | 'consolidated' | null;
+  onAcceptBatch?: (order: Order) => Promise<void>;
+  order: Order | null;
+  readonly?: boolean;
 }
 
 const BatchOrdersList: React.FC<BatchOrdersListProps> = ({
   orders,
   onOrderSelect,
   batchType,
+  onAcceptBatch,
+  order,
+  readonly,
 }) => {
   return (
     <View style={batchListStyles.container}>
@@ -273,6 +292,18 @@ const BatchOrdersList: React.FC<BatchOrdersListProps> = ({
           </TouchableOpacity>
         ))}
       </View>
+      
+      {/* Accept All Orders Button */}
+      {onAcceptBatch && order && !readonly && (order.status === 'pending' || order.status === 'assigned') && (
+        <TouchableOpacity
+          style={batchListStyles.acceptButton}
+          onPress={() => onAcceptBatch(order)}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" />
+          <Text style={batchListStyles.acceptButtonText}>Accept All Orders</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 };
@@ -371,5 +402,24 @@ const batchListStyles = StyleSheet.create({
     fontWeight: '600',
     lineHeight: premiumTypography.callout.lineHeight,
     color: flatColors.accent.blue,
+  },
+  acceptButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: flatColors.accent.green,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    marginTop: 20,
+    marginHorizontal: 20,
+    gap: 8,
+    ...premiumShadows.medium,
+  },
+  acceptButtonText: {
+    fontSize: premiumTypography.button.medium.fontSize,
+    fontWeight: '700',
+    lineHeight: premiumTypography.button.medium.lineHeight,
+    color: '#FFFFFF',
   },
 });

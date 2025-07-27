@@ -9,10 +9,12 @@ import {
   Dimensions,
   // Platform,
   AppState,
-  ScrollView,
+  FlatList,
+  ListRenderItem,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { Order, BatchOrder, extractOrderApiIds, getOrderDisplayId, isBatchOrder as checkIsBatchOrder, getBatchProperties } from '../types';
+import { extractOrderApiIds, getOrderDisplayId, isBatchOrder as checkIsBatchOrder, getBatchProperties, isSpecialHandlingObject, Order, BatchOrder } from '../types';
+import { ExtendedOrder, BatchOrderItem, RouteStop } from '../types/orderModal.types';
 import { /* COLORS, FONTS */ } from '../constants';
 import { haptics } from '../utils/haptics';
 import { soundService } from '../services/soundService';
@@ -25,14 +27,56 @@ const { /* width: SCREEN_WIDTH, */ height: SCREEN_HEIGHT } = Dimensions.get('win
 
 interface IncomingOrderModalProps {
   visible: boolean;
-  order: (Order | BatchOrder) | null;
+  order: ExtendedOrder | null;
   onAccept: (orderId: string) => void;
   onDecline: (orderId: string) => void;
   onSkip: (orderId: string) => void;
   onClose: () => void;
   timerDuration?: number; // in seconds
   onBatchAccept?: (batchId: string, selectedOrders: string[]) => void;
-  onAcceptRoute?: (routeId: string, orderData?: any) => void;
+  onAcceptRoute?: (routeId: string, orderData?: ExtendedOrder) => void;
+}
+
+// Types for FlatList sections
+type SectionType = 
+  | 'order-number'
+  | 'customer-info'
+  | 'location-pickup'
+  | 'location-delivery'
+  | 'route-summary'
+  | 'batch-orders-list'
+  | 'route-stops'
+  | 'metrics';
+
+interface SectionData {
+  id: string;
+  type: SectionType;
+  data?: {
+    // For route-summary
+    totalPickupStops?: number;
+    totalDeliveryStops?: number;
+    batchTotalOrders?: number;
+    // For stops-preview
+    stops?: RouteStop[];
+    // For metrics
+    estimatedTime?: string;
+    distance?: string;
+    totalAmount?: number;
+    deliveryFee?: number;
+    // For customer-info
+    customerName?: string;
+    customerPhone?: string;
+    deliveryNotes?: string;
+    // For order-number
+    orderNumber?: string;
+    // For location-pickup
+    pickupAddress?: string;
+    // For location-delivery
+    deliveryAddress?: string;
+    isWarehouseConsolidation?: boolean;
+    // For batch-orders-list
+    orders?: Order[];
+  };
 }
 
 const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
@@ -41,7 +85,7 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
   onAccept,
   onDecline,
   onSkip,
-  // onClose,
+  onClose,
   timerDuration = 10,
   // onBatchAccept,
   onAcceptRoute,
@@ -54,8 +98,7 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
 
   // Timer state
   const [timeRemaining, setTimeRemaining] = useState(timerDuration);
-  const [isTimerActive, setIsTimerActive] = useState(false);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   
   // Batch order state
   const [/* selectedOrders, setSelectedOrders */] = useState<string[]>([]);
@@ -72,12 +115,76 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
   // Determine batch type and consolidation status
   const isWarehouseConsolidation = React.useMemo(() => {
     if (!order) return false;
-    // Check if this is a warehouse consolidation batch
-    return order.is_consolidated || 
-           (order as any).current_batch?.is_consolidated || 
-           (order as any).delivery_address_info?.is_warehouse ||
-           false;
+    
+    // For batch orders from available_orders endpoint
+    if (order.type === 'batch') {
+      const batchOrder = order as BatchOrder;
+      return batchOrder.is_consolidated || 
+             batchOrder.delivery_address_info?.is_warehouse || 
+             batchOrder.warehouse_info?.consolidate_to_warehouse ||
+             false;
+    }
+    
+    // For regular orders with batch info
+    if (order.current_batch) {
+      return order.is_consolidated || 
+             order.current_batch.is_consolidated || 
+             order.current_batch.is_consolidated_batch ||
+             order.current_batch.delivery_address_info?.is_warehouse ||
+             order.current_batch.warehouse_info?.consolidate_to_warehouse ||
+             order.delivery_address_info?.is_warehouse ||
+             false;
+    }
+    
+    // Check for consolidation_warehouse_address field
+    if (order.consolidation_warehouse_address) {
+      return true;
+    }
+    
+    return false;
   }, [order]);
+  
+  // Debug logging
+  React.useEffect(() => {
+    console.log('🔔 [IncomingOrderModal] Modal state changed:', { visible, hasOrder: !!order });
+    
+    if (order && visible) {
+      console.log('📋 IncomingOrderModal - Full Order data:', JSON.stringify(order, null, 2));
+      console.log('📋 IncomingOrderModal - Order type:', order.type);
+      console.log('📋 IncomingOrderModal - Order fields:', {
+        id: order.id,
+        order_number: order.order_number,
+        customer: order.customer,
+        customer_name: order.customer_name,
+        customer_details: order.customer_details,
+        pickup_address: order.pickup_address,
+        delivery_address: order.delivery_address,
+        total: order.total,
+        delivery_fee: order.delivery_fee,
+        items: order.items,
+        special_handling: order.special_handling,
+        cash_on_delivery: order.cash_on_delivery,
+        cod_amount: order.cod_amount,
+        consolidation_warehouse_address: order.consolidation_warehouse_address
+      });
+      console.log('📋 IncomingOrderModal - Is batch order:', isBatchOrder);
+      console.log('📋 IncomingOrderModal - Batch properties:', batchProperties);
+      console.log('📋 IncomingOrderModal - Is warehouse consolidation:', isWarehouseConsolidation);
+      if (order.type === 'batch') {
+        const batchOrder = order as BatchOrder;
+        console.log('📋 IncomingOrderModal - Batch warehouse info:', batchOrder.warehouse_info);
+        console.log('📋 IncomingOrderModal - Batch delivery address info:', batchOrder.delivery_address_info);
+        console.log('📋 IncomingOrderModal - Batch is_consolidated:', batchOrder.is_consolidated);
+        console.log('📋 IncomingOrderModal - Batch orders count:', batchOrder.current_batch?.orders?.length || 0);
+      }
+      if (order.current_batch) {
+        console.log('📋 IncomingOrderModal - Current batch:', order.current_batch);
+        console.log('📋 IncomingOrderModal - Current batch warehouse info:', order.current_batch.warehouse_info);
+        console.log('📋 IncomingOrderModal - Current batch delivery address info:', order.current_batch.delivery_address_info);
+        console.log('📋 IncomingOrderModal - Current batch orders:', order.current_batch.orders?.length || 0);
+      }
+    }
+  }, [order, visible, isBatchOrder, batchProperties, isWarehouseConsolidation]);
   
   const isDistributionBatch = React.useMemo(() => {
     if (!isBatchOrder || !batchProperties?.orders) return false;
@@ -90,32 +197,93 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
     return uniqueDeliveryAddresses.size > 1;
   }, [isBatchOrder, batchProperties, isWarehouseConsolidation]);
   
-  const isConsolidatedBatch = (isBatchOrder && !isDistributionBatch && (batchProperties?.orders?.length || 0) > 1) || isWarehouseConsolidation;
+  // const isConsolidatedBatch = (isBatchOrder && !isDistributionBatch && (batchProperties?.orders?.length || 0) > 1) || isWarehouseConsolidation;
   
   // Get delivery address based on consolidation
   const getDeliveryAddress = React.useCallback(() => {
     if (!order) return 'Delivery location';
     
+    // Debug logging for warehouse consolidation
+    console.log('🏭 Getting delivery address - isWarehouseConsolidation:', isWarehouseConsolidation);
+    
     // For warehouse consolidation, show warehouse address
     if (isWarehouseConsolidation) {
-      const warehouseInfo = (order as any).warehouse_info || (order as any).current_batch?.warehouse_info;
-      const deliveryInfo = (order as any).delivery_address_info || (order as any).current_batch?.delivery_address_info;
+      // For batch orders from available_orders endpoint
+      if (order.type === 'batch') {
+        const deliveryInfo = (order as BatchOrder).delivery_address_info;
+        const warehouseInfo = (order as BatchOrder).warehouse_info;
+        
+        console.log('🏭 Batch order - deliveryInfo:', deliveryInfo);
+        console.log('🏭 Batch order - warehouseInfo:', warehouseInfo);
+        
+        if (deliveryInfo?.is_warehouse && deliveryInfo?.address) {
+          return `🏭 Warehouse: ${deliveryInfo.address}`;
+        } else if (warehouseInfo?.warehouse_address) {
+          return `🏭 Warehouse: ${warehouseInfo.warehouse_address}`;
+        } else if (order.delivery_address && (order.is_consolidated || deliveryInfo?.is_warehouse)) {
+          // If marked as warehouse but no specific warehouse address, use delivery address as warehouse
+          return `🏭 Warehouse: ${order.delivery_address}`;
+        } else if (order.delivery_address) {
+          // For batch orders marked as consolidated, treat delivery address as warehouse
+          return `🏭 Warehouse: ${order.delivery_address}`;
+        }
+      } else {
+        // For regular orders
+        const warehouseInfo = (order as BatchOrder).warehouse_info || order.current_batch?.warehouse_info;
+        const deliveryInfo = (order as BatchOrder).delivery_address_info || order.current_batch?.delivery_address_info;
+        
+        console.log('🏭 Regular order - deliveryInfo:', deliveryInfo);
+        console.log('🏭 Regular order - warehouseInfo:', warehouseInfo);
+        console.log('🏭 Regular order - consolidation_warehouse_address:', order.consolidation_warehouse_address);
+        
+        if (deliveryInfo?.is_warehouse && deliveryInfo?.address) {
+          return `🏭 Warehouse: ${deliveryInfo.address}`;
+        } else if (warehouseInfo?.warehouse_address) {
+          return `🏭 Warehouse: ${warehouseInfo.warehouse_address}`;
+        } else if (order.consolidation_warehouse_address) {
+          // Check for consolidation_warehouse_address field
+          return `🏭 Warehouse: ${order.consolidation_warehouse_address}`;
+        } else if (order.delivery_address && (order.is_consolidated || deliveryInfo?.is_warehouse)) {
+          // If marked as warehouse but no specific warehouse address, use delivery address as warehouse
+          return `🏭 Warehouse: ${order.delivery_address}`;
+        }
+      }
+    }
+    
+    // For batch orders, check if all orders have the same delivery address
+    if (isBatchOrder && batchProperties) {
+      // First check batch-level warehouse info
+      if (batchProperties.warehouseInfo?.warehouse_address) {
+        return `🏭 Warehouse: ${batchProperties.warehouseInfo.warehouse_address}`;
+      }
+      if (batchProperties.deliveryAddressInfo?.is_warehouse && batchProperties.deliveryAddressInfo?.address) {
+        return `🏭 Warehouse: ${batchProperties.deliveryAddressInfo.address}`;
+      }
       
-      if (deliveryInfo?.is_warehouse && deliveryInfo?.address) {
-        return `🏭 Warehouse: ${deliveryInfo.address}`;
-      } else if (warehouseInfo?.warehouse_address) {
-        return `🏭 Warehouse: ${warehouseInfo.warehouse_address}`;
+      // Then check individual orders in batch
+      if (batchProperties.orders && batchProperties.orders.length > 0) {
+        const firstOrder = batchProperties.orders[0] as BatchOrderItem;
+        if (firstOrder?.consolidation_warehouse_address || firstOrder?.warehouse_info?.warehouse_address) {
+          return `🏭 Warehouse: ${firstOrder.consolidation_warehouse_address || firstOrder.warehouse_info?.warehouse_address}`;
+        }
+        
+        const deliveryAddresses = new Set(batchProperties.orders.map(o => o.delivery_address).filter(Boolean));
+        if (deliveryAddresses.size === 1) {
+          return Array.from(deliveryAddresses)[0];
+        } else if (deliveryAddresses.size > 1) {
+          return 'Multiple delivery locations';
+        }
       }
     }
     
     return order.delivery_address || 'Delivery location';
-  }, [order, isWarehouseConsolidation]);
+  }, [order, isWarehouseConsolidation, isBatchOrder, batchProperties]);
 
   // Generate route stops for batch orders
-  const routeStops = React.useMemo(() => {
+  const routeStops = React.useMemo((): RouteStop[] => {
     if (!isBatchOrder || !batchProperties || !order) return [];
     
-    const stops = [];
+    const stops: RouteStop[] = [];
     
     // Add pickup stop(s)
     if (order.pickup_address) {
@@ -124,43 +292,68 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
         type: 'pickup' as const,
         address: order.pickup_address,
         orderNumber: order.order_number,
-        customerName: order.customer?.name || order.customer_details?.name
+        customerName: order.customer?.name || 
+                    order.customer_name || 
+                    order.customer_details?.name || 
+                    order.customer_details?.customer_name ||
+                    (order.customer && typeof order.customer === 'string' ? order.customer : null) ||
+                    'Customer'
       });
     }
     
     // Add delivery stops
-    if (batchProperties.orders && batchProperties.orders.length > 0) {
-      batchProperties.orders.forEach(batchOrderItem => {
+    if (isWarehouseConsolidation) {
+      // For warehouse consolidation, show only the warehouse as the delivery stop
+      const warehouseAddress = getDeliveryAddress();
+      stops.push({
+        id: `delivery-warehouse`,
+        type: 'delivery' as const,
+        address: warehouseAddress,
+        orderNumber: `${batchProperties.orders?.length || 1} orders`,
+        customerName: 'Warehouse Drop-off'
+      });
+    } else if (batchProperties.orders && batchProperties.orders.length > 0) {
+      // For regular batch orders, show individual delivery addresses
+      batchProperties.orders.forEach((batchOrderItem: BatchOrderItem) => {
         if (batchOrderItem.delivery_address) {
           stops.push({
             id: `delivery-${batchOrderItem.id}`,
             type: 'delivery' as const,
             address: batchOrderItem.delivery_address || '',
             orderNumber: batchOrderItem.order_number,
-            customerName: batchOrderItem.customer?.name || batchOrderItem.customer_details?.name
+            customerName: batchOrderItem.customer?.name || 
+                        batchOrderItem.customer_name || 
+                        batchOrderItem.customer_details?.name || 
+                        batchOrderItem.customer_details?.customer_name ||
+                        (batchOrderItem.customer && typeof batchOrderItem.customer === 'string' ? batchOrderItem.customer : null) ||
+                        'Customer'
           });
         }
       });
     } else if (order.delivery_address) {
-      // Single delivery for consolidated orders
+      // Single delivery for single orders
       stops.push({
         id: `delivery-${order.id}`,
         type: 'delivery' as const,
         address: order.delivery_address || '',
         orderNumber: order.order_number,
-        customerName: order.customer?.name || order.customer_details?.name
+        customerName: order.customer?.name || 
+                    order.customer_name || 
+                    order.customer_details?.name || 
+                    order.customer_details?.customer_name ||
+                    (order.customer && typeof order.customer === 'string' ? order.customer : null) ||
+                    'Customer'
       });
     }
     
     return stops;
-  }, [isBatchOrder, batchProperties, order]);
+  }, [isBatchOrder, batchProperties, order, isWarehouseConsolidation, getDeliveryAddress]);
 
   // Start countdown timer
   const startTimer = useCallback(() => {
     if (!visible || !order) return;
     
     setTimeRemaining(timerDuration);
-    setIsTimerActive(true);
     
     timerRef.current = setInterval(() => {
       setTimeRemaining(prev => {
@@ -184,7 +377,6 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
-    setIsTimerActive(false);
   }, []);
   
 
@@ -192,7 +384,7 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
   const handleAccept = useCallback(() => {
     if (!order) return;
     
-    // Stop all notifications immediately
+    // Stop all notifications immediately to prevent auto-skip
     stopTimer();
     soundService.stopRinging();
     haptics.stop(); // Stop any ongoing vibrations
@@ -200,23 +392,32 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
     // Give success feedback
     haptics.success();
     
+    // Close modal immediately to prevent timer from continuing
+    onClose();
+    
     if (isBatchOrder && onAcceptRoute && order.current_batch?.id) {
       // For batch orders, accept the entire batch using the batch ID
       const batchId = order.current_batch.id;
       console.log('✅ Driver accepted batch:', batchId);
       console.log('🔍 Batch details:', {
-        batchId: batchId,
+        batchId,
         batchName: order.current_batch.name,
-        orderCount: batchProperties?.orders?.length || 1
+        orderCount: batchProperties?.orders?.length || 1,
+        isBatchOrder,
+        hasOnAcceptRoute: !!onAcceptRoute
       });
+      
+      // Call accept route handler after closing modal
       onAcceptRoute(batchId, order);
     } else {
       const apiIds = extractOrderApiIds(order);
       console.log('✅ Driver accepted order:', getOrderDisplayId(order));
       console.log('🔍 Using delivery ID for API call:', apiIds.deliveryId);
+      
+      // Call accept handler after closing modal
       onAccept(apiIds.deliveryId);
     }
-  }, [order, stopTimer, isBatchOrder, onAcceptRoute, batchProperties, onAccept]);
+  }, [order, stopTimer, isBatchOrder, onAcceptRoute, batchProperties, onAccept, onClose]);
 
   const handleDecline = useCallback(() => {
     if (!order) return;
@@ -253,6 +454,16 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
   //   });
   // }, []);
   
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      // Ensure everything is stopped when component unmounts
+      haptics.stop();
+      soundService.stopRinging();
+      stopTimer();
+    };
+  }, [stopTimer]);
+
   // Handle app state changes for background wake
   useEffect(() => {
     const handleAppStateChange = (nextAppState: string) => {
@@ -264,6 +475,7 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
       } else if (nextAppState === 'background') {
         setWasInBackground(true);
         soundService.stopRinging(); // Stop ringing when app goes to background
+        haptics.stop(); // Stop vibration when app goes to background
       }
     };
     
@@ -275,6 +487,418 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
   // const timerProgress = timeRemaining / timerDuration;
   const progressColor = timeRemaining <= 3 ? '#FF4757' : timeRemaining <= 6 ? '#FFA726' : '#4CAF50';
 
+  // Calculate batch total orders before sections useMemo
+  const batchTotalOrders = React.useMemo(() => {
+    return isBatchOrder ? (batchProperties?.orders?.length || 1) : 1;
+  }, [isBatchOrder, batchProperties]);
+
+  // Generate sections for FlatList
+  const sections = React.useMemo(() => {
+    if (!order) {
+      console.log('⚠️ IncomingOrderModal - No order data available');
+      return [];
+    }
+    
+    console.log('📋 Generating sections for order:', {
+      orderId: order.id,
+      orderType: order.type,
+      isBatchOrder,
+      hasCustomer: !!order.customer,
+      hasPickupAddress: !!order.pickup_address,
+      hasDeliveryAddress: !!order.delivery_address
+    });
+    
+    // Calculate values within this useMemo to avoid forward references
+    const totalPickupStops = routeStops.filter(stop => stop.type === 'pickup').length;
+    const totalDeliveryStops = routeStops.filter(stop => stop.type === 'delivery').length;
+    const batchTotalAmount = isBatchOrder && batchProperties?.orders 
+      ? batchProperties.orders.reduce((sum, o) => sum + (Number(o.total) || 0), 0)
+      : Number(order?.total) || 0;
+    const distance = order.distance ? `${(order.distance / 1000).toFixed(1)} km` : '2.5 km';
+    const estimatedTime = order.estimated_delivery_time || '15 min';
+    
+    const sectionsList: SectionData[] = [];
+    
+    // Order number section
+    sectionsList.push({
+      id: 'order-number',
+      type: 'order-number',
+      data: {
+        orderNumber: isBatchOrder ? `Route #${batchProperties?.batchId || getOrderDisplayId(order)}` : getOrderDisplayId(order)
+      }
+    });
+    
+    if (!isBatchOrder || (batchProperties?.orders?.length || 0) <= 1) {
+      // Single order sections
+      sectionsList.push(
+        {
+          id: 'customer-info',
+          type: 'customer-info',
+          data: {
+            customerName: order.customer?.name || 
+                        order.customer_name || 
+                        order.customer_details?.name || 
+                        order.customer_details?.customer_name ||
+                        (order.customer && typeof order.customer === 'string' ? order.customer : null) ||
+                        'Customer'
+          }
+        },
+        {
+          id: 'location-pickup',
+          type: 'location-pickup',
+          data: {
+            pickupAddress: order.pickup_address || 'Pickup location'
+          }
+        },
+        {
+          id: 'location-delivery',
+          type: 'location-delivery',
+          data: {
+            deliveryAddress: getDeliveryAddress(),
+            isWarehouseConsolidation
+          }
+        }
+      );
+    } else {
+      // Batch order sections
+      // Always show pickup and delivery locations first
+      sectionsList.push(
+        {
+          id: 'location-pickup',
+          type: 'location-pickup',
+          data: {
+            pickupAddress: order.pickup_address || 'Pickup location'
+          }
+        },
+        {
+          id: 'location-delivery',
+          type: 'location-delivery',
+          data: {
+            deliveryAddress: getDeliveryAddress(),
+            isWarehouseConsolidation
+          }
+        }
+      );
+      
+      // Then show route summary
+      sectionsList.push({
+        id: 'route-summary',
+        type: 'route-summary',
+        data: {
+          totalPickupStops,
+          totalDeliveryStops,
+          batchTotalOrders
+        }
+      });
+      
+      if (batchProperties?.orders && batchProperties.orders.length > 0) {
+        console.log('📦 [IncomingOrderModal] Adding batch orders list section:', {
+          ordersCount: batchProperties.orders.length,
+          firstOrder: batchProperties.orders[0],
+          orders: batchProperties.orders
+        });
+        sectionsList.push({
+          id: 'batch-orders-list',
+          type: 'batch-orders-list',
+          data: {
+            orders: batchProperties.orders
+          }
+        });
+      } else {
+        console.log('📦 [IncomingOrderModal] No batch orders to display:', {
+          isBatchOrder,
+          batchProperties,
+          hasOrders: !!batchProperties?.orders,
+          ordersLength: batchProperties?.orders?.length
+        });
+      }
+      
+      if (showRouteDetails && routeStops.length > 0) {
+        sectionsList.push({
+          id: 'route-stops',
+          type: 'route-stops',
+          data: {
+            stops: routeStops
+          }
+        });
+      }
+    }
+    
+    // Metrics section
+    sectionsList.push({
+      id: 'metrics',
+      type: 'metrics',
+      data: {
+        estimatedTime,
+        distance,
+        totalAmount: Number(isBatchOrder ? batchTotalAmount : (order?.total || 0)) || 0,
+        batchTotalOrders: isBatchOrder ? batchTotalOrders : undefined,
+        deliveryFee: !isBatchOrder ? order?.delivery_fee : undefined
+      }
+    });
+    
+    return sectionsList;
+  }, [order, isBatchOrder, batchProperties, showRouteDetails, routeStops, getDeliveryAddress, isWarehouseConsolidation, batchTotalOrders]);
+
+  // Render functions for each section type
+  const renderSection: ListRenderItem<SectionData> = ({ item }) => {
+    switch (item.type) {
+      case 'order-number':
+        return (
+          <Text style={styles.orderNumber}>
+            {item.data?.orderNumber}
+          </Text>
+        );
+        
+      case 'customer-info':
+        return (
+          <View style={styles.locationSection}>
+            <View style={styles.locationIcon}>
+              <Ionicons name="person-outline" size={20} color={flatColors.primary[500]} />
+            </View>
+            <View style={styles.locationInfo}>
+              <Text style={styles.locationLabel}>CUSTOMER</Text>
+              <Text style={styles.locationAddress} numberOfLines={1}>
+                {item.data?.customerName}
+              </Text>
+            </View>
+          </View>
+        );
+        
+      case 'location-pickup':
+        return (
+          <View style={styles.locationSection}>
+            <View style={styles.locationIcon}>
+              <Ionicons name="bag-outline" size={20} color={flatColors.accent.blue} />
+            </View>
+            <View style={styles.locationInfo}>
+              <Text style={styles.locationLabel}>PICKUP</Text>
+              <Text style={styles.locationAddress} numberOfLines={2}>
+                {item.data?.pickupAddress}
+              </Text>
+            </View>
+          </View>
+        );
+        
+      case 'location-delivery':
+        return (
+          <View style={styles.locationSection}>
+            <View style={styles.locationIcon}>
+              <Ionicons 
+                name={item.data?.isWarehouseConsolidation ? "business-outline" : "home-outline"} 
+                size={20} 
+                color={item.data?.isWarehouseConsolidation ? flatColors.accent.orange : flatColors.accent.green} 
+              />
+            </View>
+            <View style={styles.locationInfo}>
+              <Text style={styles.locationLabel}>
+                {item.data?.isWarehouseConsolidation ? 'DELIVER TO WAREHOUSE' : 'DELIVERY'}
+              </Text>
+              <Text style={styles.locationAddress} numberOfLines={2}>
+                {item.data?.deliveryAddress}
+              </Text>
+            </View>
+          </View>
+        );
+        
+      case 'route-summary':
+        return (
+          <View style={styles.routeSummaryContainer}>
+            <View style={styles.routeStats}>
+              <View style={styles.routeStat}>
+                <Ionicons name="bag" size={16} color={flatColors.accent.blue} />
+                <Text style={styles.routeStatText}>{item.data?.totalPickupStops} Pickups</Text>
+              </View>
+              <View style={styles.routeStat}>
+                <Ionicons name="home" size={16} color={flatColors.accent.green} />
+                <Text style={styles.routeStatText}>{item.data?.totalDeliveryStops} Deliveries</Text>
+              </View>
+              <View style={styles.routeStat}>
+                <Ionicons name="receipt" size={16} color={flatColors.accent.orange} />
+                <Text style={styles.routeStatText}>{item.data?.batchTotalOrders} Orders</Text>
+              </View>
+            </View>
+          </View>
+        );
+        
+      case 'batch-orders-list':
+        const totalBatchAmount = item.data?.orders?.reduce((sum: number, o: BatchOrderItem) => 
+          sum + (Number(o.total) || Number(o.total_amount) || 0), 0) || 0;
+        const batchTypeText = isWarehouseConsolidation ? 'Warehouse Consolidation' : 
+                             isDistributionBatch ? 'Distribution Batch' : 'Batch Orders';
+        
+        return (
+          <View style={styles.batchOrdersList}>
+            <View style={styles.batchOrdersHeader}>
+              <Text style={styles.batchOrdersTitle}>{batchTypeText}</Text>
+              <Text style={styles.batchOrdersSubtitle}>
+                {item.data?.orders?.length || 0} orders • Total: ${totalBatchAmount.toFixed(2)}
+              </Text>
+            </View>
+            
+            {isWarehouseConsolidation && order && (
+              <View style={styles.warehouseInfoBox}>
+                <Ionicons name="business" size={16} color={flatColors.accent.orange} />
+                <View style={styles.warehouseInfoContent}>
+                  <Text style={styles.warehouseInfoLabel}>Warehouse Destination:</Text>
+                  <Text style={styles.warehouseInfoAddress}>
+                    {(order as BatchOrder).warehouse_info?.warehouse_address || 
+                     order.current_batch?.warehouse_info?.warehouse_address || 
+                     'Warehouse address pending'}
+                  </Text>
+                </View>
+              </View>
+            )}
+            
+            {item.data?.orders?.map((batchOrder: BatchOrderItem, index: number) => (
+              <View key={batchOrder.id || index} style={styles.batchOrderItem}>
+                <View style={styles.batchOrderHeader}>
+                  <View style={styles.batchOrderNumber}>
+                    <Text style={styles.batchOrderNumberText}>
+                      #{batchOrder.order_number || `Order ${index + 1}`}
+                    </Text>
+                  </View>
+                  <View style={styles.batchOrderAmount}>
+                    <Text style={styles.batchOrderAmountText}>
+                      ${Number(batchOrder.total || batchOrder.total_amount || 0).toFixed(2)}
+                    </Text>
+                  </View>
+                </View>
+                
+                <View style={styles.batchOrderCustomer}>
+                  <Ionicons name="person" size={14} color="#666" />
+                  <Text style={styles.batchOrderCustomerText}>
+                    {batchOrder.customer?.name || 
+                     batchOrder.customer_name || 
+                     batchOrder.customer_details?.name || 
+                     'Customer'}
+                  </Text>
+                </View>
+                
+                <View style={styles.batchOrderAddress}>
+                  <Ionicons name="location" size={14} color="#666" />
+                  <Text style={styles.batchOrderAddressText} numberOfLines={1}>
+                    {isWarehouseConsolidation 
+                      ? '🏭 Via warehouse → ' + (batchOrder.delivery_address || 'Final destination') 
+                      : (batchOrder.delivery_address || 'Delivery address')}
+                  </Text>
+                </View>
+                
+                {/* Special handling indicators for each order */}
+                {(batchOrder.cash_on_delivery || batchOrder.requires_signature || batchOrder.special_handling) && (
+                  <View style={styles.batchOrderBadges}>
+                    {batchOrder.cash_on_delivery && (
+                      <View style={[styles.batchOrderBadge, styles.codBadge]}>
+                        <Ionicons name="cash" size={12} color="#fff" />
+                        <Text style={styles.batchOrderBadgeText}>COD</Text>
+                      </View>
+                    )}
+                    {batchOrder.requires_signature && (
+                      <View style={[styles.batchOrderBadge, styles.signatureBadge]}>
+                        <Ionicons name="create" size={12} color="#fff" />
+                        <Text style={styles.batchOrderBadgeText}>SIG</Text>
+                      </View>
+                    )}
+                    {batchOrder.special_handling && (
+                      <View style={[styles.batchOrderBadge, styles.specialBadge]}>
+                        <Ionicons name="warning" size={12} color="#fff" />
+                        <Text style={styles.batchOrderBadgeText}>
+                          {typeof batchOrder.special_handling === 'object' 
+                            ? (batchOrder.special_handling.fragile ? 'FRAGILE' : 'SPECIAL')
+                            : 'SPECIAL'}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                )}
+              </View>
+            ))}
+          </View>
+        );
+        
+      case 'route-stops':
+        return (
+          <View style={styles.routeStopsList}>
+            <Text style={styles.routeListTitle}>Route Stops:</Text>
+            {item.data?.stops?.map((stop: RouteStop, index: number) => (
+              <View key={stop.id} style={styles.routeStopItem}>
+                <View style={styles.stopNumber}>
+                  <Text style={styles.stopNumberText}>{index + 1}</Text>
+                </View>
+                <View style={[
+                  styles.stopIcon,
+                  stop.type === 'pickup' ? styles.pickupIcon : styles.deliveryIcon
+                ]}>
+                  <Ionicons 
+                    name={stop.type === 'pickup' ? 'bag' : 'home'} 
+                    size={16} 
+                    color="#fff" 
+                  />
+                </View>
+                <View style={styles.stopDetails}>
+                  <Text style={styles.stopType}>
+                    {stop.type === 'pickup' ? 'PICKUP' : 'DELIVERY'}
+                  </Text>
+                  <Text style={styles.stopAddress} numberOfLines={1}>
+                    {stop.address}
+                  </Text>
+                  {stop.orderNumber && (
+                    <Text style={styles.stopOrderNumber}>
+                      Order #{stop.orderNumber}
+                    </Text>
+                  )}
+                  {stop.customerName && (
+                    <Text style={styles.stopCustomer}>
+                      {stop.customerName}
+                    </Text>
+                  )}
+                </View>
+              </View>
+            ))}
+          </View>
+        );
+        
+      case 'metrics':
+        return (
+          <View style={styles.metricsRow}>
+            <View style={styles.metric}>
+              <Ionicons name="time-outline" size={16} color="#666" />
+              <Text style={styles.metricText}>{item.data?.estimatedTime}</Text>
+            </View>
+            <View style={styles.metric}>
+              <Ionicons name="location-outline" size={16} color="#666" />
+              <Text style={styles.metricText}>{item.data?.distance}</Text>
+            </View>
+            <View style={styles.metric}>
+              <Ionicons name="cash-outline" size={16} color="#666" />
+              <Text style={styles.metricText}>
+                ${(item.data?.totalAmount || 0).toFixed(2)}
+              </Text>
+            </View>
+            {item.data?.batchTotalOrders && (
+              <View style={styles.metric}>
+                <Ionicons name="layers-outline" size={16} color={flatColors.accent.green} />
+                <Text style={[styles.metricText, styles.successMetricText]}>
+                  {item.data?.batchTotalOrders} orders
+                </Text>
+              </View>
+            )}
+            {item.data?.deliveryFee && (
+              <View style={styles.metric}>
+                <Ionicons name="car-outline" size={16} color={flatColors.accent.green} />
+                <Text style={[styles.metricText, styles.successMetricText]}>
+                  +${parseFloat(String(item.data?.deliveryFee)).toFixed(2)}
+                </Text>
+              </View>
+            )}
+          </View>
+        );
+        
+      default:
+        return null;
+    }
+  };
+
   // Effects
   useEffect(() => {
     if (visible && order) {
@@ -285,7 +909,7 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
       
       // Check notification settings and start ringing accordingly
       Storage.getItem('notification_settings').then(settings => {
-        const notificationSettings = settings as any;
+        const notificationSettings = settings as { sound_enabled?: boolean; vibration_enabled?: boolean };
         if (notificationSettings?.sound_enabled !== false) {
           soundService.startRinging();
         }
@@ -342,6 +966,7 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
       return () => {
         stopTimer();
         soundService.stopRinging();
+        haptics.stop(); // Stop vibrations on cleanup
         pulseAnimation.stop();
       };
     } else {
@@ -363,21 +988,46 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
       soundService.stopRinging();
       haptics.stop(); // Stop any ongoing vibrations
     }
-  }, [visible, order, startTimer, stopTimer, isBatchOrder]);
+    
+    // Return cleanup function for consistency
+    return () => {
+      stopTimer();
+      soundService.stopRinging();
+      haptics.stop();
+    };
+  }, [visible, order, isBatchOrder]); // Removed startTimer and stopTimer from deps to prevent re-renders
+
+  // These are now calculated inside the sections useMemo to avoid forward references
+  // Keeping them commented for reference
+  // const distance = React.useMemo(() => {
+  //   if (!order) return '2.5 km';
+  //   return order.distance ? `${(order.distance / 1000).toFixed(1)} km` : '2.5 km';
+  // }, [order]);
+  
+  // const estimatedTime = React.useMemo(() => {
+  //   if (!order) return '15 min';
+  //   return order.estimated_delivery_time || '15 min';
+  // }, [order]);
+  
+  // const batchTotalAmount = React.useMemo(() => {
+  //   if (isBatchOrder && batchProperties?.orders) {
+  //     return batchProperties.orders.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
+  //   }
+  //   return Number(order?.total) || 0;
+  // }, [isBatchOrder, batchProperties, order]);
+  
+  // const totalDeliveryStops = React.useMemo(() => {
+  //   return routeStops.filter(stop => stop.type === 'delivery').length;
+  // }, [routeStops]);
+  
+  // const totalPickupStops = React.useMemo(() => {
+  //   return routeStops.filter(stop => stop.type === 'pickup').length;
+  // }, [routeStops]);
 
   if (!order) return null;
-
-  // Calculate distance (placeholder - should come from backend)
-  const distance = order.distance ? `${(order.distance / 1000).toFixed(1)} km` : '2.5 km';
-  const estimatedTime = order.estimated_delivery_time || '15 min';
   
-  // Calculate batch totals
-  const batchTotalOrders = isBatchOrder ? (batchProperties?.orders?.length || 1) : 1;
-  const batchTotalAmount = isBatchOrder && batchProperties?.orders ? 
-    batchProperties.orders.reduce((sum, o) => sum + (Number(o.total) || 0), 0) : 
-    (Number(order.total) || 0);
-  const totalDeliveryStops = routeStops.filter(stop => stop.type === 'delivery').length;
-  const totalPickupStops = routeStops.filter(stop => stop.type === 'pickup').length;
+  // TypeScript type narrowing helper
+  const orderDeliveryType = order.delivery_type;
 
   return (
     <Modal
@@ -443,23 +1093,23 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
                   size={16} 
                   color={isWarehouseConsolidation ? "#FF9F43" : "#FF6B6B"} 
                 />
-                <Text style={[styles.orderTypeText, styles.batchOrderTypeText]}>
-                  {isWarehouseConsolidation ? 'WAREHOUSE CONSOLIDATION' : (isDistributionBatch ? 'DISTRIBUTION' : 'CONSOLIDATED')} ({batchTotalOrders} ORDERS)
+                <Text style={[styles.orderTypeText, isWarehouseConsolidation ? styles.warehouseOrderTypeText : styles.batchOrderTypeText]}>
+                  {isWarehouseConsolidation ? 'WAREHOUSE CONSOLIDATION' : (isDistributionBatch ? 'DISTRIBUTION' : 'BATCH')} ({batchTotalOrders} ORDERS)
                 </Text>
               </View>
             ) : (
               <View style={[
                 styles.orderTypeBadge,
-                order.delivery_type === 'food' && styles.foodBadge,
-                order.delivery_type === 'fast' && styles.fastBadge,
+                orderDeliveryType === 'food' && styles.foodBadge,
+                orderDeliveryType === 'fast' && styles.fastBadge,
               ]}>
                 <Ionicons 
-                  name={order.delivery_type === 'food' ? 'restaurant' : order.delivery_type === 'fast' ? 'flash' : 'cube'} 
+                  name={orderDeliveryType === 'food' ? 'restaurant' : orderDeliveryType === 'fast' ? 'flash' : 'cube'} 
                   size={16} 
                   color="#fff" 
                 />
                 <Text style={styles.orderTypeText}>
-                  {(order.delivery_type || 'regular').toUpperCase()} ORDER
+                  {(orderDeliveryType || 'regular').toUpperCase()} ORDER
                 </Text>
               </View>
             )}
@@ -488,12 +1138,12 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
           </View>
 
           {/* Special Handling Indicators */}
-          {(order.special_handling && order.special_handling !== 'none' || 
-            order.cash_on_delivery || 
-            order.requires_signature || 
-            order.requires_id_verification) && (
+          {(order?.special_handling && order.special_handling !== 'none' || 
+            order?.cash_on_delivery || 
+            order?.requires_signature || 
+            order?.requires_id_verification) && (
             <View style={styles.specialHandlingContainer}>
-              {order.special_handling && order.special_handling !== 'none' && (
+              {order?.special_handling && (typeof order.special_handling === 'string' ? order.special_handling !== 'none' : true) && (
                 <View style={[
                   styles.specialHandlingBadge,
                   order.special_handling === 'fragile' && styles.fragileBadge,
@@ -512,7 +1162,15 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
                     color="#fff" 
                   />
                   <Text style={styles.specialHandlingText}>
-                    {order.special_handling.replace(/_/g, ' ').toUpperCase()}
+                    {typeof order.special_handling === 'string' 
+                      ? order.special_handling.replace(/_/g, ' ').toUpperCase()
+                      : isSpecialHandlingObject(order.special_handling)
+                        ? (order.special_handling.fragile ? 'FRAGILE' : 
+                           order.special_handling.temperature_controlled ? 'TEMPERATURE CONTROLLED' :
+                           order.special_handling.hazardous ? 'HAZARDOUS' :
+                           order.special_handling.liquid ? 'LIQUID' :
+                           order.special_handling.perishable ? 'PERISHABLE' : 'SPECIAL')
+                        : 'SPECIAL'}
                   </Text>
                 </View>
               )}
@@ -539,231 +1197,42 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
             </View>
           )}
 
-          {/* Order Summary */}
-          <ScrollView 
-            style={styles.orderSummary} 
+          {/* Order Summary - Using FlatList for better performance */}
+          <FlatList
+            data={sections}
+            renderItem={renderSection}
+            keyExtractor={(item) => item.id}
+            style={styles.orderSummary}
             contentContainerStyle={styles.orderSummaryContent}
             showsVerticalScrollIndicator={true}
             bounces={true}
             scrollEnabled={true}
             nestedScrollEnabled={true}
-            keyboardShouldPersistTaps="handled"
-          >
-            <Text style={styles.orderNumber}>
-              {isBatchOrder ? `Route #${batchProperties?.batchId || getOrderDisplayId(order)}` : getOrderDisplayId(order)}
-            </Text>
-            
-            {!isBatchOrder || (batchProperties?.orders?.length || 0) <= 1 ? (
-              <>
-                {/* Customer Info */}
-                <View style={styles.locationSection}>
-                  <View style={styles.locationIcon}>
-                    <Ionicons name="person-outline" size={20} color={flatColors.primary} />
-                  </View>
-                  <View style={styles.locationInfo}>
-                    <Text style={styles.locationLabel}>CUSTOMER</Text>
-                    <Text style={styles.locationAddress} numberOfLines={1}>
-                      {order.customer?.name || order.customer_details?.name || 'Customer Name'}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Single Order or Single-Order Batch - Pickup Info */}
-                <View style={styles.locationSection}>
-                  <View style={styles.locationIcon}>
-                    <Ionicons name="bag-outline" size={20} color={flatColors.accent.blue} />
-                  </View>
-                  <View style={styles.locationInfo}>
-                    <Text style={styles.locationLabel}>PICKUP</Text>
-                    <Text style={styles.locationAddress} numberOfLines={2}>
-                      {order.pickup_address || 'Pickup location'}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Single Order or Single-Order Batch - Drop-off Info */}
-                <View style={styles.locationSection}>
-                  <View style={styles.locationIcon}>
-                    <Ionicons 
-                      name={isWarehouseConsolidation ? "business-outline" : "home-outline"} 
-                      size={20} 
-                      color={isWarehouseConsolidation ? flatColors.accent.orange : flatColors.accent.green} 
-                    />
-                  </View>
-                  <View style={styles.locationInfo}>
-                    <Text style={styles.locationLabel}>
-                      {isWarehouseConsolidation ? 'DELIVER TO WAREHOUSE' : 'DELIVERY'}
-                    </Text>
-                    <Text style={styles.locationAddress} numberOfLines={2}>
-                      {getDeliveryAddress()}
-                    </Text>
-                  </View>
-                </View>
-              </>
-            ) : (
-              <>
-                {/* Batch Order - Route Summary */}
-                <View style={styles.routeSummaryContainer}>
-                  <View style={styles.routeStats}>
-                    <View style={styles.routeStat}>
-                      <Ionicons name="bag" size={16} color={flatColors.accent.blue} />
-                      <Text style={styles.routeStatText}>{totalPickupStops} Pickups</Text>
-                    </View>
-                    <View style={styles.routeStat}>
-                      <Ionicons name="home" size={16} color={flatColors.accent.green} />
-                      <Text style={styles.routeStatText}>{totalDeliveryStops} Deliveries</Text>
-                    </View>
-                    <View style={styles.routeStat}>
-                      <Ionicons name="receipt" size={16} color={flatColors.accent.orange} />
-                      <Text style={styles.routeStatText}>{batchTotalOrders} Orders</Text>
-                    </View>
-                  </View>
-                </View>
-
-                {/* Batch Orders List */}
-                {batchProperties?.orders && batchProperties.orders.length > 0 && (
-                  <View style={styles.batchOrdersList}>
-                    <Text style={styles.batchOrdersTitle}>Orders in this batch:</Text>
-                    {batchProperties.orders.map((batchOrder, index) => (
-                      <View key={batchOrder.id || index} style={styles.batchOrderItem}>
-                        <View style={styles.batchOrderHeader}>
-                          <View style={styles.batchOrderNumber}>
-                            <Text style={styles.batchOrderNumberText}>
-                              #{batchOrder.order_number || `Order ${index + 1}`}
-                            </Text>
-                          </View>
-                          <View style={styles.batchOrderAmount}>
-                            <Text style={styles.batchOrderAmountText}>
-                              ${Number(batchOrder.total || 0).toFixed(2)}
-                            </Text>
-                          </View>
-                        </View>
-                        
-                        <View style={styles.batchOrderCustomer}>
-                          <Ionicons name="person" size={14} color="#666" />
-                          <Text style={styles.batchOrderCustomerText}>
-                            {batchOrder.customer?.name || batchOrder.customer_details?.name || 'Customer'}
-                          </Text>
-                        </View>
-                        
-                        <View style={styles.batchOrderAddress}>
-                          <Ionicons name="location" size={14} color="#666" />
-                          <Text style={styles.batchOrderAddressText} numberOfLines={1}>
-                            {batchOrder.delivery_address || 'Delivery address'}
-                          </Text>
-                        </View>
-                        
-                        {/* Special handling indicators for each order */}
-                        {(batchOrder.cash_on_delivery || batchOrder.requires_signature || batchOrder.special_handling) && (
-                          <View style={styles.batchOrderBadges}>
-                            {batchOrder.cash_on_delivery && (
-                              <View style={[styles.batchOrderBadge, styles.codBadge]}>
-                                <Ionicons name="cash" size={12} color="#fff" />
-                                <Text style={styles.batchOrderBadgeText}>COD</Text>
-                              </View>
-                            )}
-                            {batchOrder.requires_signature && (
-                              <View style={[styles.batchOrderBadge, styles.signatureBadge]}>
-                                <Ionicons name="create" size={12} color="#fff" />
-                                <Text style={styles.batchOrderBadgeText}>SIG</Text>
-                              </View>
-                            )}
-                            {batchOrder.special_handling && (
-                              <View style={[styles.batchOrderBadge, styles.specialBadge]}>
-                                <Ionicons name="warning" size={12} color="#fff" />
-                                <Text style={styles.batchOrderBadgeText}>
-                                  {typeof batchOrder.special_handling === 'object' 
-                                    ? (batchOrder.special_handling.fragile ? 'FRAGILE' : 'SPECIAL')
-                                    : 'SPECIAL'}
-                                </Text>
-                              </View>
-                            )}
-                          </View>
-                        )}
-                      </View>
-                    ))}
-                  </View>
-                )}
-                
-                {/* Route Details */}
-                {showRouteDetails && (
-                  <View style={styles.routeStopsList}>
-                    <Text style={styles.routeListTitle}>Route Stops:</Text>
-                    {routeStops.map((stop, index) => (
-                      <View key={stop.id} style={styles.routeStopItem}>
-                        <View style={styles.stopNumber}>
-                          <Text style={styles.stopNumberText}>{index + 1}</Text>
-                        </View>
-                        <View style={[
-                          styles.stopIcon,
-                          stop.type === 'pickup' ? styles.pickupIcon : styles.deliveryIcon
-                        ]}>
-                          <Ionicons 
-                            name={stop.type === 'pickup' ? 'bag' : 'home'} 
-                            size={16} 
-                            color="#fff" 
-                          />
-                        </View>
-                        <View style={styles.stopDetails}>
-                          <Text style={styles.stopType}>
-                            {stop.type === 'pickup' ? 'PICKUP' : 'DELIVERY'}
-                          </Text>
-                          <Text style={styles.stopAddress} numberOfLines={1}>
-                            {stop.address}
-                          </Text>
-                          {stop.orderNumber && (
-                            <Text style={styles.stopOrderNumber}>
-                              Order #{stop.orderNumber}
-                            </Text>
-                          )}
-                          {stop.customerName && (
-                            <Text style={styles.stopCustomer}>
-                              {stop.customerName}
-                            </Text>
-                          )}
-                        </View>
-                      </View>
-                    ))}
-                  </View>
-                )}
-              </>
-            )}
-
-            {/* Order Metrics */}
-            <View style={styles.metricsRow}>
-              <View style={styles.metric}>
-                <Ionicons name="time-outline" size={16} color="#666" />
-                <Text style={styles.metricText}>{estimatedTime}</Text>
-              </View>
-              <View style={styles.metric}>
-                <Ionicons name="location-outline" size={16} color="#666" />
-                <Text style={styles.metricText}>{distance}</Text>
-              </View>
-              <View style={styles.metric}>
-                <Ionicons name="cash-outline" size={16} color="#666" />
-                <Text style={styles.metricText}>
-                  ${isBatchOrder ? batchTotalAmount.toFixed(2) : (order.total ? parseFloat(String(order.total)).toFixed(2) : '0.00')}
-                </Text>
-              </View>
-              {isBatchOrder && (
-                <View style={styles.metric}>
-                  <Ionicons name="layers-outline" size={16} color={flatColors.accent.green} />
-                  <Text style={[styles.metricText, styles.successMetricText]}>
-                    {batchTotalOrders} orders
-                  </Text>
-                </View>
-              )}
-              {!isBatchOrder && order.delivery_fee && (
-                <View style={styles.metric}>
-                  <Ionicons name="car-outline" size={16} color={flatColors.accent.green} />
-                  <Text style={[styles.metricText, styles.successMetricText]}>
-                    +${parseFloat(String(order.delivery_fee)).toFixed(2)}
-                  </Text>
-                </View>
-              )}
-            </View>
-            
-          </ScrollView>
+            initialNumToRender={8}
+            maxToRenderPerBatch={5}
+            windowSize={10}
+            removeClippedSubviews={true}
+            getItemLayout={(data, index) => {
+              // Optimize scrolling by providing estimated item heights
+              const heights: { [key: string]: number } = {
+                'order-number': 50,
+                'customer-info': 68,
+                'location-pickup': 68,
+                'location-delivery': 68,
+                'route-summary': 100,
+                'batch-orders-list': 200, // Approximate
+                'route-stops': 300, // Approximate
+                'metrics': 80,
+              };
+              const section = data?.[index];
+              const height = section ? (heights[section.type] || 100) : 100;
+              return {
+                length: height,
+                offset: height * index,
+                index,
+              };
+            }}
+          />
 
           {/* Action Buttons */}
           <View style={styles.actionButtons}>
@@ -923,11 +1392,12 @@ const styles = StyleSheet.create({
   orderSummary: {
     flex: 1,
     minHeight: 200, // Ensure minimum height
-    maxHeight: SCREEN_HEIGHT * 0.5, // Increased to 50% of screen
+    maxHeight: SCREEN_HEIGHT * 0.55, // Increased to 55% of screen for FlatList
   },
   orderSummaryContent: {
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingTop: 16,
+    paddingBottom: 32, // Extra padding for last item
   },
   orderNumber: {
     ...premiumTypography.callout,
@@ -1063,6 +1533,9 @@ const styles = StyleSheet.create({
   },
   batchOrderTypeText: {
     color: flatColors.accent.red,
+  },
+  warehouseOrderTypeText: {
+    color: flatColors.accent.orange,
   },
   routeDetailsButton: {
     flexDirection: 'row',
@@ -1213,13 +1686,43 @@ const styles = StyleSheet.create({
   // Batch orders list styles
   batchOrdersList: {
     marginTop: 16,
-    paddingHorizontal: 20,
+  },
+  batchOrdersHeader: {
+    marginBottom: 12,
   },
   batchOrdersTitle: {
     ...premiumTypography.body.medium,
     fontWeight: '700',
     color: flatColors.neutral[800],
+    marginBottom: 4,
+  },
+  batchOrdersSubtitle: {
+    ...premiumTypography.caption.medium,
+    color: flatColors.neutral[600],
+  },
+  warehouseInfoBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: flatColors.cards.yellow.background,
+    borderWidth: 1,
+    borderColor: flatColors.cards.yellow.border,
+    borderRadius: 12,
+    padding: 12,
     marginBottom: 12,
+    gap: 12,
+  },
+  warehouseInfoContent: {
+    flex: 1,
+  },
+  warehouseInfoLabel: {
+    ...premiumTypography.caption.medium,
+    color: flatColors.neutral[600],
+    marginBottom: 2,
+  },
+  warehouseInfoAddress: {
+    ...premiumTypography.body.small,
+    fontWeight: '600',
+    color: flatColors.neutral[800],
   },
   batchOrderItem: {
     backgroundColor: flatColors.backgrounds.secondary,
@@ -1299,6 +1802,22 @@ const styles = StyleSheet.create({
   },
   specialBadge: {
     backgroundColor: '#FF9F43',
+  },
+  warehouseIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: `${flatColors.accent.orange}15`, // 15% opacity orange
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    marginTop: 4,
+  },
+  warehouseIndicatorText: {
+    ...premiumTypography.caption.small,
+    color: flatColors.accent.orange,
+    fontWeight: '600',
+    fontSize: 11,
   },
 });
 

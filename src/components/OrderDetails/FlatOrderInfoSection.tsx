@@ -22,6 +22,43 @@ export const FlatOrderInfoSection: React.FC<FlatOrderInfoSectionProps> = ({
                       order.customer_details?.phone || 
                       order.customer_details?.phone_number;
 
+  // Determine if this is warehouse consolidation
+  const isWarehouseConsolidation = order.is_consolidated || 
+                                  order.current_batch?.is_consolidated || 
+                                  order.consolidation_warehouse_address ||
+                                  order.delivery_address_info?.is_warehouse ||
+                                  order.warehouse_info?.consolidate_to_warehouse ||
+                                  false;
+
+  // Get the appropriate delivery address
+  const getDeliveryAddress = () => {
+    if (isWarehouseConsolidation) {
+      // Check various warehouse address sources
+      if (order.consolidation_warehouse_address) {
+        return `🏭 Warehouse: ${order.consolidation_warehouse_address}`;
+      }
+      if (order.warehouse_info?.warehouse_address) {
+        return `🏭 Warehouse: ${order.warehouse_info.warehouse_address}`;
+      }
+      if (order.delivery_address_info?.is_warehouse && order.delivery_address_info?.address) {
+        return `🏭 Warehouse: ${order.delivery_address_info.address}`;
+      }
+      if (order.current_batch?.warehouse_info?.warehouse_address) {
+        return `🏭 Warehouse: ${order.current_batch.warehouse_info.warehouse_address}`;
+      }
+      if (order.current_batch?.delivery_address_info?.is_warehouse && order.current_batch?.delivery_address_info?.address) {
+        return `🏭 Warehouse: ${order.current_batch.delivery_address_info.address}`;
+      }
+      // Fallback: if marked as consolidated but no specific warehouse address
+      if (order.delivery_address) {
+        return `🏭 Warehouse: ${order.delivery_address}`;
+      }
+    }
+    return order.delivery_address || 'Address not provided';
+  };
+
+  const deliveryAddress = getDeliveryAddress();
+
   const handleCall = () => {
     if (customerPhone && onCall) {
       onCall(customerPhone);
@@ -90,7 +127,7 @@ export const FlatOrderInfoSection: React.FC<FlatOrderInfoSectionProps> = ({
             <View style={styles.infoContent}>
               <Text style={styles.infoLabel}>Delivery Address</Text>
               <Text style={styles.infoValue}>
-                {order.delivery_address || 'Address not provided'}
+                {deliveryAddress}
               </Text>
             </View>
             {!readonly && order.delivery_address && (

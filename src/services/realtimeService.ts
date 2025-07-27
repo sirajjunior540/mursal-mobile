@@ -272,6 +272,41 @@ class RealtimeService {
   /**
    * Set up SDK callbacks
    */
+  private processValidOrder(orderData: any): void {
+    const order = orderData.order || orderData;
+    const orderId = order?.id;
+    
+    if (!orderId) {
+      console.error('❌ Unable to process order without valid ID');
+      return;
+    }
+
+    console.log(`🔔 Processing order: ${orderId}`);
+    console.log('📊 Full data structure:', JSON.stringify(orderData, null, 2));
+
+    // Check if we've already seen this order
+    if (this.seenOrderIds.has(orderId)) {
+      console.log(`📎 Order ${orderId} already seen, ignoring`);
+      return;
+    }
+
+    // Validate order data using backend field names
+    if (!this.validateOrderData(orderData)) {
+      console.error(`❌ Order ${orderId} has invalid data, skipping`);
+      return;
+    }
+
+    // Mark as seen
+    this.seenOrderIds.add(orderId);
+    this.notifiedOrderIds.add(orderId);
+
+    // Extract the actual order data for the callback
+    const normalizedOrder = orderData.order ? orderData.order : orderData;
+    
+    // Notify callback with the order data
+    this.callbacks.onNewOrder?.(normalizedOrder as Order);
+  }
+
   private setupSdkCallbacks(): void {
     if (!this.sdk) return;
 
@@ -284,33 +319,29 @@ class RealtimeService {
         
         if (!orderId) {
           console.error('❌ Received order data without valid ID');
+          console.error('📊 Debug - Raw data structure:', JSON.stringify(data, null, 2));
+          console.error('📊 Debug - Parsed order:', JSON.stringify(order, null, 2));
+          console.error('📊 Debug - Available fields:', Object.keys(orderData || {}));
+          
+          // Try to extract ID from alternative fields for batch orders
+          const alternativeId = orderData?.batch_id || orderData?.id || order?.batch_id;
+          if (alternativeId) {
+            console.log(`🔧 Found alternative ID: ${alternativeId}, treating as batch order`);
+            // Handle as batch order with synthetic ID
+            const syntheticOrder = {
+              ...order,
+              id: alternativeId,
+              order_number: orderData?.batch_number || `BATCH_${alternativeId}`,
+              is_batch: true
+            };
+            this.processValidOrder({ ...orderData, id: alternativeId, order_number: orderData?.batch_number || `BATCH_${alternativeId}`, is_batch: true });
+            return;
+          }
+          
           return;
         }
 
-        console.log(`🔔 New order received from ${source}: ${orderId}`);
-        console.log('📊 Full data structure:', JSON.stringify(orderData, null, 2));
-
-        // Check if we've already seen this order
-        if (this.seenOrderIds.has(orderId)) {
-          console.log(`📎 Order ${orderId} already seen, ignoring`);
-          return;
-        }
-
-        // Validate order data using backend field names
-        if (!this.validateOrderData(orderData)) {
-          console.error(`❌ Order ${orderId} has invalid data, skipping`);
-          return;
-        }
-
-        // Mark as seen
-        this.seenOrderIds.add(orderId);
-        this.notifiedOrderIds.add(orderId);
-
-        // Extract the actual order data for the callback
-        const normalizedOrder = orderData.order ? orderData.order : orderData;
-        
-        // Notify callback with the order data
-        this.callbacks.onNewOrder?.(normalizedOrder as Order);
+        this.processValidOrder(orderData);
       },
       onOrderUpdate: (order) => {
         console.log(`📝 Order update received: ${order.id}`);

@@ -200,22 +200,35 @@ export const EnhancedActiveDeliveriesCard: React.FC<ActiveDeliveriesCardProps> =
         {isExpanded && (
           <View style={styles.batchOrders}>
             {batch.orders.map((order, index) => (
-              <View key={order.id} style={styles.batchOrderWrapper}>
-                <FlatOrderItem
-                  order={order}
-                  onPress={() => onOrderPress(order)}
-                  chevronColor={flatColors.accent.green}
-                />
-                {index === 0 && batch.statusCounts.accepted > 0 && (
-                  <View style={styles.pickupReminder}>
-                    <Ionicons name="information-circle" size={16} color={flatColors.accent.orange} />
-                    <Text style={styles.pickupReminderText}>
-                      Remember to collect all {batch.orders.length} packages at pickup
-                    </Text>
-                  </View>
-                )}
-              </View>
+              <TouchableOpacity
+                key={order.id}
+                style={styles.batchOrderItem}
+                onPress={() => onOrderPress(order)}
+                activeOpacity={0.8}
+              >
+                <View style={styles.batchOrderInfo}>
+                  <Text style={styles.batchOrderNumber}>#{order.order_number}</Text>
+                  <Text style={styles.batchOrderCustomer}>{order.customer_name || order.customer?.name || 'Customer'}</Text>
+                  <Text style={styles.batchOrderAddress} numberOfLines={1}>
+                    <Ionicons name="location" size={12} color={flatColors.neutral[400]} /> {order.delivery_address || 'Delivery Location'}
+                  </Text>
+                </View>
+                <View style={styles.batchOrderRight}>
+                  <Text style={styles.batchOrderAmount}>${Number(order.total || order.total_amount || 0).toFixed(2)}</Text>
+                  <Text style={[styles.batchOrderStatus, { color: getBatchStatusColor(batch) }]}>
+                    {order.status?.replace('_', ' ') || 'pending'}
+                  </Text>
+                </View>
+              </TouchableOpacity>
             ))}
+            {batch.statusCounts.accepted > 0 && (
+              <View style={styles.pickupReminder}>
+                <Ionicons name="information-circle" size={16} color={flatColors.accent.orange} />
+                <Text style={styles.pickupReminderText}>
+                  Remember to collect all {batch.orders.length} packages at pickup
+                </Text>
+              </View>
+            )}
           </View>
         )}
       </View>
@@ -421,20 +434,55 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   batchOrders: {
-    marginTop: 8,
-    paddingLeft: 20,
-    borderLeftWidth: 2,
-    borderLeftColor: flatColors.neutral[200],
-    marginLeft: 24,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
   },
-  batchOrderWrapper: {
-    marginVertical: 4,
+  batchOrderItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: flatColors.backgrounds.secondary,
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  batchOrderInfo: {
+    flex: 1,
+  },
+  batchOrderNumber: {
+    ...premiumTypography.caption.medium,
+    fontWeight: '600',
+    color: flatColors.neutral[700],
+    marginBottom: 2,
+  },
+  batchOrderCustomer: {
+    ...premiumTypography.caption.small,
+    color: flatColors.neutral[500],
+    marginBottom: 2,
+  },
+  batchOrderAddress: {
+    ...premiumTypography.caption.small,
+    color: flatColors.neutral[400],
+  },
+  batchOrderRight: {
+    alignItems: 'flex-end',
+    marginLeft: 12,
+  },
+  batchOrderAmount: {
+    ...premiumTypography.caption.medium,
+    fontWeight: '700',
+    color: flatColors.accent.green,
+    marginBottom: 2,
+  },
+  batchOrderStatus: {
+    ...premiumTypography.caption.small,
+    fontWeight: '600',
+    textTransform: 'capitalize',
   },
   pickupReminder: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: flatColors.cards.yellow.background,
-    marginHorizontal: 20,
     marginTop: 8,
     padding: 12,
     borderRadius: 12,

@@ -1,9 +1,14 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import { useNavigation } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
 import { Order } from '../../types';
+import { RootStackParamList } from '../../types';
 import { flatColors } from '../../design/dashboard/flatColors';
 import { premiumTypography } from '../../design/dashboard/premiumTypography';
+import QRScanner from '../tracking/QRScanner';
+import { QRScanResult } from '../../types/tracking';
 
 interface FlatOrderActionsProps {
   order: Order;
@@ -32,6 +37,8 @@ export const FlatOrderActions: React.FC<FlatOrderActionsProps> = ({
   onAcceptRoute,
   onClose,
 }) => {
+  const [showQRScanner, setShowQRScanner] = useState(false);
+  const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
   const handleStatusUpdate = (status: string, label: string) => {
     Alert.alert(
       'Confirm Action',
@@ -87,12 +94,116 @@ export const FlatOrderActions: React.FC<FlatOrderActionsProps> = ({
     );
   };
 
+  const handleQRScan = () => {
+    setShowQRScanner(true);
+  };
+
+  const handleQRScanResult = (result: QRScanResult) => {
+    setShowQRScanner(false);
+    
+    if (result.success && result.data) {
+      // Parse QR data to get order information
+      let scannedOrderId: string | undefined;
+      let scannedOrderNumber: string | undefined;
+      let scannedBatchId: string | undefined;
+      
+      try {
+        // Try parsing as JSON first
+        const parsedData = JSON.parse(result.data);
+        scannedOrderId = parsedData.order_id || parsedData.orderId || parsedData.id;
+        scannedOrderNumber = parsedData.order_number || parsedData.orderNumber;
+        scannedBatchId = parsedData.batch_id || parsedData.batchId;
+      } catch {
+        // Handle pipe-delimited format: ORDER123|http://...|456|BATCH789
+        if (result.data.includes('|')) {
+          const parts = result.data.split('|');
+          if (parts.length >= 3) {
+            scannedOrderNumber = parts[0].replace(/^(ORD|ORDER|#)/i, '');
+            scannedOrderId = parts[2];
+            scannedBatchId = parts.length > 3 ? parts[3] : undefined;
+          }
+        } else if (result.data.match(/^(ORD|ORDER|#)/i)) {
+          // Simple order number
+          scannedOrderNumber = result.data.replace(/^(ORD|ORDER|#)/i, '');
+        }
+      }
+      
+      // Check if this is a batch order
+      if (isBatchOrder && batchProperties && batchProperties.orders) {
+        // Check if scanned order belongs to this batch
+        const belongsToThisBatch = batchProperties.orders.some((batchOrder: Order) => 
+          batchOrder.id === scannedOrderId || 
+          batchOrder.order_number === scannedOrderNumber ||
+          batchOrder.order_number === `ORDER${scannedOrderNumber}` ||
+          batchOrder.order_number === `ORD${scannedOrderNumber}` ||
+          batchOrder.order_number === `#${scannedOrderNumber}`
+        );
+        
+        if (belongsToThisBatch) {
+          Alert.alert(
+            '✅ Order Verified',
+            `Order #${scannedOrderNumber || scannedOrderId} belongs to this batch.\n\nYou can mark it as picked up.`,
+            [
+              {
+                text: 'Mark as Picked Up',
+                onPress: () => {
+                  if (onStatusUpdate) {
+                    onStatusUpdate(order.id, 'picked_up');
+                  }
+                }
+              },
+              {
+                text: 'Cancel',
+                style: 'cancel'
+              }
+            ]
+          );
+        } else {
+          Alert.alert(
+            '❌ Wrong Batch',
+            `Order #${scannedOrderNumber || scannedOrderId} does NOT belong to this batch.\n\nPlease check if you have the correct package.`,
+            [{ text: 'OK' }]
+          );
+        }
+      } else {
+        // Non-batch order - check if it matches current order
+        if (order.id === scannedOrderId || order.order_number === scannedOrderNumber) {
+          Alert.alert(
+            '✅ Order Verified',
+            `Order confirmed. You can mark it as picked up.`,
+            [
+              {
+                text: 'Mark as Picked Up',
+                onPress: () => {
+                  if (onStatusUpdate) {
+                    onStatusUpdate(order.id, 'picked_up');
+                  }
+                }
+              },
+              {
+                text: 'Cancel',
+                style: 'cancel'
+              }
+            ]
+          );
+        } else {
+          Alert.alert(
+            '❌ Wrong Order',
+            `This QR code is for a different order.`,
+            [{ text: 'OK' }]
+          );
+        }
+      }
+    }
+  };
+
   const getStatusActions = () => {
     const actions = [];
     
     switch (order.status) {
       case 'pending':
       case 'assigned':
+      case 'accepted':
         actions.push({
           key: 'picked_up',
           label: 'Mark as Picked Up',
@@ -151,6 +262,19 @@ export const FlatOrderActions: React.FC<FlatOrderActionsProps> = ({
         <View style={styles.actionSection}>
           <Text style={styles.sectionTitle}>Update Status</Text>
           <View style={styles.statusButtonContainer}>
+            {/* QR Scan Button for Pickup Confirmation */}
+            {(order.status === 'assigned' || order.status === 'accepted' || order.status === 'pending') && (
+              <TouchableOpacity
+                style={styles.qrScanButton}
+                onPress={handleQRScan}
+              >
+                <Ionicons name="qr-code-outline" size={20} color={flatColors.accent.purple} />
+                <Text style={styles.qrScanButtonText}>
+                  Scan QR to Verify Pickup
+                </Text>
+              </TouchableOpacity>
+            )}
+            
             {statusActions.map((action) => (
               <TouchableOpacity
                 key={action.key}
@@ -195,8 +319,37 @@ export const FlatOrderActions: React.FC<FlatOrderActionsProps> = ({
             {batchProperties.orders.length} orders with a total value of{' '}
             {order.currency || 'SAR'} {batchProperties.totalValue.toFixed(2)}
           </Text>
+          
+          {/* Item Pickup Button for accepted batch orders */}
+          {(order.status === 'assigned' || order.status === 'accepted' || order.status === 'picked_up') && 
+           batchProperties.batchId && (
+            <TouchableOpacity
+              style={styles.itemPickupButton}
+              onPress={() => {
+                onClose();
+                navigation.navigate('ItemPickup', {
+                  batchId: batchProperties.batchId,
+                  batchNumber: batchProperties.batchNumber || 'Unknown',
+                });
+              }}
+            >
+              <Ionicons name="checkbox-outline" size={20} color="#FFFFFF" />
+              <Text style={styles.itemPickupButtonText}>
+                Confirm Item Pickups
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
+      
+      {/* QR Scanner Modal */}
+      <QRScanner
+        isVisible={showQRScanner}
+        onClose={() => setShowQRScanner(false)}
+        onScanResult={handleQRScanResult}
+        allowManualEntry={true}
+        placeholder={isBatchOrder ? "Enter order number from this batch" : "Enter order number"}
+      />
     </View>
   );
 };
@@ -257,6 +410,23 @@ const styles = StyleSheet.create({
   statusButtonContainer: {
     gap: 8,
   },
+  qrScanButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: flatColors.cards.purple.background,
+    borderWidth: 1,
+    borderColor: flatColors.accent.purple,
+    gap: 8,
+  },
+  qrScanButtonText: {
+    fontSize: premiumTypography.callout.fontSize,
+    fontWeight: '600',
+    lineHeight: premiumTypography.callout.lineHeight,
+    color: flatColors.accent.purple,
+  },
   statusButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -312,5 +482,20 @@ const styles = StyleSheet.create({
     fontWeight: premiumTypography.footnote.fontWeight,
     lineHeight: premiumTypography.footnote.lineHeight,
     color: flatColors.neutral[700],
+  },
+  itemPickupButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    marginTop: 12,
+    borderRadius: 8,
+    backgroundColor: flatColors.accent.purple,
+    gap: 8,
+  },
+  itemPickupButtonText: {
+    fontSize: premiumTypography.footnote.fontSize,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
 });

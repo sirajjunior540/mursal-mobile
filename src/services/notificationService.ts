@@ -96,17 +96,51 @@ class NotificationService {
         return;
       }
       
+      // Check if this is a high priority notification that should wake the screen
+      const isHighPriority = data.priority === 'high' || data.wake_screen === 'true' || data.show_when_locked === 'true';
+      
+      if (isHighPriority) {
+        console.log('[NotificationService] High priority notification detected - attempting wake-up');
+        
+        // Enhanced wake-up sequence for high priority notifications
+        this.performWakeUpSequence();
+      }
+      
       // Check if this is a new order notification
-      if (data.type === 'new_order' && data.order) {
-        // Only trigger popup/sound if app is in foreground or this is a high-priority notification
+      if (data.type === 'new_order' || data.type === 'new_batch' || data.order || data.orderId || data.batch_id) {
+        // Parse order data if it's a string
+        let orderData = data.order;
+        if (typeof orderData === 'string') {
+          try {
+            orderData = JSON.parse(orderData);
+          } catch (e) {
+            console.error('[NotificationService] Error parsing order data:', e);
+          }
+        }
+        
+        // For batch notifications, create a pseudo-order object if needed
+        if (data.type === 'new_batch' && !orderData && data.batch_id) {
+          orderData = {
+            id: data.batch_id,
+            order_number: data.batch_number || `BATCH_${data.batch_id}`,
+            is_batch: true,
+            batch_id: data.batch_id,
+            order_count: data.order_count || 1,
+            total: data.total_value || '0',
+            pickup_address: data.pickup_address || '',
+            customer_details: {
+              name: `Batch Order (${data.order_count || 1} orders)`
+            }
+          };
+        }
+        
         const appState = AppState.currentState;
         
-        if (appState === 'active') {
-          // App is in foreground - show popup immediately
-          this.notificationCallbacks.onNewOrder?.(data.order);
-        } else {
-          // App is in background - the push notification will wake up the phone
-          // When user opens the app, we'll handle it through normal channels
+        // Always trigger callback for new orders regardless of app state
+        // The callback will handle the appropriate UI based on app state
+        if (orderData) {
+          console.log(`[NotificationService] Processing ${data.type || 'new_order'} notification, app state: ${appState}`);
+          this.notificationCallbacks.onNewOrder?.(orderData);
         }
         
         // Always play sound and vibrate for new orders (this will wake the phone)
@@ -114,18 +148,47 @@ class NotificationService {
         this.vibrateForOrder();
       }
     } catch (error) {
-      console.error('[NotificationService] Error handling push notification:', error);
+      console.error('[NotificationService] Error handling push notification');
     }
   }
   
   private async getCurrentTenantId(): Promise<string | null> {
     try {
-      const { Storage, STORAGE_KEYS } = await import('../utils');
-      const tenantId = await Storage.getItem(STORAGE_KEYS.TENANT_ID);
-      return tenantId as string | null;
+      // First try to get from storage
+      let tenantId: string | null = null;
+      try {
+        const { Storage, STORAGE_KEYS } = await import('../utils');
+        if (Storage && STORAGE_KEYS && STORAGE_KEYS.TENANT_ID) {
+          tenantId = await Storage.getItem(STORAGE_KEYS.TENANT_ID);
+        }
+      } catch (storageError) {
+        console.warn('[NotificationService] Could not access storage');
+      }
+      
+      if (tenantId) {
+        return tenantId as string;
+      }
+      
+      // Fallback to environment config
+      try {
+        const { ENV } = await import('../config/environment');
+        if (ENV) {
+          const fallbackTenantId = ENV.TENANT_ID || ENV.DEFAULT_TENANT_ID || 'sirajjunior';
+          console.log('[NotificationService] Using fallback tenant ID:', fallbackTenantId);
+          return fallbackTenantId;
+        }
+      } catch (envError) {
+        console.warn('[NotificationService] Could not load environment config');
+      }
+      
+      // If all else fails, return default
+      console.log('[NotificationService] Using hardcoded fallback tenant ID: sirajjunior');
+      return 'sirajjunior';
+      
     } catch (error) {
-      console.error('[NotificationService] Error getting tenant ID:', error);
-      return null;
+      console.error('[NotificationService] Error getting tenant ID');
+      // Ultimate fallback
+      return 'sirajjunior';
     }
   }
 
@@ -133,9 +196,28 @@ class NotificationService {
     try {
       // Import API service to send FCM token to backend
       const { apiService } = await import('./api');
-      await apiService.updateFcmToken(token);
+      
+      console.log('[NotificationService] Attempting to send FCM token to backend...');
+      
+      // Add timeout to prevent hanging on localhost:8081 connections
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('FCM token update timeout')), 10000); // 10 second timeout
+      });
+      
+      const updatePromise = apiService.updateFCMToken(token);
+      
+      const result = await Promise.race([updatePromise, timeoutPromise]) as any;
+      
+      if (result.success) {
+        console.log('[NotificationService] FCM token sent to backend successfully');
+      } else {
+        console.warn('[NotificationService] FCM token update failed:', result.error);
+        // Don't throw error - this is not critical for notification functionality
+      }
     } catch (error) {
-      // Failed to send token
+      // Log but don't throw - FCM token sending failure shouldn't break notifications
+      console.warn('[NotificationService] Warning: Could not send FCM token to backend:', error);
+      console.log('[NotificationService] Continuing with local notification functionality...');
     }
   }
 
@@ -383,6 +465,114 @@ class NotificationService {
         setTimeout(() => Vibration.vibrate(), 100);
       }
     } catch (error) {
+    }
+  }
+
+  /**
+   * Enhanced wake-up sequence for high priority notifications
+   */
+  private performWakeUpSequence() {
+    try {
+      console.log('[NotificationService] Performing wake-up sequence');
+      
+      // Cancel any existing vibrations first
+      Vibration.cancel();
+      
+      // Create an enhanced vibration pattern for wake-up
+      // Pattern: [wait, vibrate, wait, vibrate...] in milliseconds
+      const wakeUpPattern = [
+        0,    // Start immediately
+        300,  // Long vibration
+        200,  // Pause
+        100,  // Short vibration
+        200,  // Pause
+        100,  // Short vibration
+        500,  // Longer pause
+        400,  // Long vibration
+        200,  // Pause
+        200,  // Medium vibration
+      ];
+      
+      if (Platform.OS === 'android') {
+        // Android supports vibration patterns
+        Vibration.vibrate(wakeUpPattern, false); // Don't repeat
+      } else {
+        // iOS doesn't support patterns, so simulate with multiple calls
+        const simulatePattern = () => {
+          Vibration.vibrate(); // Long vibration (system default)
+          setTimeout(() => Vibration.vibrate(), 500);  // Short vibration
+          setTimeout(() => Vibration.vibrate(), 800);  // Short vibration
+          setTimeout(() => Vibration.vibrate(), 1500); // Final long vibration
+        };
+        
+        simulatePattern();
+      }
+      
+      // Enhanced sound sequence
+      this.playWakeUpSound();
+      
+    } catch (error) {
+      console.error('[NotificationService] Error in wake-up sequence');
+      // Fallback to basic vibration
+      this.vibrateStrong();
+    }
+  }
+
+  /**
+   * Enhanced sound for wake-up notifications
+   */
+  private playWakeUpSound() {
+    try {
+      if (this.orderSound) {
+        // Play custom sound multiple times for wake-up
+        this.orderSound.stop(() => {
+          this.orderSound?.play(() => {
+            // Play again after short delay
+            setTimeout(() => {
+              this.orderSound?.play();
+            }, 500);
+          });
+        });
+      } else {
+        // Enhanced system beep pattern for wake-up
+        this.createWakeUpBeepPattern();
+      }
+    } catch (error) {
+      // Fallback to basic beep
+      this.createWakeUpBeepPattern();
+    }
+  }
+
+  /**
+   * Create an enhanced beep pattern specifically for wake-up
+   */
+  private createWakeUpBeepPattern() {
+    try {
+      // Create a more aggressive beep pattern to wake up the phone
+      const beepSequence = () => {
+        // First set of beeps
+        Vibration.vibrate(150);
+        setTimeout(() => Vibration.vibrate(150), 300);
+        setTimeout(() => Vibration.vibrate(150), 600);
+        
+        // Brief pause
+        setTimeout(() => {
+          // Second set of beeps (longer)
+          Vibration.vibrate(300);
+          setTimeout(() => Vibration.vibrate(150), 500);
+          setTimeout(() => Vibration.vibrate(300), 800);
+        }, 1200);
+      };
+      
+      // Execute the sequence
+      beepSequence();
+      
+      // Repeat once more after 2 seconds to ensure wake-up
+      setTimeout(beepSequence, 2000);
+      
+    } catch (error) {
+      // Final fallback - basic vibration
+      Vibration.vibrate(1000);
     }
   }
 }

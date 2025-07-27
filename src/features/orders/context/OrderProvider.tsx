@@ -2,13 +2,19 @@
  * Simplified OrderProvider for testing the refactored structure
  */
 import React, { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react';
-import { Alert } from 'react-native';
+import { Alert, AppState, AppStateStatus } from 'react-native';
 import { Order, OrderContextType, OrderStatus } from '../../../types';
 import { apiService } from '../../../services/api';
 import { realtimeService } from '../../../services/realtimeService';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useDriver } from '../../../contexts/DriverContext';
 import { orderActionService } from '../../../services/orderActionService';
+import { 
+  cacheService, 
+  getCachedAvailableOrders, 
+  getCachedDriverOrders, 
+  getCachedOrderHistory 
+} from '../../../services/comprehensiveCacheService';
 
 // Context
 const OrderContext = createContext<OrderContextType | undefined>(undefined);
@@ -39,16 +45,27 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
   const notificationCallbackRef = useRef<((order: Order) => void) | null>(null);
   
   // Actions - Define these before the effects that use them
-  const refreshOrders = useCallback(async () => {
+  const refreshOrders = useCallback(async (forceRefresh = false) => {
     setIsLoading(true);
     setError(null);
     
     try {
-      const response = await apiService.getAvailableOrders();
+      // Use cached data if available and not forcing refresh
+      const newOrders = await getCachedAvailableOrders(
+        async () => {
+          const response = await apiService.getAvailableOrders();
+          if (!response.success) {
+            throw new Error(response.error || 'Failed to fetch orders');
+          }
+          return response.data;
+        },
+        forceRefresh
+      );
       
-      if (response.success) {
-        const newOrders = response.data;
-        
+      // Check if data has actually changed
+      const hasChanged = await cacheService.hasChanged('availableOrders', newOrders);
+      
+      if (hasChanged) {
         // Check for new orders that weren't seen before
         const batchesToNotify = new Map<string, Order>(); // Map to store first order of each batch
         
@@ -81,16 +98,21 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
           setSeenBatchIds(prev => new Set([...prev, batchId]));
         });
         
-        // Update seen order IDs
-        setSeenOrderIds(new Set(newOrders.map(o => o.id)));
-        setOrders(newOrders);
-        setLastUpdated(new Date().toISOString());
-      } else {
-        setError(response.error || 'Failed to fetch orders');
+        // Update seen order IDs - only add new orders, don't replace the whole set
+        setSeenOrderIds(prev => {
+          const newSet = new Set(prev);
+          newOrders.forEach(order => newSet.add(order.id));
+          return newSet;
+        });
       }
+      
+      // Always update orders (even if not changed) to ensure UI is in sync
+      setOrders(newOrders);
+      setLastUpdated(new Date().toISOString());
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Unknown error';
       setError(errorMsg);
+      setOrders([]); // Clear orders on error
     } finally {
       setIsLoading(false);
     }
@@ -105,6 +127,55 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
 
     const initializeRealtimeService = async () => {
       try {
+        // Set up notification service callbacks for push notifications
+        console.log('🔔 [OrderProvider] Setting up notification service callbacks');
+        const { notificationService } = await import('../../../services/notificationService');
+        notificationService.setNotificationCallbacks({
+          onNewOrder: (order: Order) => {
+            console.log('📱 [OrderProvider] New order from push notification:', order.order_number);
+            
+            // Check driver online status
+            const isDriverOnline = driver?.isOnline && driver?.is_available && driver?.is_on_duty;
+            
+            if (!isDriverOnline) {
+              console.log('🚫 [OrderProvider] Driver is offline, ignoring push notification');
+              return;
+            }
+            
+            // Handle batch notifications
+            const batchId = order.current_batch?.id;
+            if (batchId) {
+              // Check if we've already seen this batch
+              if (!seenBatchIds.has(batchId)) {
+                console.log('🆕 [OrderProvider] New batch from push notification:', batchId);
+                setSeenBatchIds(prev => new Set([...prev, batchId]));
+                
+                // Trigger the incoming order modal
+                if (notificationCallbackRef.current) {
+                  notificationCallbackRef.current(order);
+                }
+              }
+            } else {
+              // Single order - trigger modal immediately
+              if (notificationCallbackRef.current) {
+                notificationCallbackRef.current(order);
+              }
+            }
+            
+            // Add to orders list
+            setOrders(prev => {
+              const exists = prev.some(o => o.id === order.id);
+              if (!exists) {
+                return [...prev, order];
+              }
+              return prev;
+            });
+            
+            // Mark as seen
+            setSeenOrderIds(prev => new Set([...prev, order.id]));
+          }
+        });
+        
         // Set up realtime service callbacks
         realtimeService.setCallbacks({
           onNewOrder: (order: Order) => {
@@ -189,9 +260,6 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
               return prev;
             });
             
-            // Trigger a single refresh to update the full list
-            refreshOrders();
-            
             // Mark order as seen
             setSeenOrderIds(prev => new Set([...prev, order.id]));
           },
@@ -237,6 +305,77 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
       realtimeService.stop();
     };
   }, [isLoggedIn, authLoading, driver]);
+
+  // Handle app state changes (background/foreground)
+  useEffect(() => {
+    const handleAppStateChange = async (nextAppState: AppStateStatus) => {
+      console.log(`📱 [OrderProvider] App state changed to: ${nextAppState}`);
+      
+      if (nextAppState === 'active' && isLoggedIn && !authLoading) {
+        console.log('🔄 [OrderProvider] App returned to foreground, reinitializing services...');
+        
+        // Stop existing connections
+        realtimeService.stop();
+        
+        // Small delay to ensure clean shutdown
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        try {
+          // Reinitialize realtime service with fresh token
+          await realtimeService.retryInitialization();
+          
+          // Start service if driver is online
+          if (driver?.isOnline) {
+            realtimeService.start();
+          }
+          
+          // Force refresh all data by calling API directly
+          // We can't use refreshOrders here because it's defined later
+          setIsLoading(true);
+          try {
+            const response = await apiService.getAvailableOrders();
+            if (response.success && response.data) {
+              setOrders(response.data);
+            }
+            // Fetch driver orders directly
+            const driverResponse = await apiService.getDriverOrders();
+            if (driverResponse.success && driverResponse.data) {
+              setDriverOrders(driverResponse.data);
+            }
+          } finally {
+            setIsLoading(false);
+          }
+          
+          console.log('✅ [OrderProvider] Services reinitialized after app resume');
+        } catch (error) {
+          console.error('❌ [OrderProvider] Failed to reinitialize after app resume:', error);
+          
+          // Try to refresh token explicitly
+          try {
+            await apiService.refreshToken();
+            // Retry initialization after token refresh
+            await realtimeService.retryInitialization();
+            if (driver?.isOnline) {
+              realtimeService.start();
+            }
+          } catch (tokenError) {
+            console.error('❌ [OrderProvider] Token refresh failed:', tokenError);
+            // User might need to re-login
+          }
+        }
+      } else if (nextAppState === 'background') {
+        console.log('📴 [OrderProvider] App going to background, stopping realtime service...');
+        // Stop realtime connections when app goes to background
+        realtimeService.stop();
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    
+    return () => {
+      subscription.remove();
+    };
+  }, [isLoggedIn, authLoading, driver?.isOnline]);
 
   // Load initial orders when user is logged in
   useEffect(() => {
@@ -284,9 +423,16 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
       }
       
       // Small delay to ensure status is updated in backend
-      const timer = setTimeout(() => {
-        // Only refresh driver orders, not available orders (realtime service handles that)
-        getDriverOrders();
+      const timer = setTimeout(async () => {
+        // Fetch driver orders directly
+        try {
+          const response = await apiService.getDriverOrders();
+          if (response.success && response.data) {
+            setDriverOrders(response.data);
+          }
+        } catch (error) {
+          console.error('Failed to fetch driver orders:', error);
+        }
       }, 1000);
       
       return () => clearTimeout(timer);
@@ -298,7 +444,7 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
         realtimeService.stop();
       }
     }
-  }, [driver?.isOnline, refreshOrders, getDriverOrders]);
+  }, [driver?.isOnline]);
 
   const getOrderDetails = useCallback(async (orderId: string) => {
     // First check driver orders (accepted orders)
@@ -391,13 +537,20 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
         // Remove the accepted order from available orders
         setOrders(prev => prev.filter(o => o.id !== orderId));
         
+        // Invalidate caches when order is accepted
+        await cacheService.invalidateByEvent('orderAccepted');
+        
+        // Add a small delay to ensure backend has updated the order status
+        console.log('⏱️ [OrderProvider] Waiting for backend to process order acceptance...');
+        await new Promise(resolve => setTimeout(resolve, 1500)); // 1.5 second delay
+        
         // Refresh driver orders to get the newly accepted order
         console.log('🔄 [OrderProvider] Refreshing driver orders after acceptance');
-        await getDriverOrders();
+        await getDriverOrders(true); // Force refresh
         
         // Also refresh available orders to ensure consistency
         console.log('🔄 [OrderProvider] Refreshing available orders after acceptance');
-        await refreshOrders();
+        await refreshOrders(true); // Force refresh
         
         return true;
       } else {
@@ -482,6 +635,15 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
         setOrders(prev => prev.map(o => 
           o.id === deliveryId ? { ...o, status } : o
         ));
+        
+        // Invalidate caches when status changes
+        await cacheService.invalidateByEvent('orderStatusChanged');
+        
+        // If order is completed, invalidate history cache too
+        if (status === 'delivered' || status === 'failed') {
+          await cacheService.invalidateByEvent('orderCompleted');
+        }
+        
         return true;
       } else {
         return false;
@@ -491,15 +653,25 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
     }
   }, []);
 
-  const getOrderHistory = useCallback(async (filters?: any) => {
+  const getOrderHistory = useCallback(async (filters?: any, forceRefresh = false) => {
     setIsLoading(true);
     try {
-      const response = await apiService.getOrderHistory();
-      if (response.success) {
-        setOrderHistory(response.data);
-      }
+      // Use cached data if available
+      const history = await getCachedOrderHistory(
+        async () => {
+          const response = await apiService.getOrderHistory();
+          if (!response.success) {
+            throw new Error(response.error || 'Failed to load order history');
+          }
+          return response.data || [];
+        },
+        forceRefresh
+      );
+      
+      setOrderHistory(history);
     } catch (error) {
-      // Failed to get order history
+      console.error('[OrderProvider] Failed to get order history:', error);
+      // Don't clear history on error to prevent flickering
     } finally {
       setIsLoading(false);
     }
@@ -521,23 +693,27 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
     // Not implemented yet but required by interface
   }, []);
 
-  const getDriverOrders = useCallback(async () => {
+  const getDriverOrders = useCallback(async (forceRefresh = false) => {
     setIsLoading(true);
     setError(null);
     try {
       console.log('[OrderProvider] Fetching driver orders...');
-      const response = await apiService.getDriverOrders();
-      console.log('[OrderProvider] Driver orders response:', response);
       
-      if (response.success && response.data) {
-        console.log('[OrderProvider] Setting driver orders:', response.data.length, 'orders');
-        setDriverOrders(response.data);
-        setError(null);
-      } else {
-        console.error('[OrderProvider] Failed response:', response);
-        setError(response.error || 'Failed to load orders');
-        setDriverOrders([]);
-      }
+      // Use cached data if available
+      const orders = await getCachedDriverOrders(
+        async () => {
+          const response = await apiService.getDriverOrders(forceRefresh);
+          if (!response.success) {
+            throw new Error(response.error || 'Failed to load orders');
+          }
+          return response.data || [];
+        },
+        forceRefresh
+      );
+      
+      console.log('[OrderProvider] Setting driver orders:', orders.length, 'orders');
+      setDriverOrders(orders);
+      setError(null);
     } catch (error) {
       console.error('[OrderProvider] Exception caught:', error);
       const errorMsg = error instanceof Error ? error.message : 'Failed to get driver orders';

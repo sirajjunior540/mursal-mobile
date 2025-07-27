@@ -33,6 +33,8 @@ import { Design } from '../constants/designSystem';
 import { flatColors } from '../design/dashboard/flatColors';
 import { orderActionService } from '../services/orderActionService';
 import { notificationService } from '../services/notificationService';
+import { apiService } from '../services/api';
+import { cacheService } from '../services/comprehensiveCacheService';
 
 interface DashboardStackParamList extends Record<string, object | undefined> {
   AvailableOrders: undefined;
@@ -87,9 +89,12 @@ const DashboardScreen: React.FC = () => {
 
     // Set up notification callback for new orders
     const handleNewOrder = (order: Order) => {
+      console.log('🔥 [DashboardScreen] handleNewOrder called with order:', order.order_number || order.id);
+      console.log('🔥 [DashboardScreen] Setting incoming order and showing modal...');
       setIncomingOrder(order);
       setShowIncomingModal(true);
       Haptics.trigger('notificationSuccess');
+      console.log('🔥 [DashboardScreen] Modal should now be visible!');
     };
     
     setOrderNotificationCallback(handleNewOrder);
@@ -107,11 +112,14 @@ const DashboardScreen: React.FC = () => {
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     Haptics.trigger('impactLight');
+    
+    // Force refresh all data when user manually refreshes
     await Promise.all([
-      refreshOrders(),
-      getDriverOrders(),
-      getDriverBalance(),
+      refreshOrders(true),    // Force refresh available orders
+      getDriverOrders(true),  // Force refresh driver orders
+      getDriverBalance(),     // Get fresh balance
     ]);
+    
     setRefreshing(false);
   }, [refreshOrders, getDriverOrders, getDriverBalance]);
 
@@ -151,27 +159,41 @@ const DashboardScreen: React.FC = () => {
     setShowIncomingModal(false);
     
     try {
+      console.log('🚀 Accepting batch route:', routeId, orderData?.current_batch);
+      
       const result = await orderActionService.acceptRoute(routeId, orderData || incomingOrder, {
         showConfirmation: false,
         onSuccess: async () => {
-          // Refresh driver orders to get the newly accepted route
-          await getDriverOrders();
-          // Navigate directly to route screen
-          navigation.navigate('Navigation');
+          console.log('✅ Batch accepted successfully, refreshing orders...');
+          
+          // Refresh both available and driver orders
+          await Promise.all([
+            refreshOrders(),    // This will remove the accepted orders from available
+            getDriverOrders()   // This will add them to driver's active orders
+          ]);
+          
+          // Small delay to ensure data is loaded
+          setTimeout(() => {
+            // Navigate directly to route screen
+            navigation.navigate('Navigation');
+          }, 500);
         },
         onError: (error) => {
+          console.error('❌ Failed to accept batch:', error);
           Alert.alert('Error', `Failed to accept route: ${error}`);
         }
       });
       
       if (!result.success) {
+        console.error('❌ Accept route failed:', result.error);
         Alert.alert('Error', result.error || 'Failed to accept route');
       }
     } catch (error) {
+      console.error('💥 Exception in handleAcceptRoute:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to accept route';
       Alert.alert('Error', errorMessage);
     }
-  }, [navigation, incomingOrder]);
+  }, [navigation, incomingOrder, refreshOrders, getDriverOrders]);
 
   const handleDeclineOrder = useCallback(async (deliveryId: string) => {
     Haptics.trigger('impactLight');
@@ -560,6 +582,29 @@ const DashboardScreen: React.FC = () => {
             onViewAll={() => navigation.navigate('AvailableOrders')}
             canAcceptOrder={canAcceptOrder}
             isOnline={driver?.isOnline || false}
+            onAcceptBatch={async (batchId, orders) => {
+              try {
+                console.log('🚀 Accepting batch from available orders card:', batchId);
+                const response = await apiService.acceptBatchOrder(batchId);
+                if (response.success) {
+                  Alert.alert('Success', 'Batch accepted successfully');
+                  
+                  // Invalidate caches for batch acceptance
+                  await cacheService.invalidateByEvent('batchAccepted');
+                  
+                  // Force refresh to update both available and active orders
+                  await Promise.all([
+                    refreshOrders(true),
+                    getDriverOrders(true)
+                  ]);
+                } else {
+                  Alert.alert('Error', response.error || 'Failed to accept batch');
+                }
+              } catch (error) {
+                console.error('Failed to accept batch:', error);
+                Alert.alert('Error', 'Failed to accept batch order');
+              }
+            }}
           />
         </ScrollView>
       </SafeAreaView>
@@ -585,6 +630,41 @@ const DashboardScreen: React.FC = () => {
             ? async (order) => {
                 handleCloseOrderDetails();
                 await handleAcceptOrder(order.id);
+              }
+            : undefined
+        }
+        onAcceptRoute={
+          // For batch orders, accept the entire batch
+          selectedOrder && !activeOrders?.some(o => o.id === selectedOrder.id)
+            ? async (order) => {
+                handleCloseOrderDetails();
+                // Check if this is a batch order
+                if (order.current_batch?.id) {
+                  try {
+                    console.log('🚀 Accepting batch order:', order.current_batch.id);
+                    const response = await apiService.acceptBatchOrder(order.current_batch.id);
+                    if (response.success) {
+                      Alert.alert('Success', 'Batch accepted successfully');
+                      
+                      // Invalidate caches for batch acceptance
+                      await cacheService.invalidateByEvent('batchAccepted');
+                      
+                      // Force refresh to update both available and active orders
+                      await Promise.all([
+                        refreshOrders(true),
+                        getDriverOrders(true)
+                      ]);
+                    } else {
+                      Alert.alert('Error', response.error || 'Failed to accept batch');
+                    }
+                  } catch (error) {
+                    console.error('Failed to accept batch:', error);
+                    Alert.alert('Error', 'Failed to accept batch order');
+                  }
+                } else {
+                  // Fallback to regular order acceptance
+                  await handleAcceptOrder(order.id);
+                }
               }
             : undefined
         }

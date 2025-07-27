@@ -4,6 +4,7 @@
  * with the Mursal backend, supporting WebSocket, polling, and push notifications.
  */
 
+import { AppState, AppStateStatus } from 'react-native';
 import { Order } from '../types';
 import { 
   RealtimeSDKConfig, 
@@ -46,6 +47,9 @@ export class RealtimeSDK {
   private isRunning: boolean = false;
   private seenOrderIds: Map<string, number> = new Map(); // Order ID -> timestamp
   private metrics: RealtimeMetrics;
+  private appStateSubscription: any = null;
+  private lastAppState: AppStateStatus = 'active';
+  private backgroundTime: number = 0;
   
   /**
    * Constructor
@@ -112,6 +116,9 @@ export class RealtimeSDK {
     if (this.config.pushEnabled && (this.config.enabledModes.includes('push') || this.config.enabledModes.includes('all'))) {
       this.initializePushClient();
     }
+    
+    // Set up app state listener for background/foreground transitions
+    this.setupAppStateListener();
   }
   
   /**
@@ -141,6 +148,12 @@ export class RealtimeSDK {
       this.pushClient.stop();
       this.pushClient = null;
     }
+    
+    // Remove app state listener
+    if (this.appStateSubscription) {
+      this.appStateSubscription.remove();
+      this.appStateSubscription = null;
+    }
   }
   
   /**
@@ -148,6 +161,13 @@ export class RealtimeSDK {
    */
   private initializeWebSocketClient(): void {
     try {
+      console.log('[RealtimeSDK] Initializing WebSocket client with config:', {
+        baseUrl: this.config.baseUrl,
+        endpoint: this.config.websocketEndpoint,
+        hasAuthToken: !!this.config.authToken,
+        tenantId: this.config.tenantId
+      });
+      
       this.websocketClient = new WebSocketClient({
         baseUrl: this.config.baseUrl,
         endpoint: this.config.websocketEndpoint,
@@ -159,6 +179,7 @@ export class RealtimeSDK {
       
       // Verify the client was created correctly
       if (!this.websocketClient) {
+        console.error('[RealtimeSDK] WebSocket client creation failed - client is null/undefined');
         throw new Error('WebSocket client is null/undefined');
       }
       
@@ -282,6 +303,14 @@ export class RealtimeSDK {
         }
         break;
         
+      case 'new_batch_order':
+        // Handle batch orders the same as regular orders
+        if (message.batch) {
+          // Extract order data from batch and treat as new order
+          this.handleNewBatchOrder(message.batch, 'websocket');
+        }
+        break;
+        
       case 'order_update':
         if (message.order) {
           this.handleOrderUpdate(message.order, 'websocket');
@@ -349,6 +378,48 @@ export class RealtimeSDK {
     }
   }
   
+  /**
+   * Handle new batch order from any source
+   * @param batch Batch data
+   * @param source Source of the batch
+   */
+  private handleNewBatchOrder(batch: any, source: CommunicationMode): void {
+    this.log('info', `New batch order ${batch.batch_id || batch.id} received from ${source}`);
+    
+    // Convert batch data to individual orders and process them
+    if (batch.orders && Array.isArray(batch.orders)) {
+      // Process each order in the batch
+      batch.orders.forEach((order: Order) => {
+        this.handleNewOrder(order, source);
+      });
+    } else {
+      // If no orders array, treat the batch as a single order
+      // Create a synthetic order from batch data
+      const syntheticOrder: Order = {
+        id: batch.batch_id || batch.id,
+        order_number: batch.batch_number || `BATCH_${batch.batch_id}`,
+        customer: batch.customer || { name: 'Batch Customer' },
+        pickup_address: batch.pickup_address || '',
+        pickup_latitude: batch.pickup_latitude,
+        pickup_longitude: batch.pickup_longitude,
+        delivery_address: batch.delivery_address || batch.pickup_address || '',
+        delivery_latitude: batch.delivery_latitude || batch.pickup_latitude,
+        delivery_longitude: batch.delivery_longitude || batch.pickup_longitude,
+        status: 'pending',
+        total: batch.total_value || 0,
+        created_at: new Date(batch.created_at || Date.now()),
+        current_batch: batch,
+        // Add batch-specific properties
+        is_batch: true,
+        batch_id: batch.batch_id || batch.id,
+        batch_number: batch.batch_number,
+        order_count: batch.order_count || 1
+      } as Order;
+      
+      this.handleNewOrder(syntheticOrder, source);
+    }
+  }
+
   /**
    * Handle new order from any source
    * @param order Order data
@@ -533,6 +604,53 @@ export class RealtimeSDK {
     
     // Notify metrics callback if provided
     this.callbacks.onMetrics?.(this.getMetrics());
+  }
+  
+  /**
+   * Set up app state listener for background/foreground transitions
+   */
+  private setupAppStateListener(): void {
+    this.appStateSubscription = AppState.addEventListener('change', this.handleAppStateChange.bind(this));
+    this.lastAppState = AppState.currentState;
+  }
+  
+  /**
+   * Handle app state changes
+   * @param nextAppState The next app state
+   */
+  private handleAppStateChange(nextAppState: AppStateStatus): void {
+    this.log('info', `App state changed: ${this.lastAppState} -> ${nextAppState}`);
+    
+    if (this.lastAppState.match(/inactive|background/) && nextAppState === 'active') {
+      // App came to foreground
+      const backgroundDuration = Date.now() - this.backgroundTime;
+      this.log('info', `App came to foreground after ${Math.round(backgroundDuration / 1000)}s`);
+      
+      // Reconnect WebSocket if it was disconnected
+      if (this.websocketClient && !this.websocketClient.isConnected()) {
+        this.log('info', 'Reconnecting WebSocket after background...');
+        this.websocketClient.start();
+      }
+      
+      // Force a polling refresh if polling is enabled
+      if (this.pollingClient) {
+        this.log('info', 'Forcing polling refresh after background...');
+        this.pollingClient.forcePoll();
+      }
+      
+      // Notify callbacks about reconnection
+      this.callbacks.onConnectionChange?.(true, 'websocket');
+      
+    } else if (nextAppState.match(/inactive|background/)) {
+      // App went to background
+      this.backgroundTime = Date.now();
+      this.log('info', 'App went to background');
+      
+      // Note: We don't disconnect WebSocket here, as the OS will handle it
+      // and our reconnection logic will kick in when needed
+    }
+    
+    this.lastAppState = nextAppState;
   }
   
   /**

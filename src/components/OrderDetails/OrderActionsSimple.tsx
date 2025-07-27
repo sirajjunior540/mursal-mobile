@@ -292,8 +292,9 @@ export const OrderActionsSimple: React.FC<OrderActionsSimpleProps> = ({
   const statusActions = getStatusActions();
   // Only show Accept/Decline for orders that are NOT in the driver's active deliveries
   // Check if onAccept callback exists - if not, this order is already accepted
-  const canAccept = (order.status === 'pending' || (order.status === 'assigned' && !!onAccept));
-  const canDecline = (order.status === 'pending' || (order.status === 'assigned' && !!onDecline));
+  // For batch orders, also check onAcceptRoute
+  const canAccept = (order.status === 'pending' || order.status === 'assigned') && (!!onAccept || !!onAcceptRoute);
+  const canDecline = (order.status === 'pending' || order.status === 'assigned') && !!onDecline;
 
   // Show actions for orders that have status actions or can be accepted/declined
   const shouldShowActions = !readonly && (statusActions.length > 0 || canAccept || canDecline);

@@ -18,6 +18,15 @@ declare global {
   var btoa: (str: string) => string;
   
   type HeadersInit = Record<string, string> | [string, string][] | Headers;
+  
+  // FCM and notification related globals
+  var fcmToken: string | undefined;
+  var pendingNotification: {
+    type: string;
+    order?: any;
+    orderId?: string;
+    receivedAt: string;
+  } | undefined;
 }
 
 export {};

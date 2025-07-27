@@ -127,4 +127,28 @@ export const premiumShadows = {
       elevation: 8,
     } as ViewStyle,
   },
+  
+  // Large shadow for modals
+  large: {
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 16,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 28,
+    elevation: 16,
+  } as ViewStyle,
+  
+  // Small shadow for buttons
+  small: {
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
+    elevation: 2,
+  } as ViewStyle,
 };

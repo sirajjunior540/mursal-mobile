@@ -257,22 +257,59 @@ const RouteNavigationScreen: React.FC = () => {
         // Add delivery - check for warehouse consolidation
         if (order.delivery_latitude && order.delivery_longitude) {
           // Check if this is a consolidated batch going to warehouse
-          const isConsolidatedToWarehouse = order.current_batch?.is_consolidated && 
-            order.current_batch?.delivery_address_info?.is_warehouse;
+          const isWarehouseConsolidation = order.is_consolidated || 
+                                         order.current_batch?.is_consolidated || 
+                                         order.consolidation_warehouse_address ||
+                                         order.delivery_address_info?.is_warehouse ||
+                                         order.warehouse_info?.consolidate_to_warehouse ||
+                                         order.current_batch?.delivery_address_info?.is_warehouse ||
+                                         false;
           
           let deliveryAddress = order.delivery_address || 'Delivery Location';
           let deliveryLat = Number(order.delivery_latitude);
           let deliveryLng = Number(order.delivery_longitude);
           
-          // If consolidated batch, use warehouse address from batch info
-          if (isConsolidatedToWarehouse && order.current_batch?.delivery_address_info) {
-            const warehouseInfo = order.current_batch.delivery_address_info;
-            if (warehouseInfo.address) {
-              deliveryAddress = `🏭 ${warehouseInfo.address}`;
+          // If warehouse consolidation, check various sources for warehouse address
+          if (isWarehouseConsolidation) {
+            // Check direct consolidation_warehouse_address field
+            if (order.consolidation_warehouse_address) {
+              deliveryAddress = `🏭 Warehouse: ${order.consolidation_warehouse_address}`;
             }
-            if (warehouseInfo.latitude && warehouseInfo.longitude) {
-              deliveryLat = warehouseInfo.latitude;
-              deliveryLng = warehouseInfo.longitude;
+            // Check warehouse_info
+            else if (order.warehouse_info?.warehouse_address) {
+              deliveryAddress = `🏭 Warehouse: ${order.warehouse_info.warehouse_address}`;
+              if (order.warehouse_info.latitude && order.warehouse_info.longitude) {
+                deliveryLat = Number(order.warehouse_info.latitude);
+                deliveryLng = Number(order.warehouse_info.longitude);
+              }
+            }
+            // Check delivery_address_info
+            else if (order.delivery_address_info?.is_warehouse && order.delivery_address_info?.address) {
+              deliveryAddress = `🏭 Warehouse: ${order.delivery_address_info.address}`;
+              if (order.delivery_address_info.latitude && order.delivery_address_info.longitude) {
+                deliveryLat = Number(order.delivery_address_info.latitude);
+                deliveryLng = Number(order.delivery_address_info.longitude);
+              }
+            }
+            // Check current_batch warehouse info
+            else if (order.current_batch?.warehouse_info?.warehouse_address) {
+              deliveryAddress = `🏭 Warehouse: ${order.current_batch.warehouse_info.warehouse_address}`;
+              if (order.current_batch.warehouse_info.latitude && order.current_batch.warehouse_info.longitude) {
+                deliveryLat = Number(order.current_batch.warehouse_info.latitude);
+                deliveryLng = Number(order.current_batch.warehouse_info.longitude);
+              }
+            }
+            // Check current_batch delivery_address_info
+            else if (order.current_batch?.delivery_address_info?.is_warehouse && order.current_batch?.delivery_address_info?.address) {
+              deliveryAddress = `🏭 Warehouse: ${order.current_batch.delivery_address_info.address}`;
+              if (order.current_batch.delivery_address_info.latitude && order.current_batch.delivery_address_info.longitude) {
+                deliveryLat = Number(order.current_batch.delivery_address_info.latitude);
+                deliveryLng = Number(order.current_batch.delivery_address_info.longitude);
+              }
+            }
+            // Fallback: if marked as consolidated but no specific warehouse address
+            else if (order.delivery_address) {
+              deliveryAddress = `🏭 Warehouse: ${order.delivery_address}`;
             }
           }
           

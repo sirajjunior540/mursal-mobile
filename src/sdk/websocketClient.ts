@@ -116,7 +116,10 @@ export class WebSocketClient {
     this.callbacks.onConnectionChange?.(true);
 
     // Send authentication if token is available
-    this.authenticate();
+    // Add a small delay to ensure WebSocket is fully ready
+    setTimeout(() => {
+      this.authenticate();
+    }, 100);
   }
 
   /**
@@ -170,10 +173,17 @@ export class WebSocketClient {
     console.error('[WebSocketClient] WebSocket error:', event);
     
     // Extract error details if available
-    const errorDetails = (event as any).message || (event as any).reason || 'Unknown error';
+    const errorEvent = event as ErrorEvent;
+    const errorDetails = errorEvent.message || errorEvent.error || 'Unknown error';
     const errorMessage = `WebSocket error: ${errorDetails}`;
     
     console.error('[WebSocketClient] Error details:', errorDetails);
+    console.error('[WebSocketClient] Error at line 176 - Full event:', {
+      type: event.type,
+      message: errorEvent.message,
+      error: errorEvent.error,
+      target: event.target
+    });
     this.callbacks.onError?.(errorMessage);
   }
 
@@ -248,6 +258,8 @@ export class WebSocketClient {
     const fullUrl = `${wsUrl}${endpoint}`;
     if (__DEV__) {
       console.log('[WebSocketClient] WebSocket URL:', fullUrl);
+      console.log('[WebSocketClient] Base URL:', this.config.baseUrl);
+      console.log('[WebSocketClient] Endpoint:', this.config.endpoint);
     }
     return fullUrl;
   }
@@ -256,11 +268,21 @@ export class WebSocketClient {
    * Send authentication message
    */
   private authenticate(): void {
-    if (!this.config.authToken || !this.connected || !this.websocket) {
+    if (!this.config.authToken || !this.websocket) {
       console.log('[WebSocketClient] Cannot authenticate:', {
         hasToken: !!this.config.authToken,
-        connected: this.connected,
         hasWebSocket: !!this.websocket
+      });
+      return;
+    }
+    
+    // Check if WebSocket is ready to send
+    if (this.websocket.readyState !== WebSocket.OPEN) {
+      console.log('[WebSocketClient] Cannot authenticate - WebSocket not ready:', {
+        readyState: this.websocket.readyState,
+        readyStateText: this.websocket.readyState === WebSocket.CONNECTING ? 'CONNECTING' : 
+                       this.websocket.readyState === WebSocket.CLOSING ? 'CLOSING' : 
+                       this.websocket.readyState === WebSocket.CLOSED ? 'CLOSED' : 'UNKNOWN'
       });
       return;
     }
@@ -298,8 +320,26 @@ export class WebSocketClient {
    * @param message Message to send
    */
   sendMessage(message: any): void {
-    if (!this.connected || !this.websocket) {
-      console.warn('[WebSocketClient] Cannot send message: not connected');
+    if (!this.websocket) {
+      console.warn('[WebSocketClient] Cannot send message: WebSocket is null');
+      return;
+    }
+
+    // Check WebSocket ready state
+    if (this.websocket.readyState !== WebSocket.OPEN) {
+      const stateMap: { [key: number]: string } = {
+        [WebSocket.CONNECTING]: 'CONNECTING',
+        [WebSocket.OPEN]: 'OPEN',
+        [WebSocket.CLOSING]: 'CLOSING',
+        [WebSocket.CLOSED]: 'CLOSED'
+      };
+      const currentState = stateMap[this.websocket.readyState] || 'UNKNOWN';
+      console.warn(`[WebSocketClient] Cannot send message: WebSocket is in ${currentState} state (${this.websocket.readyState})`);
+      
+      // If it's an invalid state error, report it
+      if (this.websocket.readyState === WebSocket.CLOSING || this.websocket.readyState === WebSocket.CLOSED) {
+        this.callbacks.onError?.(`WebSocket is in invalid state: ${currentState}`);
+      }
       return;
     }
 
@@ -308,7 +348,14 @@ export class WebSocketClient {
       this.websocket.send(messageString);
     } catch (error) {
       console.error('[WebSocketClient] Error sending message:', error);
-      this.callbacks.onError?.(`Error sending message: ${error}`);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      
+      // Check if it's an invalid state error
+      if (errorMessage.toLowerCase().includes('invalid state')) {
+        console.error('[WebSocketClient] Invalid state error - WebSocket readyState:', this.websocket.readyState);
+      }
+      
+      this.callbacks.onError?.(`Error sending message: ${errorMessage}`);
     }
   }
 

@@ -65,6 +65,44 @@ export const FlatOrderItem: React.FC<OrderItemProps> = ({
 
   const statusConfig = getStatusConfig(order.status);
 
+  // Determine if this is warehouse consolidation
+  const isWarehouseConsolidation = order.is_consolidated || 
+                                  order.current_batch?.is_consolidated || 
+                                  order.consolidation_warehouse_address ||
+                                  order.delivery_address_info?.is_warehouse ||
+                                  order.warehouse_info?.consolidate_to_warehouse ||
+                                  order.current_batch?.warehouse_info?.consolidate_to_warehouse ||
+                                  false;
+
+  // Get the appropriate delivery address
+  const getDeliveryAddress = () => {
+    if (isWarehouseConsolidation) {
+      // Check various warehouse address sources
+      if (order.consolidation_warehouse_address) {
+        return order.consolidation_warehouse_address;
+      }
+      if (order.warehouse_info?.warehouse_address) {
+        return order.warehouse_info.warehouse_address;
+      }
+      if (order.delivery_address_info?.is_warehouse && order.delivery_address_info?.address) {
+        return order.delivery_address_info.address;
+      }
+      if (order.current_batch?.warehouse_info?.warehouse_address) {
+        return order.current_batch.warehouse_info.warehouse_address;
+      }
+      if (order.current_batch?.delivery_address_info?.is_warehouse && order.current_batch?.delivery_address_info?.address) {
+        return order.current_batch.delivery_address_info.address;
+      }
+      // Fallback: if marked as consolidated but no specific warehouse address
+      if (order.delivery_address) {
+        return order.delivery_address;
+      }
+    }
+    return order.delivery_address || 'Address not provided';
+  };
+
+  const deliveryAddress = getDeliveryAddress();
+
   return (
     <TouchableOpacity 
       style={styles.container}
@@ -89,6 +127,14 @@ export const FlatOrderItem: React.FC<OrderItemProps> = ({
               <Text style={styles.customerName} numberOfLines={1}>
                 {order.customer_name || 'Customer'}
               </Text>
+              <View style={styles.addressContainer}>
+                {isWarehouseConsolidation && (
+                  <Ionicons name="business" size={12} color={flatColors.accent.purple} style={styles.warehouseIcon} />
+                )}
+                <Text style={[styles.deliveryAddress, isWarehouseConsolidation && styles.warehouseAddress]} numberOfLines={1}>
+                  {isWarehouseConsolidation ? `Warehouse: ${deliveryAddress}` : deliveryAddress}
+                </Text>
+              </View>
               <View style={styles.timeContainer}>
                 <Ionicons name="time-outline" size={12} color={flatColors.neutral[400]} />
                 <Text style={styles.orderTime}>
@@ -188,6 +234,25 @@ const styles = StyleSheet.create({
     ...premiumTypography.caption.medium,
     color: flatColors.neutral[400],
     fontWeight: '500',
+  },
+  addressContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+    gap: 4,
+  },
+  deliveryAddress: {
+    ...premiumTypography.caption.medium,
+    color: flatColors.neutral[500],
+    fontWeight: '500',
+    flex: 1,
+  },
+  warehouseAddress: {
+    color: flatColors.accent.purple,
+    fontWeight: '600',
+  },
+  warehouseIcon: {
+    marginRight: 2,
   },
   rightSection: {
     alignItems: 'flex-end',

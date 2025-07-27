@@ -3,6 +3,7 @@ import { ENV } from '../config/environment';
 
 export * from './theme';
 export * from './colors';
+export * from './designSystem';
 
 // Export spacing as SPACING for consistency
 export { spacing as SPACING } from './theme';

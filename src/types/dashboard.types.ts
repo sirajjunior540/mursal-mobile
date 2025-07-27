@@ -77,6 +77,7 @@ export interface AvailableOrdersCardProps {
   onViewAll: () => void;
   canAcceptOrder: (order: Order) => boolean;
   isOnline: boolean;
+  onAcceptBatch?: (batchId: string, orders: Order[]) => void;
 }
 
 // Active Deliveries Card Props

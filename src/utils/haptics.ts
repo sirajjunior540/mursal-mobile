@@ -154,19 +154,27 @@ export const haptics = {
   // Notification feedback for incoming orders
   notification: () => {
     try {
+      // First cancel any existing vibrations
+      Vibration.cancel();
+      
       if (ReactNativeHapticFeedback) {
         if (Platform.OS === 'ios') {
+          // On iOS, use native haptic feedback (doesn't repeat indefinitely)
           ReactNativeHapticFeedback.trigger('notificationSuccess', options);
+          // Add a short repeating pattern for iOS
+          Vibration.vibrate([0, 200, 100, 200, 100, 200], true);
         } else {
-          ReactNativeHapticFeedback.trigger('soft', options);
+          // On Android, use a repeating vibration pattern
+          Vibration.vibrate([0, 200, 100, 200, 100, 200], true);
         }
       } else {
-        // Special pattern for notifications
-        Vibration.vibrate([0, 200, 100, 200]);
+        // Special pattern for notifications with repeat
+        Vibration.vibrate([0, 200, 100, 200, 100, 200], true);
       }
     } catch (error) {
       console.warn('Haptics error:', error);
-      Vibration.vibrate([0, 200, 100, 200]);
+      // Fallback to simple repeating pattern
+      Vibration.vibrate([0, 200, 100, 200], true);
     }
   },
 

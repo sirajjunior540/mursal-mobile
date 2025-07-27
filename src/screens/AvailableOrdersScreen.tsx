@@ -8,6 +8,7 @@ import {
   Alert,
   RefreshControl,
   StatusBar,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from 'react-native-vector-icons/Ionicons';
@@ -15,11 +16,13 @@ import { useNavigation } from '@react-navigation/native';
 
 import EnhancedOrderCard from '../components/EnhancedOrderCard';
 import BatchOrderCard from '../components/BatchOrderCard';
+import { FlatOrderDetailsModal } from '../components/OrderDetails';
 
 import { useOrders } from '../features/orders/context/OrderProvider';
 import { Order, isBatchOrder } from '../types';
 import { Design } from '../constants/designSystem';
 import { apiService } from '../services/api';
+import { navigationService } from '../services/navigationService';
 
 const AvailableOrdersScreen: React.FC = () => {
   const navigation = useNavigation();
