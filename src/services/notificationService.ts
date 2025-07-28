@@ -126,11 +126,38 @@ class NotificationService {
             is_batch: true,
             batch_id: data.batch_id,
             order_count: data.order_count || 1,
-            total: data.total_value || '0',
+            total: parseFloat(data.total_value || data.total || '0') || 0,
             pickup_address: data.pickup_address || '',
             customer_details: {
               name: `Batch Order (${data.order_count || 1} orders)`
-            }
+            },
+            currency: data.currency || 'SAR' // Default to SAR if not provided
+          };
+        }
+        
+        // If no order data but we have essential fields, create a minimal order object
+        if (!orderData && (data.order_id || data.delivery_id)) {
+          console.log('[NotificationService] Creating order from notification data:', data);
+          orderData = {
+            id: data.delivery_id || data.order_id || data.id,
+            order_number: data.order_number || `#${data.order_id || data.id}`,
+            customer: data.customer || {
+              name: data.customer_name || 'Customer',
+              phone: data.customer_phone || '',
+            },
+            customer_details: {
+              name: data.customer_name || 'Customer',
+              phone: data.customer_phone || ''
+            },
+            pickup_address: data.pickup_address || 'Pickup Location',
+            delivery_address: data.delivery_address || 'Delivery Location',
+            total: parseFloat(data.total || data.total_amount || '0') || 0,
+            subtotal: parseFloat(data.subtotal || '0') || 0,
+            delivery_fee: parseFloat(data.delivery_fee || '0') || 0,
+            items: data.items || [],
+            status: 'pending',
+            created_at: new Date().toISOString(),
+            currency: data.currency || 'SAR' // Default to SAR if not provided
           };
         }
         
@@ -140,7 +167,17 @@ class NotificationService {
         // The callback will handle the appropriate UI based on app state
         if (orderData) {
           console.log(`[NotificationService] Processing ${data.type || 'new_order'} notification, app state: ${appState}`);
-          this.notificationCallbacks.onNewOrder?.(orderData);
+          console.log('[NotificationService] Order data:', JSON.stringify(orderData, null, 2));
+          console.log('[NotificationService] Has callback:', !!this.notificationCallbacks.onNewOrder);
+          
+          if (this.notificationCallbacks.onNewOrder) {
+            console.log('[NotificationService] Calling onNewOrder callback...');
+            this.notificationCallbacks.onNewOrder(orderData);
+          } else {
+            console.error('[NotificationService] No onNewOrder callback registered!');
+          }
+        } else {
+          console.error('[NotificationService] No order data available from notification:', data);
         }
         
         // Always play sound and vibrate for new orders (this will wake the phone)

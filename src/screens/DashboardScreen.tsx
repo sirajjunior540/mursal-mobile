@@ -24,6 +24,7 @@ import {
   FlatAvailableOrdersCard,
 } from '../components/Dashboard/flat';
 import { EnhancedActiveDeliveriesCard } from '../components/Dashboard/EnhancedActiveDeliveriesCard';
+import DriverBalanceCard from '../features/finance/components/DriverBalanceCard';
 
 import { useOrders } from '../features/orders/context/OrderProvider';
 import { useDriver } from '../contexts/DriverContext';
@@ -549,6 +550,11 @@ const DashboardScreen: React.FC = () => {
           />
           
           <FlatStatsCards stats={statsData} />
+          
+          <DriverBalanceCard 
+            onRefresh={handleRefresh}
+            compact={false}
+          />
           
           <FlatPerformanceMetrics
             data={performanceData}

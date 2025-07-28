@@ -11,6 +11,7 @@ import { launchImageLibrary, ImagePickerResponse } from 'react-native-image-pick
 import { SecureStorage } from '../../utils';
 import { InAppCamera } from '../Photo';
 import { DeliveryScenarioModal, DeliveryScenario } from '../RouteNavigation/DeliveryScenarioModal';
+import { CashCollectionModal } from '../CashCollectionModal';
 
 interface OrderActionsSimpleProps {
   order: Order;
@@ -49,6 +50,8 @@ export const OrderActionsSimple: React.FC<OrderActionsSimpleProps> = ({
   const [isCheckingPhotoRequirements, setIsCheckingPhotoRequirements] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [showCashModal, setShowCashModal] = useState(false);
+  const [cashCollected, setCashCollected] = useState<{ amount: number; change: number } | null>(null);
 
   // Check if photo is required for delivery
   const checkPhotoRequirement = async (status: string) => {
@@ -102,7 +105,14 @@ export const OrderActionsSimple: React.FC<OrderActionsSimpleProps> = ({
   };
 
   const handleStatusUpdate = async (status: string, label: string) => {
-    // For delivered status, show scenario selection first
+    // For delivered status with COD, show cash collection first
+    if (status === 'delivered' && order.cash_on_delivery) {
+      setPendingStatusUpdate({ status, label });
+      setShowCashModal(true);
+      return;
+    }
+    
+    // For delivered status without COD, show scenario selection
     if (status === 'delivered') {
       setPendingStatusUpdate({ status, label });
       setShowScenarioModal(true);
@@ -222,6 +232,13 @@ export const OrderActionsSimple: React.FC<OrderActionsSimpleProps> = ({
     }
   };
 
+
+  const handleCashCollected = (collectedAmount: number, changeGiven: number) => {
+    setCashCollected({ amount: collectedAmount, change: changeGiven });
+    setShowCashModal(false);
+    // After cash collection, proceed to scenario selection
+    setShowScenarioModal(true);
+  };
 
   const handleAccept = () => {
     if (isBatchOrder && onAcceptRoute) {
@@ -520,6 +537,21 @@ export const OrderActionsSimple: React.FC<OrderActionsSimpleProps> = ({
         onPhotoTaken={handleInAppPhotoTaken}
         title="Delivery Photo"
         instruction="Take a clear photo of the delivered package"
+      />
+      
+      {/* Cash Collection Modal */}
+      <CashCollectionModal
+        visible={showCashModal}
+        onClose={() => setShowCashModal(false)}
+        onConfirm={handleCashCollected}
+        order={{
+          order_number: order.order_number || '',
+          customer_name: order.customer_details?.name,
+          total: order.total || 0,
+          delivery_fee: order.delivery_fee || 0,
+          cod_amount: order.cod_amount,
+          currency: order.currency,
+        }}
       />
     </>
   );

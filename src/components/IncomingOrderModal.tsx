@@ -22,6 +22,7 @@ import { Storage } from '../utils';
 import { flatColors } from '../design/dashboard/flatColors';
 import { premiumTypography } from '../design/dashboard/premiumTypography';
 import { premiumShadows } from '../design/dashboard/premiumShadows';
+import { useTenant } from '../contexts/TenantContext';
 
 const { /* width: SCREEN_WIDTH, */ height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -90,6 +91,10 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
   // onBatchAccept,
   onAcceptRoute,
 }) => {
+  // Get tenant settings for currency
+  const { tenantSettings } = useTenant();
+  const currency = order?.currency || tenantSettings?.currency || 'SAR';
+  
   // Animation refs
   const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const scaleAnim = useRef(new Animated.Value(0.8)).current;
@@ -732,7 +737,7 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
             <View style={styles.batchOrdersHeader}>
               <Text style={styles.batchOrdersTitle}>{batchTypeText}</Text>
               <Text style={styles.batchOrdersSubtitle}>
-                {item.data?.orders?.length || 0} orders • Total: ${totalBatchAmount.toFixed(2)}
+                {item.data?.orders?.length || 0} orders • Total: {currency} {totalBatchAmount.toFixed(2)}
               </Text>
             </View>
             
@@ -760,7 +765,7 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
                   </View>
                   <View style={styles.batchOrderAmount}>
                     <Text style={styles.batchOrderAmountText}>
-                      ${Number(batchOrder.total || batchOrder.total_amount || 0).toFixed(2)}
+                      {currency} {Number(batchOrder.total || batchOrder.total_amount || 0).toFixed(2)}
                     </Text>
                   </View>
                 </View>
@@ -872,7 +877,7 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
             <View style={styles.metric}>
               <Ionicons name="cash-outline" size={16} color="#666" />
               <Text style={styles.metricText}>
-                ${(item.data?.totalAmount || 0).toFixed(2)}
+                {currency} {(item.data?.totalAmount || 0).toFixed(2)}
               </Text>
             </View>
             {item.data?.batchTotalOrders && (
@@ -887,7 +892,7 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
               <View style={styles.metric}>
                 <Ionicons name="car-outline" size={16} color={flatColors.accent.green} />
                 <Text style={[styles.metricText, styles.successMetricText]}>
-                  +${parseFloat(String(item.data?.deliveryFee)).toFixed(2)}
+                  +{currency} {parseFloat(String(item.data?.deliveryFee)).toFixed(2)}
                 </Text>
               </View>
             )}
@@ -1178,7 +1183,7 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
                 <View style={[styles.specialHandlingBadge, styles.codBadge]}>
                   <Ionicons name="cash" size={14} color="#fff" />
                   <Text style={styles.specialHandlingText}>
-                    COD ${Number(order.cod_amount || order.total || 0).toFixed(2)}
+                    COD {currency} {Number(order.cod_amount || order.total || 0).toFixed(2)}
                   </Text>
                 </View>
               )}

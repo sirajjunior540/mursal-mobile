@@ -11,6 +11,8 @@ import Card from '../../../../shared/components/Card/Card';
 import StatusBadge from '../../../../shared/components/StatusBadge/StatusBadge';
 import Button from '../../../../shared/components/Button/Button';
 import { createOrderCardStyles } from './OrderCard.styles';
+import { formatOrderAmount, getCurrencySymbol } from '../../../../utils/currency';
+import { useTenant } from '../../../../contexts/TenantContext';
 
 interface OrderCardProps {
   order: Order;
@@ -32,6 +34,10 @@ const OrderCard: React.FC<OrderCardProps> = memo(({
   const styles = createOrderCardStyles(theme);
   const cardAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
+  const { tenantSettings } = useTenant();
+  
+  // Get currency from order or tenant settings
+  const currency = order?.currency || tenantSettings?.currency || 'SAR';
 
   // Entry animation
   React.useEffect(() => {
@@ -205,7 +211,7 @@ const OrderCard: React.FC<OrderCardProps> = memo(({
               <View style={[styles.specialHandlingBadge, styles.codBadge]}>
                 <Ionicons name="cash" size={12} color="#fff" />
                 <Text style={styles.specialHandlingText}>
-                  COD ${order.cod_amount?.toFixed(2) || order.total?.toFixed(2) || '0.00'}
+                  COD {formatOrderAmount(order.cod_amount || order.total, currency)}
                 </Text>
               </View>
             )}
@@ -265,9 +271,9 @@ const OrderCard: React.FC<OrderCardProps> = memo(({
             />
             <Text 
               style={styles.metricText}
-              accessibilityLabel={`Order total: $${order.total}`}
+              accessibilityLabel={`Order total: ${formatOrderAmount(order.total, currency)}`}
             >
-              ${order.total}
+              {formatOrderAmount(order.total, currency)}
             </Text>
           </View>
         </View>

@@ -347,13 +347,30 @@ export class PushNotificationClient {
           }
         }
         
-        // Notify callback
-        this.callbacks.onNotification?.({
+        // Prepare notification data with all available fields
+        const notificationData = {
           type: data.type || 'new_order',
           order: orderData,
-          orderId: data.orderId,
+          orderId: data.orderId || data.order_id || data.id,
+          order_id: data.order_id || data.orderId || data.id,
+          delivery_id: data.delivery_id || data.id,
+          order_number: data.order_number,
+          customer_name: data.customer_name,
+          customer_phone: data.customer_phone,
+          pickup_address: data.pickup_address,
+          delivery_address: data.delivery_address,
+          total: data.total || data.total_amount,
+          total_amount: data.total_amount || data.total,
+          subtotal: data.subtotal,
+          delivery_fee: data.delivery_fee,
+          items: data.items,
           ...data
-        });
+        };
+        
+        console.log('[PushNotificationClient] Notifying callback with data:', notificationData);
+        
+        // Notify callback
+        this.callbacks.onNotification?.(notificationData);
       } else {
         // Pass through other notification types
         this.callbacks.onNotification?.(data);
