@@ -2,7 +2,7 @@
  * Driver Finance API Service
  * Handles all financial operations for drivers including cash management
  */
-import { apiCall } from '../../utils/api';
+import { apiCall } from '../api';
 
 export interface DriverBalance {
   current_balance: {

@@ -3,6 +3,7 @@ import { AuthContextType, AuthUser, Driver, Tenant } from '../types';
 import { STORAGE_KEYS, TENANT_CONFIG, USER_ROLES } from '../constants';
 import { Storage, SecureStorage } from '../utils';
 import { apiService } from '../services/api';
+import { authService } from '../services/api/authService';
 
 // Action Types
 type AuthAction =
@@ -130,30 +131,43 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
         if (userData && driverData && token) {
           console.log('Restoring auth session for user:', userData.username);
-          // Verify token is still valid by making a test API call
-          try {
-            const profileResponse = await apiService.getDriverProfile();
-            if (profileResponse.success) {
-              dispatch({
-                type: 'RESTORE_AUTH',
-                payload: { 
-                  user: { ...userData, token },
-                  driver: driverData,
-                  tenant: tenantData || undefined
-                },
-              });
-            } else {
-              console.log('Token invalid, clearing auth data');
-              await SecureStorage.clearAll();
+          
+          // Check if token needs refresh
+          const isValid = await authService.ensureValidToken();
+          
+          if (isValid) {
+            // Setup auto-refresh for the session
+            await authService.setupAutoRefresh();
+            
+            // Verify token is still valid by making a test API call
+            try {
+              const profileResponse = await apiService.getDriverProfile();
+              if (profileResponse.success) {
+                dispatch({
+                  type: 'RESTORE_AUTH',
+                  payload: { 
+                    user: { ...userData, token },
+                    driver: driverData,
+                    tenant: tenantData || undefined
+                  },
+                });
+              } else {
+                console.log('Token invalid, clearing auth data');
+                await SecureStorage.clearAll();
+                dispatch({ type: 'LOGOUT' });
+              }
+            } catch (error) {
+              console.log('⚠️ Auth verification failed, clearing auth data:', error);
+              try {
+                await SecureStorage.clearAll();
+              } catch (_clearError) {
+                console.error('Error clearing auth data:', _clearError);
+              }
               dispatch({ type: 'LOGOUT' });
             }
-          } catch (error) {
-            console.log('⚠️ Auth verification failed, clearing auth data:', error);
-            try {
-              await SecureStorage.clearAll();
-            } catch (_clearError) {
-              console.error('Error clearing auth data:', _clearError);
-            }
+          } else {
+            console.log('Token refresh failed, user needs to login again');
+            await SecureStorage.clearAll();
             dispatch({ type: 'LOGOUT' });
           }
         } else {
@@ -201,6 +215,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           type: 'LOGIN_SUCCESS',
           payload: { user, driver, tenant },
         });
+
+        // Setup auto-refresh for the session
+        await authService.setupAutoRefresh();
+        console.log('✅ Auto-refresh enabled for persistent login');
 
         // Enable realtime service initialization - OrderContext will handle the actual initialization
         try {
@@ -252,6 +270,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const logout = async (): Promise<void> => {
     try {
+      // Clear auto-refresh timer
+      authService.clearAutoRefresh();
+      
       // Disable realtime service
       try {
         const { realtimeService } = await import('../services/realtimeService');
@@ -282,6 +303,27 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
 
+  const getSessionInfo = async () => {
+    const timeRemaining = await authService.getSessionTimeRemaining();
+    return {
+      isLoggedIn: state.isLoggedIn,
+      timeRemainingSeconds: timeRemaining,
+      timeRemainingFormatted: formatTimeRemaining(timeRemaining),
+    };
+  };
+
+  const formatTimeRemaining = (seconds: number): string => {
+    if (seconds <= 0) return 'Session expired';
+    
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    
+    if (hours > 0) {
+      return `${hours}h ${minutes}m remaining`;
+    }
+    return `${minutes}m remaining`;
+  };
+
   const contextValue: AuthContextType = {
     user: state.user,
     tenant: state.tenant,
@@ -292,6 +334,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     logout,
     setTenant,
     hasPermission: hasPermission(state.user),
+    getSessionInfo,
   };
 
   return (

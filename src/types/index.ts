@@ -392,6 +392,11 @@ export interface AuthContextType {
     hasTenantAdminAccess: () => boolean;
     hasTenantStaffAccess: () => boolean;
   };
+  getSessionInfo?: () => Promise<{
+    isLoggedIn: boolean;
+    timeRemainingSeconds: number;
+    timeRemainingFormatted: string;
+  }>;
 }
 
 export interface OrderContextType {

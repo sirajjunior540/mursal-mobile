@@ -3,6 +3,7 @@ import { Storage, SecureStorage } from '../utils';
 import { ENV, getTenantHost } from '../config/environment';
 import { ApiEndpoints } from './apiEndpoints';
 import { ApiResponse } from '../types';
+import { authService } from './api/authService';
 
 // Re-export types and interfaces from the split modules
 export * from './apiTypes';
@@ -147,19 +148,25 @@ export class HttpClient {
       if (response.status === 401) {
         const refreshToken = await SecureStorage.getRefreshToken();
         if (refreshToken && endpoint !== '/api/v1/auth/token/refresh/') {
-          // Try to refresh the token
-          const refreshResponse = await this.refreshAuthToken();
-          if (refreshResponse.success) {
+          console.log('[HttpClient] Got 401, attempting token refresh...');
+          
+          // Try to refresh the token using authService
+          const refreshed = await authService.refreshToken();
+          if (refreshed) {
+            console.log('[HttpClient] Token refreshed, retrying request...');
             // Retry the original request with new token
             return this.request<T>(endpoint, options);
           }
         }
         
         // If refresh failed or no refresh token, return error
+        console.log('[HttpClient] Token refresh failed, user needs to re-login');
         return {
           success: false,
           data: null as T,
-          error: (data as { detail?: string })?.detail || 'Authentication failed'
+          error: (data as { detail?: string })?.detail || 'Authentication failed',
+          statusCode: 401,
+          message: 'Authentication required'
         };
       }
 
