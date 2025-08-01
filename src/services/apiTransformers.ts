@@ -357,6 +357,10 @@ export class ApiTransformers {
       final_delivery_address: order?.final_delivery_address,
       final_delivery_latitude: order?.final_delivery_latitude ? parseFloat(String(order.final_delivery_latitude)) : undefined,
       final_delivery_longitude: order?.final_delivery_longitude ? parseFloat(String(order.final_delivery_longitude)) : undefined,
+      
+      // QR Code fields
+      qr_code_id: order?.qr_code_id || undefined,
+      qr_code_url: order?.qr_code_url || undefined,
     };
 
     // If this is a batch order, try to determine batch size from available data

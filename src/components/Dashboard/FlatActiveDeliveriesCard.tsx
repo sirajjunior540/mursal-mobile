@@ -106,7 +106,7 @@ export const FlatActiveDeliveriesCard: React.FC<ActiveDeliveriesCardProps> = ({
     const acceptedCount = orders.filter(o => o.status === 'accepted' || o.status === 'assigned').length;
     
     // Calculate total value
-    const totalValue = orders.reduce((sum, order) => sum + (order.total_amount || 0), 0);
+    const totalValue = orders.reduce((sum, order) => sum + (order.total_amount || order.total || 0), 0);
     
     // Get next delivery location
     const nextDelivery = orders.find(o => o.status === 'in_transit' || o.status === 'picked_up');

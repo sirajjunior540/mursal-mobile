@@ -280,6 +280,10 @@ export interface Order {
   cod_amount?: number;
   
   
+  // QR Code fields
+  qr_code_id?: string;
+  qr_code_url?: string;
+  
   // Additional fields
   tenantId?: string;
   tenant?: Tenant;

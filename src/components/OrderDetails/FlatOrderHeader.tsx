@@ -100,7 +100,7 @@ export const FlatOrderHeader: React.FC<OrderHeaderProps & { onMarkAsFailed?: () 
             {isBatchView && (
               <View style={styles.subtitleRow}>
                 <Text style={styles.subtitle}>
-                  {orderCount} orders • {order.currency || 'SAR'} {order.total_amount?.toFixed(2) || '0.00'}
+                  {orderCount} orders • {order.currency || 'SAR'} {(order.total_amount || order.total || 0).toFixed(2)}
                 </Text>
               </View>
             )}

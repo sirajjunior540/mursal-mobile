@@ -12,6 +12,7 @@ import { FlatSpecialHandlingBadges } from './FlatSpecialHandlingBadges';
 import { FlatOrderInfoSection } from './FlatOrderInfoSection';
 import { OrderPhotosSection } from './OrderPhotosSection';
 import { OrderActionsSimple } from './OrderActionsSimple';
+import { QRCodeDisplay } from './QRCodeDisplay';
 
 interface FlatOrderDetailsModalProps {
   visible: boolean;
@@ -48,6 +49,7 @@ export const FlatOrderDetailsModal: React.FC<FlatOrderDetailsModalProps> = ({
 }) => {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [showBatchList, setShowBatchList] = useState(true);
+  const [showQRCode, setShowQRCode] = useState(false);
 
   // Detect if this is a batch order - only call if order exists
   const isBatchOrder = order ? checkIsBatchOrder(order) : false;
@@ -191,6 +193,7 @@ export const FlatOrderDetailsModal: React.FC<FlatOrderDetailsModalProps> = ({
                   readonly={readonly}
                   onCall={onCall}
                   onNavigate={onNavigate}
+                  onShowQR={() => setShowQRCode(true)}
                 />
 
                 {/* Delivery Photos Section - Only show for completed/delivered orders */}
@@ -219,6 +222,17 @@ export const FlatOrderDetailsModal: React.FC<FlatOrderDetailsModalProps> = ({
             )}
         </ScrollView>
       </SafeAreaView>
+      
+      {/* QR Code Display Modal */}
+      {currentOrder && (
+        <QRCodeDisplay
+          visible={showQRCode}
+          qrCodeUrl={currentOrder.qr_code_url}
+          qrCodeId={currentOrder.qr_code_id}
+          orderNumber={currentOrder.order_number}
+          onClose={() => setShowQRCode(false)}
+        />
+      )}
     </Modal>
   );
 };

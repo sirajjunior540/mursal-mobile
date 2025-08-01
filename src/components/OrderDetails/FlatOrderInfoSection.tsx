@@ -10,6 +10,7 @@ interface FlatOrderInfoSectionProps {
   readonly?: boolean;
   onCall?: (phone: string) => void;
   onNavigate?: (order: Order) => void;
+  onShowQR?: () => void;
 }
 
 export const FlatOrderInfoSection: React.FC<FlatOrderInfoSectionProps> = ({
@@ -17,6 +18,7 @@ export const FlatOrderInfoSection: React.FC<FlatOrderInfoSectionProps> = ({
   readonly = false,
   onCall,
   onNavigate,
+  onShowQR,
 }) => {
   const customerPhone = order.customer?.phone || 
                       order.customer_details?.phone || 
@@ -175,10 +177,26 @@ export const FlatOrderInfoSection: React.FC<FlatOrderInfoSectionProps> = ({
             <View style={styles.infoContent}>
               <Text style={styles.infoLabel}>Order Total</Text>
               <Text style={styles.infoValue}>
-                {order.currency || 'SAR'} {typeof order.total_amount === 'number' ? order.total_amount.toFixed(2) : '0.00'}
+                {order.currency || 'SAR'} {typeof order.total_amount === 'number' ? order.total_amount.toFixed(2) : typeof order.total === 'number' ? order.total.toFixed(2) : '0.00'}
               </Text>
             </View>
           </View>
+
+          {/* QR Code Button */}
+          {(order.qr_code_id || order.qr_code_url) && (
+            <View style={styles.infoRow}>
+              <View style={styles.iconContainer}>
+                <Ionicons name="qr-code" size={20} color={flatColors.accent.purple} />
+              </View>
+              <View style={styles.infoContent}>
+                <Text style={styles.infoLabel}>Package QR Code</Text>
+                <Text style={styles.infoValue}>View QR Code</Text>
+              </View>
+              <TouchableOpacity style={styles.actionButton} onPress={onShowQR}>
+                <Ionicons name="eye" size={16} color={flatColors.accent.purple} />
+              </TouchableOpacity>
+            </View>
+          )}
 
           {order.delivery_fee !== undefined && order.delivery_fee !== null && (
             <View style={styles.infoRow}>
