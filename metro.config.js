@@ -9,7 +9,7 @@ const { getDefaultConfig, mergeConfig } = require('@react-native/metro-config');
  */
 const config = {
   server: {
-    port: 8082, // Different port for DriverApp to avoid conflict with CustomerApp
+    port: 8081, // Different port for DriverApp to avoid conflict with CustomerApp
   },
 };
 

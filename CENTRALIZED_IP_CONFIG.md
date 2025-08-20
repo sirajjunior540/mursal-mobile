@@ -6,7 +6,7 @@ Your IP address is now centralized in the `.env` file. When your network IP chan
 
 ## Current Configuration
 
-- **Current IP**: `192.168.1.50` (set in .env)
+- **Current IP**: `172.20.10.2` (set in .env)
 - **Server Port**: `8000`
 - **Tenant**: `sirajjunior`
 
@@ -70,8 +70,8 @@ This will:
    ALLOWED_HOSTS = [
        'localhost',
        '127.0.0.1',
-       '192.168.1.50',  # Your IP
-       'sirajjunior.192.168.1.50',  # Tenant subdomain
+       '172.20.10.2',  # Your IP
+       'sirajjunior.172.20.10.2',  # Tenant subdomain
        '10.0.2.2',  # Android emulator
    ]
    ```
@@ -82,7 +82,7 @@ This will:
    python manage.py runserver 0.0.0.0:8000
    
    # Option 2: Bind to specific IP
-   python manage.py runserver 192.168.1.50:8000
+   python manage.py runserver 172.20.10.2:8000
    ```
 
 ## 🧪 Testing the Connection
@@ -97,10 +97,10 @@ This will:
 2. **Test from command line:**
    ```bash
    # Basic test
-   curl http://192.168.1.50:8000/
+   curl http://172.20.10.2:8000/
    
    # Test with tenant header
-   curl -H "Host: sirajjunior.192.168.1.50" http://192.168.1.50:8000/
+   curl -H "Host: sirajjunior.172.20.10.2" http://172.20.10.2:8000/
    ```
 
 3. **Run connection test script:**

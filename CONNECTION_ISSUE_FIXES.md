@@ -4,7 +4,7 @@
 
 ### 1. **WebSocket Host Mismatch**
 - **Problem**: WebSocket host was set to `sirajjunior.localhost` 
-- **Fix**: Changed to `sirajjunior.192.168.1.50` for physical device testing
+- **Fix**: Changed to `sirajjunior.172.20.10.2` for physical device testing
 - **File**: `.env` line 15
 
 ### 2. **Missing Location Update API**
@@ -90,8 +90,8 @@ After successful login:
 1. **Check Django server**: `python manage.py runserver 0.0.0.0:8000`
 2. **Test endpoints manually**:
    ```bash
-   curl -H "Host: sirajjunior.192.168.1.50" \
-        http://192.168.1.50:8000/api/v1/delivery/deliveries/available_orders/
+   curl -H "Host: sirajjunior.172.20.10.2" \
+        http://172.20.10.2:8000/api/v1/delivery/deliveries/available_orders/
    ```
 3. **Check mobile app logs** for specific error messages
 

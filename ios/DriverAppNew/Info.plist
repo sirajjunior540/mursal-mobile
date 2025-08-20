@@ -32,7 +32,7 @@
 		<true/>
 		<key>NSExceptionDomains</key>
 		<dict>
-			<key>192.168.1.50</key>
+			<key>172.20.10.2</key>
 			<dict>
 				<key>NSExceptionAllowsInsecureHTTPLoads</key>
 				<true/>
@@ -42,7 +42,7 @@
 				<key>NSExceptionAllowsInsecureHTTPLoads</key>
 				<true/>
 			</dict>
-			<key>sirajjunior.192.168.1.50</key>
+			<key>sirajjunior.172.20.10.2</key>
 			<dict>
 				<key>NSExceptionAllowsInsecureHTTPLoads</key>
 				<true/>

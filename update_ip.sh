@@ -5,7 +5,7 @@
 
 if [ $# -eq 0 ]; then
     echo "Usage: ./update_ip.sh <new_ip>"
-    echo "Example: ./update_ip.sh 192.168.1.50"
+    echo "Example: ./update_ip.sh 172.20.10.2"
     exit 1
 fi
 
