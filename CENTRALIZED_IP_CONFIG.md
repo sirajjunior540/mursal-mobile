@@ -72,7 +72,7 @@ This will:
        '127.0.0.1',
        '172.20.10.2',  # Your IP
        'sirajjunior.172.20.10.2',  # Tenant subdomain
-       '10.0.2.2',  # Android emulator
+       '172.20.10.2',  # Android emulator
    ]
    ```
 
@@ -110,7 +110,7 @@ This will:
 
 ## 🤖 Android Specific
 
-For Android emulator, the app automatically uses `10.0.2.2` when it detects:
+For Android emulator, the app automatically uses `172.20.10.2` when it detects:
 - Platform is Android
 - SERVER_IP is set to localhost
 

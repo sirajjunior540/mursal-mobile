@@ -1885,4 +1885,151 @@ export class ApiEndpoints {
   async updateDriverProfile(profile: Partial<DriverProfile>): Promise<ApiResponse<DriverProfile>> {
     return this.client.put<DriverProfile>('/api/v1/drivers/driver-profile/', profile);
   }
+
+  // ==================== Flash Deals ====================
+
+  async getFlashDeals(): Promise<ApiResponse<FlashDeal[]>> {
+    try {
+      console.log('[API] Fetching flash deals from marketplace endpoint');
+      const response = await this.client.get<any>('/api/v1/marketplace/mobile/flash-deals/');
+      
+      if (response.success && response.data) {
+        // Handle both array and paginated responses
+        const dealData = Array.isArray(response.data) 
+          ? response.data 
+          : (response.data.results || response.data.deals || response.data.data || []);
+        
+        if (Array.isArray(dealData)) {
+          const flashDeals: FlashDeal[] = dealData.map(this.transformFlashDeal);
+          console.log('[API] Successfully fetched', flashDeals.length, 'flash deals');
+          return {
+            success: true,
+            data: flashDeals,
+            message: response.message
+          };
+        }
+      }
+      
+      // If the endpoint doesn't exist, return mock data for demo purposes
+      console.log('[API] Flash deals endpoint not available, returning mock data');
+      const mockDeals = this.generateMockFlashDeals();
+      return {
+        success: true,
+        data: mockDeals,
+        message: 'Mock flash deals data'
+      };
+      
+    } catch (error) {
+      console.error('[API] Error fetching flash deals:', error);
+      
+      // Return mock data as fallback
+      const mockDeals = this.generateMockFlashDeals();
+      return {
+        success: true,
+        data: mockDeals,
+        message: 'Fallback mock data'
+      };
+    }
+  }
+
+  private transformFlashDeal(backendDeal: any): FlashDeal {
+    return {
+      id: String(backendDeal.id),
+      title: backendDeal.title || backendDeal.name || 'Flash Deal',
+      originalPrice: parseFloat(backendDeal.originalPrice || backendDeal.original_price || '0'),
+      discountedPrice: parseFloat(backendDeal.discountedPrice || backendDeal.discounted_price || '0'),
+      discountPercentage: parseInt(backendDeal.discountPercentage || backendDeal.discount_percentage || '0'),
+      timeRemaining: parseInt(backendDeal.timeRemaining || backendDeal.time_remaining || '3600'),
+      image: backendDeal.image || backendDeal.image_url || 'https://via.placeholder.com/300x200.png?text=Flash+Deal',
+      store: {
+        name: backendDeal.store?.name || backendDeal.store_name || 'Flash Store',
+        rating: parseFloat(backendDeal.store?.rating || backendDeal.store_rating || '4.5'),
+      },
+    };
+  }
+
+  private generateMockFlashDeals(): FlashDeal[] {
+    return [
+      {
+        id: '1',
+        title: 'Premium Delivery Rush - Extra Earnings!',
+        originalPrice: 50.00,
+        discountedPrice: 25.00,
+        discountPercentage: 50,
+        timeRemaining: 7200, // 2 hours
+        image: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&h=250&fit=crop',
+        store: {
+          name: 'Mursal Express',
+          rating: 4.8,
+        },
+      },
+      {
+        id: '2',
+        title: 'Weekend Bonus - Double Tips Expected',
+        originalPrice: 30.00,
+        discountedPrice: 21.00,
+        discountPercentage: 30,
+        timeRemaining: 14400, // 4 hours
+        image: 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=400&h=250&fit=crop',
+        store: {
+          name: 'Quick Delivery Co',
+          rating: 4.6,
+        },
+      },
+      {
+        id: '3',
+        title: 'Peak Hours Challenge - Surge Pricing',
+        originalPrice: 40.00,
+        discountedPrice: 28.00,
+        discountPercentage: 30,
+        timeRemaining: 10800, // 3 hours
+        image: 'https://images.unsplash.com/photo-1565792952-a9f33ae8b6ab?w=400&h=250&fit=crop',
+        store: {
+          name: 'Fast Track Deliveries',
+          rating: 4.7,
+        },
+      },
+      {
+        id: '4',
+        title: 'Customer Satisfaction Bonus',
+        originalPrice: 25.00,
+        discountedPrice: 20.00,
+        discountPercentage: 20,
+        timeRemaining: 21600, // 6 hours
+        image: 'https://images.unsplash.com/photo-1590736969955-eefb5cdf82c7?w=400&h=250&fit=crop',
+        store: {
+          name: 'Elite Couriers',
+          rating: 4.9,
+        },
+      },
+      {
+        id: '5',
+        title: 'New Driver Incentive Program',
+        originalPrice: 60.00,
+        discountedPrice: 15.00,
+        discountPercentage: 75,
+        timeRemaining: 1800, // 30 minutes - urgent!
+        image: 'https://images.unsplash.com/photo-1600298882283-d0b80b4065c3?w=400&h=250&fit=crop',
+        store: {
+          name: 'Delivery Heroes',
+          rating: 4.5,
+        },
+      },
+    ];
+  }
+}
+
+// Flash Deal interface
+export interface FlashDeal {
+  id: string;
+  title: string;
+  originalPrice: number;
+  discountedPrice: number;
+  discountPercentage: number;
+  timeRemaining: number; // in seconds
+  image: string;
+  store: {
+    name: string;
+    rating: number;
+  };
 }

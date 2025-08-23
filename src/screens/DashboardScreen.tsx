@@ -16,6 +16,7 @@ import Haptics from 'react-native-haptic-feedback';
 import IncomingOrderModal from '../components/IncomingOrderModal';
 import { FlatOrderDetailsModal } from '../components/OrderDetails';
 import FloatingQRButton from '../components/FloatingQRButton';
+import FlashDealsSection from '../components/FlashDealsSection';
 import {
   FlatDashboardHeader,
   FlatStatsCards,
@@ -35,12 +36,17 @@ import { orderActionService } from '../services/orderActionService';
 import { notificationService } from '../services/notificationService';
 import { apiService } from '../services/api';
 import { cacheService } from '../services/comprehensiveCacheService';
+import { FlashDeal } from '../services/apiEndpoints';
 
 interface DashboardStackParamList extends Record<string, object | undefined> {
   AvailableOrders: undefined;
   AcceptedOrders: undefined;
   Navigation: undefined;
   History: undefined;
+  SpecialOffers: {
+    selectedDealId?: string;
+    category?: 'all' | 'surge' | 'bonus' | 'incentive';
+  };
 }
 
 type NavigationProp = StackNavigationProp<DashboardStackParamList, 'Home'>;
@@ -68,6 +74,8 @@ const DashboardScreen: React.FC = () => {
   const [showPerformanceMetrics, setShowPerformanceMetrics] = useState(true);
   const [showAvailableOrders, setShowAvailableOrders] = useState(true);
   const [showActiveDeliveries, setShowActiveDeliveries] = useState(true);
+  const [flashDeals, setFlashDeals] = useState<FlashDeal[]>([]);
+  const [loadingDeals, setLoadingDeals] = useState(false);
   
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
@@ -109,6 +117,27 @@ const DashboardScreen: React.FC = () => {
     };
   }, [setOrderNotificationCallback, fadeAnim, slideAnim]);
 
+  // Load flash deals on initial load
+  useEffect(() => {
+    loadFlashDeals();
+  }, [loadFlashDeals]);
+
+  const loadFlashDeals = useCallback(async () => {
+    try {
+      setLoadingDeals(true);
+      const response = await apiService.getFlashDeals();
+      if (response.success && response.data) {
+        setFlashDeals(response.data);
+      } else {
+        console.warn('[Dashboard] Failed to load flash deals:', response.error);
+      }
+    } catch (error) {
+      console.error('[Dashboard] Error loading flash deals:', error);
+    } finally {
+      setLoadingDeals(false);
+    }
+  }, []);
+
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     Haptics.trigger('impactLight');
@@ -118,10 +147,11 @@ const DashboardScreen: React.FC = () => {
       refreshOrders(true),    // Force refresh available orders
       getDriverOrders(true),  // Force refresh driver orders
       getDriverBalance(),     // Get fresh balance
+      loadFlashDeals(),       // Refresh flash deals
     ]);
     
     setRefreshing(false);
-  }, [refreshOrders, getDriverOrders, getDriverBalance]);
+  }, [refreshOrders, getDriverOrders, getDriverBalance, loadFlashDeals]);
 
   const handleToggleOnline = useCallback(async () => {
     if (driver) {
@@ -275,6 +305,28 @@ const DashboardScreen: React.FC = () => {
     handleCloseOrderDetails();
     navigation.navigate('Navigation');
   }, [navigation, handleCloseOrderDetails]);
+
+  const handleDealPress = useCallback((deal: FlashDeal) => {
+    Haptics.trigger('impactLight');
+    
+    // Determine deal category for better filtering
+    const title = deal.title.toLowerCase();
+    let category: 'all' | 'surge' | 'bonus' | 'incentive' = 'all';
+    
+    if (title.includes('surge') || title.includes('peak') || title.includes('rush')) {
+      category = 'surge';
+    } else if (title.includes('bonus') || title.includes('extra') || title.includes('double')) {
+      category = 'bonus';
+    } else if (title.includes('incentive') || title.includes('program') || title.includes('challenge')) {
+      category = 'incentive';
+    }
+    
+    // Navigate to special offers screen with pre-selected deal and category
+    navigation.navigate('SpecialOffers', {
+      selectedDealId: deal.id,
+      category: category
+    });
+  }, [navigation]);
 
   const handleQRScanResult = useCallback((result: QRScanResult) => {
     if (result.success) {
@@ -549,6 +601,17 @@ const DashboardScreen: React.FC = () => {
           />
           
           <FlatStatsCards stats={statsData} />
+          
+          <FlashDealsSection
+            deals={flashDeals}
+            onDealPress={handleDealPress}
+            onRefresh={loadFlashDeals}
+            onViewAll={() => {
+              Haptics.trigger('impactLight');
+              navigation.navigate('SpecialOffers', { category: 'all' });
+            }}
+            loading={loadingDeals}
+          />
           
           <FlatPerformanceMetrics
             data={performanceData}

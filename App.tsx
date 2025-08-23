@@ -35,6 +35,7 @@ import ProfileScreen from './src/screens/ProfileScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
 import BatchLegsScreen from './src/screens/BatchLegsScreen';
 import DriverProfileSettingsScreen from './src/screens/DriverProfileSettingsScreen';
+import SpecialOffersScreen from './src/screens/SpecialOffersScreen';
 
 // Context providers
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
@@ -65,6 +66,10 @@ interface RootStackParamList extends Record<string, object | undefined> {
   DriverProfileSettings: undefined;
   AvailableOrders: undefined;
   AcceptedOrders: undefined;
+  SpecialOffers: {
+    selectedDealId?: string;
+    category?: 'all' | 'surge' | 'bonus' | 'incentive';
+  };
 }
 
 interface TabParamList extends Record<string, object | undefined> {
@@ -346,6 +351,15 @@ const AppNavigator = () => {
             <Stack.Screen 
               name="AcceptedOrders" 
               component={AcceptedOrdersScreen} 
+              options={{ 
+                headerShown: false,
+                presentation: 'card',
+                animation: 'slide_from_right'
+              }}
+            />
+            <Stack.Screen 
+              name="SpecialOffers" 
+              component={SpecialOffersScreen} 
               options={{ 
                 headerShown: false,
                 presentation: 'card',

@@ -44,5 +44,5 @@ fi
 echo ""
 echo "📱 For React Native on physical device:"
 echo "   - iOS Simulator: Use 'localhost' or '127.0.0.1'"
-echo "   - Android Emulator: Use '10.0.2.2' for localhost"
+echo "   - Android Emulator: Use '172.20.10.2' for localhost"
 echo "   - Physical device: Use your computer's network IP (e.g., 192.168.x.x)"
