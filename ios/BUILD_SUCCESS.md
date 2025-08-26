@@ -18,7 +18,7 @@ The build output shows:
 ## Next Steps
 1. **Wait for the build to complete** - First builds take several minutes
 2. **The app should automatically launch** on the iPhone 16 Pro simulator
-3. **Metro bundler is running** at http://localhost:8081
+3. **Metro bundler is running** at http://192.168.0.191:8081
 
 ## If the Build Completes Successfully
 You should see:

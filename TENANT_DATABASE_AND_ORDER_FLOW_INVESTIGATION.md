@@ -9,7 +9,7 @@ from django_tenants.utils import tenant_context
 from tenants.models import Client, Domain
 
 # Get tenant
-domain_obj = Domain.objects.filter(domain='sirajjunior.localhost').first()
+domain_obj = Domain.objects.filter(domain='sirajjunior.192.168.0.191').first()
 tenant = domain_obj.tenant
 
 # Access tenant data

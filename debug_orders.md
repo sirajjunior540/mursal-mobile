@@ -169,16 +169,16 @@ console.log('Show accept button:', showAcceptButton);
 ```bash
 # Test available orders endpoint
 curl -H "Authorization: Bearer <token>" \
-     -H "Host: sirajjunior.172.20.10.2" \
-     http://172.20.10.2:8000/api/v1/delivery/deliveries/available_orders/
+     -H "Host: sirajjunior.192.168.0.191" \
+     http://192.168.0.191:8000/api/v1/delivery/deliveries/available_orders/
 
 # Test accept endpoint  
 curl -X POST -H "Authorization: Bearer <token>" \
-     -H "Host: sirajjunior.172.20.10.2" \
-     http://172.20.10.2:8000/api/v1/delivery/deliveries/{id}/accept/
+     -H "Host: sirajjunior.192.168.0.191" \
+     http://192.168.0.191:8000/api/v1/delivery/deliveries/{id}/accept/
 
 # Test decline endpoint
 curl -X POST -H "Authorization: Bearer <token>" \
-     -H "Host: sirajjunior.172.20.10.2" \
-     http://172.20.10.2:8000/api/v1/delivery/deliveries/{id}/decline/
+     -H "Host: sirajjunior.192.168.0.191" \
+     http://192.168.0.191:8000/api/v1/delivery/deliveries/{id}/decline/
 ```

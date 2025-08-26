@@ -22,7 +22,7 @@ else
     echo "🔍 Checking common local addresses..."
     
     # Check common local addresses
-    for IP in "localhost" "127.0.0.1" "192.168.1.1" "10.0.0.1" "192.168.0.1" "host.docker.internal"; do
+    for IP in "192.168.0.191" "127.0.0.1" "192.168.1.1" "10.0.0.1" "192.168.0.1" "host.docker.internal"; do
         if curl -s --connect-timeout 2 "http://$IP:$CURRENT_PORT/api/v1/auth/token/" > /dev/null 2>&1; then
             echo "✅ Found server at $IP:$CURRENT_PORT"
             echo ""
@@ -43,6 +43,6 @@ fi
 
 echo ""
 echo "📱 For React Native on physical device:"
-echo "   - iOS Simulator: Use 'localhost' or '127.0.0.1'"
-echo "   - Android Emulator: Use '172.20.10.2' for localhost"
+echo "   - iOS Simulator: Use '192.168.0.191' or '127.0.0.1'"
+echo "   - Android Emulator: Use '192.168.0.191' for 192.168.0.191"
 echo "   - Physical device: Use your computer's network IP (e.g., 192.168.x.x)"

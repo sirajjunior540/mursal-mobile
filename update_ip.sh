@@ -5,7 +5,7 @@
 
 if [ $# -eq 0 ]; then
     echo "Usage: ./update_ip.sh <new_ip>"
-    echo "Example: ./update_ip.sh 172.20.10.2"
+    echo "Example: ./update_ip.sh 192.168.0.191"
     exit 1
 fi
 
@@ -50,7 +50,7 @@ echo "   - iOS: npx react-native run-ios"
 echo "   - Android: npx react-native run-android"
 echo ""
 echo "4. Update Django settings.py:"
-echo "   ALLOWED_HOSTS = ['$NEW_IP', 'sirajjunior.$NEW_IP', 'localhost', '*']"
+echo "   ALLOWED_HOSTS = ['$NEW_IP', 'sirajjunior.$NEW_IP', '192.168.0.191', '*']"
 echo ""
 echo "5. Run Django server:"
 echo "   python manage.py runserver $NEW_IP:8000"

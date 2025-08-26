@@ -18,7 +18,7 @@ After installing the updated iOS simulator, your build is **successfully proceed
 
 ### Current Status:
 - **Build in Progress**: The app is compiling (first builds take 5-10 minutes)
-- **Metro Running**: React Native bundler ready at http://localhost:8081
+- **Metro Running**: React Native bundler ready at http://192.168.0.191:8081
 - **Configuration Complete**: All Firebase and React Native setup is correct
 
 ### Expected Next Steps:

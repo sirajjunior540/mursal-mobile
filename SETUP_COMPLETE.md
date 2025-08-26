@@ -6,8 +6,8 @@ Your React Native Driver App has been successfully configured for physical devic
 
 ### 1. Environment Configuration
 - **Centralized config system** using `.env` and `src/config/environment.ts`
-- **Auto-detected your IP**: `172.20.10.2`
-- **Multi-tenant support** with host header: `sirajjunior.172.20.10.2`
+- **Auto-detected your IP**: `192.168.0.191`
+- **Multi-tenant support** with host header: `sirajjunior.192.168.0.191`
 - **Feature flags** for easy enable/disable of functionality
 
 ### 2. Network Configuration
@@ -26,9 +26,9 @@ Your React Native Driver App has been successfully configured for physical devic
 ## 🔧 Current Configuration
 
 ```env
-API_BASE_URL=http://172.20.10.2:8000
-API_HOST=sirajjunior.172.20.10.2
-WS_BASE_URL=ws://172.20.10.2:8000
+API_BASE_URL=http://192.168.0.191:8000
+API_HOST=sirajjunior.192.168.0.191
+WS_BASE_URL=ws://192.168.0.191:8000
 DEFAULT_TENANT_ID=sirajjunior
 ```
 
@@ -44,8 +44,8 @@ python manage.py runserver 0.0.0.0:8000
 ```python
 # Add to ALLOWED_HOSTS in settings.py
 ALLOWED_HOSTS = [
-    '172.20.10.2',
-    'sirajjunior.172.20.10.2',
+    '192.168.0.191',
+    'sirajjunior.192.168.0.191',
     # ... other hosts
 ]
 ```
@@ -112,7 +112,7 @@ npm run prepare:release    # Pre-release validation
 
 1. **Test the connection**:
    ```bash
-   curl -H "Host: sirajjunior.172.20.10.2" http://172.20.10.2:8000/
+   curl -H "Host: sirajjunior.192.168.0.191" http://192.168.0.191:8000/
    ```
 
 2. **Run the app** on your physical device
@@ -133,7 +133,7 @@ npm run setup:ip -- YOUR_NEW_IP
 Update the `.env` file:
 ```env
 DEFAULT_TENANT_ID=different_tenant
-API_HOST=different_tenant.172.20.10.2
+API_HOST=different_tenant.192.168.0.191
 ```
 
 ### Production Deployment

@@ -132,7 +132,7 @@ python manage.py migrate
 curl -X POST http://your-server:8000/api/v1/auth/drivers/1/update_fcm_token/ \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -H "Content-Type: application/json" \
-  -H "Host: sirajjunior.172.20.10.2" \
+  -H "Host: sirajjunior.192.168.0.191" \
   -d '{"fcm_token": "test_token_12345"}'
 ```
 

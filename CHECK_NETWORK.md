@@ -1,14 +1,14 @@
 # Network Connection Checklist for Physical Phone
 
 ## 1. Verify Both Devices on Same Network
-- Your computer IP: 172.20.10.2
+- Your computer IP: 192.168.0.191
 - Make sure your phone is connected to the same Wi-Fi network
 - Check phone's Wi-Fi settings to confirm
 
 ## 2. Test Connection from Phone
 Open your phone's browser and navigate to:
 ```
-http://172.20.10.2:8000/whoami/
+http://192.168.0.191:8000/whoami/
 ```
 
 You should see a response like "mursal multi-tenant ecommerce delivery platform"
@@ -32,7 +32,7 @@ python manage.py runserver 0.0.0.0:8000
 ```
 NOT just:
 ```bash
-python manage.py runserver  # This only binds to localhost
+python manage.py runserver  # This only binds to 192.168.0.191
 ```
 
 ## 4. Clear React Native Cache
