@@ -8,8 +8,8 @@ Run these commands to test if the backend handles decline correctly:
 ```bash
 # Get list of available orders
 curl -H "Authorization: Bearer YOUR_TOKEN" \
-     -H "Host: sirajjunior.192.168.0.191" \
-     http://192.168.0.191:8000/api/v1/delivery/deliveries/available_orders/
+     -H "Host: sirajjunior.192.168.100.51" \
+     http://192.168.100.51:8000/api/v1/delivery/deliveries/available_orders/
 
 # Note the order IDs - should be delivery IDs
 ```
@@ -19,8 +19,8 @@ curl -H "Authorization: Bearer YOUR_TOKEN" \
 # Try to decline an order
 curl -X POST \
      -H "Authorization: Bearer YOUR_TOKEN" \
-     -H "Host: sirajjunior.192.168.0.191" \
-     http://192.168.0.191:8000/api/v1/delivery/deliveries/ORDER_ID/decline/
+     -H "Host: sirajjunior.192.168.100.51" \
+     http://192.168.100.51:8000/api/v1/delivery/deliveries/ORDER_ID/decline/
 
 # Expected Response:
 # {"message": "Delivery declined successfully.", "delivery_id": "ORDER_ID"}
@@ -30,8 +30,8 @@ curl -X POST \
 ```bash
 # Get available orders again
 curl -H "Authorization: Bearer YOUR_TOKEN" \
-     -H "Host: sirajjunior.192.168.0.191" \
-     http://192.168.0.191:8000/api/v1/delivery/deliveries/available_orders/
+     -H "Host: sirajjunior.192.168.100.51" \
+     http://192.168.100.51:8000/api/v1/delivery/deliveries/available_orders/
 
 # The declined order should NOT appear in this driver's list
 ```

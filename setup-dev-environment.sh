@@ -157,7 +157,7 @@ show_next_steps() {
     echo ""
     
     echo "🌐 Backend connection:"
-    echo "   Make sure your backend is running on http://192.168.0.191:8000"
+    echo "   Make sure your backend is running on http://192.168.100.51:8000"
     echo "   Update environment config if using a different URL"
 }
 

@@ -35,7 +35,7 @@ python manage.py runserver 0.0.0.0:8000
 ```
 
 #### B. Verify IP Address
-- The app is configured to use: `192.168.0.191:8000`
+- The app is configured to use: `192.168.100.51:8000`
 - Make sure this is your server's actual IP
 - Update `.env` file if needed:
 ```
@@ -65,7 +65,7 @@ Add network security config for Android 9+:
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
     <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="true">192.168.0.191</domain>
+        <domain includeSubdomains="true">192.168.100.51</domain>
         <!-- Add your server IP here -->
     </domain-config>
 </network-security-config>
@@ -158,8 +158,8 @@ Add CORS headers to Django:
 ```python
 # settings.py
 CORS_ALLOWED_ORIGINS = [
-    "http://192.168.0.191:3000",
-    "http://192.168.0.191:8081",
+    "http://192.168.100.51:3000",
+    "http://192.168.100.51:8081",
     # Add your dev machine IP
     "http://192.168.1.xxx:8081",
 ]
@@ -188,7 +188,7 @@ path('api/v1/auth/token/', YourTokenView.as_view(), name='token'),
 
 5. **Authentication works:**
 ```bash
-curl -X POST http://192.168.0.191:8000/api/v1/auth/token/ \
+curl -X POST http://192.168.100.51:8000/api/v1/auth/token/ \
   -H "Content-Type: application/json" \
   -d '{"username":"testuser","password":"testpass","tenant_id":"sirajjunior"}'
 ```

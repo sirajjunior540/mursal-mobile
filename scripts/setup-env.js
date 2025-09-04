@@ -12,7 +12,7 @@ function getLocalIP() {
     return result.trim();
   } catch (error) {
     console.warn('Could not detect IP automatically. Please set it manually in .env');
-    return '192.168.0.191'; // fallback
+    return '192.168.100.51'; // fallback
   }
 }
 
