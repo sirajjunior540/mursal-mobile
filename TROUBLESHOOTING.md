@@ -29,7 +29,7 @@ Make sure your Django server is running properly:
 python manage.py runserver 0.0.0.0:8000
 
 # Check if it's accessible from your network
-curl -H "Host: sirajjunior.192.168.100.51" http://192.168.100.51:8000/
+curl -H "Host: sirajjunior.192.168.1.192" http://192.168.1.192:8000/
 ```
 
 ### 3. Verify Django Configuration
@@ -39,11 +39,11 @@ Check your Django `settings.py`:
 ```python
 # REQUIRED: Add your IP and tenant host to ALLOWED_HOSTS
 ALLOWED_HOSTS = [
-    '192.168.100.51',
+    '192.168.1.192',
     '127.0.0.1',
-    '192.168.100.51',  # Your development machine IP
-    'sirajjunior.192.168.100.51',  # Tenant host
-    'sirajjunior.192.168.100.51',  # For local development
+    '192.168.1.192',  # Your development machine IP
+    'sirajjunior.192.168.1.192',  # Tenant host
+    'sirajjunior.192.168.1.192',  # For local development
 ]
 
 # CORS Configuration (if using django-cors-headers)
@@ -79,18 +79,18 @@ urlpatterns = [
 
 ```bash
 # Test basic connectivity
-curl -v -H "Host: sirajjunior.192.168.100.51" http://192.168.100.51:8000/health/
+curl -v -H "Host: sirajjunior.192.168.1.192" http://192.168.1.192:8000/health/
 
 # Test auth endpoint
-curl -v -H "Host: sirajjunior.192.168.100.51" \
+curl -v -H "Host: sirajjunior.192.168.1.192" \
      -H "Content-Type: application/json" \
-     http://192.168.100.51:8000/api/v1/auth/
+     http://192.168.1.192:8000/api/v1/auth/
 
 # Test login endpoint (replace with actual credentials)
-curl -v -H "Host: sirajjunior.192.168.100.51" \
+curl -v -H "Host: sirajjunior.192.168.1.192" \
      -H "Content-Type: application/json" \
      -d '{"username":"testuser","password":"testpass","tenantId":"sirajjunior"}' \
-     http://192.168.100.51:8000/api/v1/auth/login/
+     http://192.168.1.192:8000/api/v1/auth/login/
 ```
 
 ## 🐛 Common Issues & Solutions
@@ -104,7 +104,7 @@ curl -v -H "Host: sirajjunior.192.168.100.51" \
 
 ### Issue 2: "DisallowedHost" error
 **Cause**: Django ALLOWED_HOSTS doesn't include your IP/host
-**Solution**: Add `192.168.100.51` and `sirajjunior.192.168.100.51` to ALLOWED_HOSTS
+**Solution**: Add `192.168.1.192` and `sirajjunior.192.168.1.192` to ALLOWED_HOSTS
 
 ### Issue 3: "CORS error"
 **Cause**: Django not configured to accept requests from mobile app
@@ -159,8 +159,8 @@ npm run android  # or npm run ios
 The app now has enhanced debug logging. Check the logs for:
 
 ```
-[API] GET http://192.168.100.51:8000/api/v1/auth/
-[API] Host header: sirajjunior.192.168.100.51
+[API] GET http://192.168.1.192:8000/api/v1/auth/
+[API] Host header: sirajjunior.192.168.1.192
 [API] Using auth token: abcd1234...
 ```
 

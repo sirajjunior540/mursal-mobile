@@ -6,7 +6,7 @@ Your IP address is now centralized in the `.env` file. When your network IP chan
 
 ## Current Configuration
 
-- **Current IP**: `192.168.100.51` (set in .env)
+- **Current IP**: `192.168.1.192` (set in .env)
 - **Server Port**: `8000`
 - **Tenant**: `sirajjunior`
 
@@ -68,11 +68,11 @@ This will:
 2. **Update Django settings.py:**
    ```python
    ALLOWED_HOSTS = [
-       '192.168.100.51',
+       '192.168.1.192',
        '127.0.0.1',
-       '192.168.100.51',  # Your IP
-       'sirajjunior.192.168.100.51',  # Tenant subdomain
-       '192.168.100.51',  # Android emulator
+       '192.168.1.192',  # Your IP
+       'sirajjunior.192.168.1.192',  # Tenant subdomain
+       '192.168.1.192',  # Android emulator
    ]
    ```
 
@@ -82,7 +82,7 @@ This will:
    python manage.py runserver 0.0.0.0:8000
    
    # Option 2: Bind to specific IP
-   python manage.py runserver 192.168.100.51:8000
+   python manage.py runserver 192.168.1.192:8000
    ```
 
 ## 🧪 Testing the Connection
@@ -97,10 +97,10 @@ This will:
 2. **Test from command line:**
    ```bash
    # Basic test
-   curl http://192.168.100.51:8000/
+   curl http://192.168.1.192:8000/
    
    # Test with tenant header
-   curl -H "Host: sirajjunior.192.168.100.51" http://192.168.100.51:8000/
+   curl -H "Host: sirajjunior.192.168.1.192" http://192.168.1.192:8000/
    ```
 
 3. **Run connection test script:**
@@ -110,9 +110,9 @@ This will:
 
 ## 🤖 Android Specific
 
-For Android emulator, the app automatically uses `192.168.100.51` when it detects:
+For Android emulator, the app automatically uses `192.168.1.192` when it detects:
 - Platform is Android
-- SERVER_IP is set to 192.168.100.51
+- SERVER_IP is set to 192.168.1.192
 
 No manual changes needed!
 

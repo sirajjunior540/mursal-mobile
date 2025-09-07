@@ -236,7 +236,7 @@ class NotificationService {
       
       console.log('[NotificationService] Attempting to send FCM token to backend...');
       
-      // Add timeout to prevent hanging on 192.168.100.51:8081 connections
+      // Add timeout to prevent hanging on 192.168.1.192:8081 connections
       const timeoutPromise = new Promise((_, reject) => {
         setTimeout(() => reject(new Error('FCM token update timeout')), 10000); // 10 second timeout
       });

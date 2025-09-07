@@ -199,7 +199,7 @@ try {
   // Provide emergency fallback configuration to prevent app crash
   console.warn('🚨 Using emergency fallback configuration');
   /* eslint-enable no-console */
-  const fallbackIP = '192.168.100.51'; // Fallback to current network IP
+  const fallbackIP = '192.168.1.192'; // Fallback to current network IP
   
   config = {
     NODE_ENV: 'development',

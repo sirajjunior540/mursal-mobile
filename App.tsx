@@ -4,7 +4,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { StatusBar, StyleSheet, useColorScheme, View, Alert, AppState, AppStateStatus } from 'react-native';
+import { StatusBar, StyleSheet, useColorScheme, View, Alert, AppState, AppStateStatus, Text } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -36,13 +36,15 @@ import DashboardScreen from './src/screens/DashboardScreen';
 import BatchLegsScreen from './src/screens/BatchLegsScreen';
 import DriverProfileSettingsScreen from './src/screens/DriverProfileSettingsScreen';
 import SpecialOffersScreen from './src/screens/SpecialOffersScreen';
+import NotificationsScreen from './src/screens/NotificationsScreen';
 
 // Context providers
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 import { OrderProvider, useOrders } from './src/features/orders/context/OrderProvider';
 import { DriverProvider } from './src/contexts/DriverContext';
 import { TenantProvider } from './src/contexts/TenantContext';
-import { Order } from './src/types';
+import { Order, BatchOrder } from './src/types';
+import { ExtendedOrder } from './src/types/orderModal.types';
 
 // Services and utilities
 import { theme } from './src/shared/styles/theme';
@@ -53,6 +55,7 @@ import { notificationService } from './src/services/notificationService';
 import { haptics } from './src/utils/haptics';
 import { ENV, getTenantHost } from './src/config/environment';
 import { appStateService } from './src/services/appStateService';
+import { notificationApiService } from './src/services/api/notificationService';
 
 // Environment configuration
 const API_BASE_URL = ENV.API_BASE_URL;
@@ -76,6 +79,7 @@ interface TabParamList extends Record<string, object | undefined> {
   Home: undefined;
   Navigation: undefined;
   History: undefined;
+  Notifications: undefined;
   Profile: undefined;
 }
 
@@ -105,6 +109,8 @@ const MainTabs = () => {
             iconName = focused ? 'navigate' : 'navigate-outline';
           } else if (route.name === 'History') {
             iconName = focused ? 'receipt' : 'receipt-outline';
+          } else if (route.name === 'Notifications') {
+            iconName = focused ? 'notifications' : 'notifications-outline';
           } else if (route.name === 'Profile') {
             iconName = focused ? 'person' : 'person-outline';
           }
@@ -153,6 +159,67 @@ const MainTabs = () => {
         options={{ tabBarLabel: 'History' }}
       />
       <Tab.Screen 
+        name="Notifications" 
+        component={NotificationsScreen} 
+        options={{ 
+          tabBarLabel: 'Notifications',
+          tabBarIcon: ({ focused, color, size }) => {
+            const [unreadCount, setUnreadCount] = useState(0);
+            
+            useEffect(() => {
+              const loadUnreadCount = async () => {
+                try {
+                  const count = await notificationApiService.getUnreadCount();
+                  setUnreadCount(count);
+                } catch (error) {
+                  console.error('Failed to load unread notification count:', error);
+                }
+              };
+              
+              loadUnreadCount();
+              const interval = setInterval(loadUnreadCount, 30000);
+              return () => clearInterval(interval);
+            }, []);
+            
+            const iconName = focused ? 'notifications' : 'notifications-outline';
+            
+            return (
+              <View style={{ position: 'relative' }}>
+                <Ionicons name={iconName as React.ComponentProps<typeof Ionicons>['name']} size={size} color={color} />
+                {unreadCount > 0 && (
+                  <View
+                    style={{
+                      position: 'absolute',
+                      top: -6,
+                      right: -10,
+                      backgroundColor: '#FF3B30',
+                      borderRadius: 10,
+                      minWidth: 20,
+                      height: 20,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      borderWidth: 2,
+                      borderColor: 'white',
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: 'white',
+                        fontSize: 12,
+                        fontWeight: 'bold',
+                        textAlign: 'center',
+                      }}
+                    >
+                      {unreadCount > 99 ? '99+' : unreadCount.toString()}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            );
+          }
+        }}
+      />
+      <Tab.Screen 
         name="Profile" 
         component={ProfileScreen} 
         options={{ tabBarLabel: 'Profile' }}
@@ -184,12 +251,12 @@ const IncomingOrderManager = () => {
     getDriverOrders,
     refreshOrders
   } = orderContext;
-  const [incomingOrder, setIncomingOrder] = useState<Order | null>(null);
+  const [incomingOrder, setIncomingOrder] = useState<ExtendedOrder | null>(null);
   const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
     // Set up the notification callback
-    setOrderNotificationCallback((order: Order) => {
+    setOrderNotificationCallback((order: ExtendedOrder) => {
       setIncomingOrder(order);
       setShowModal(true);
     });
