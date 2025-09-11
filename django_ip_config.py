@@ -33,19 +33,19 @@ def main():
     print("\n📝 Django settings.py configuration:")
     print(f"""
 ALLOWED_HOSTS = [
-    '192.168.1.192',
+    '192.168.1.78',
     '127.0.0.1',
     '{ip}',
     'sirajjunior.{ip}',
-    '192.168.1.192',  # Android emulator
+    '192.168.1.78',  # Android emulator
     # Add any additional hosts here
 ]
 
 # If using django-cors-headers:
 CORS_ALLOWED_ORIGINS = [
-    "http://192.168.1.192:8081",
+    "http://192.168.1.78:8081",
     "http://{ip}:8081",
-    "http://192.168.1.192:8081",  # Android emulator
+    "http://192.168.1.78:8081",  # Android emulator
 ]
 """)
     
