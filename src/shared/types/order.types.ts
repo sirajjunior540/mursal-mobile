@@ -12,6 +12,29 @@ export interface OrderCustomer {
   address?: string;
 }
 
+// Product variant and addon structures
+export interface VariantOption {
+  name: string;
+  price_adjustment: number;
+}
+
+export interface VariantGroup {
+  id: string;
+  name: string;
+  options: VariantOption[];
+}
+
+export interface Addon {
+  name: string;
+  price: number;
+}
+
+export interface AddonGroup {
+  id: string;
+  name: string;
+  addons: Addon[];
+}
+
 export interface OrderItem {
   id: string;
   name: string;
@@ -19,6 +42,8 @@ export interface OrderItem {
   price: number;
   category?: string;
   notes?: string;
+  variant_groups?: VariantGroup[];
+  addon_groups?: AddonGroup[];
 }
 
 export interface OrderLocation {
@@ -343,6 +368,8 @@ export interface BatchOrderItem {
   price: number;
   weight?: number;
   product_id?: string;
+  variant_groups?: VariantGroup[];
+  addon_groups?: AddonGroup[];
 }
 
 // API Response types for batch operations

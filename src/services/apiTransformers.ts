@@ -16,7 +16,9 @@ import {
   BackendDriver,
   BackendBatch,
   BackendTransactionData,
-  BackendBatchLeg
+  BackendBatchLeg,
+  BackendVariantGroup,
+  BackendAddonGroup
 } from './apiTypes';
 
 /**
@@ -298,13 +300,39 @@ export class ApiTransformers {
 
     perfLog('Batch detection', { isBatchDelivery });
 
-    // Transform order items
+    // Transform variant groups
+    const transformVariantGroups = (variantGroups: BackendVariantGroup[] = []) => {
+      return variantGroups.map(group => ({
+        id: String(group.id || ''),
+        name: group.name || '',
+        options: (group.options || []).map(option => ({
+          name: option.name || '',
+          price_adjustment: option.price_adjustment || 0
+        }))
+      }));
+    };
+
+    // Transform addon groups
+    const transformAddonGroups = (addonGroups: BackendAddonGroup[] = []) => {
+      return addonGroups.map(group => ({
+        id: String(group.id || ''),
+        name: group.name || '',
+        addons: (group.addons || []).map(addon => ({
+          name: addon.name || '',
+          price: addon.price || 0
+        }))
+      }));
+    };
+
+    // Transform order items with variants and addons
     const items = (order?.items || order?.order_items || []).map((item: BackendOrderItem) => ({
       id: String(item.id || Math.random()),
       name: item.name || item.product_details?.name || item.product?.name || 'Unknown Item',
       quantity: item.quantity || 1,
       price: typeof item.price === 'string' ? parseFloat(item.price) : item.price || 0,
-      specialInstructions: item.notes || ''
+      specialInstructions: item.notes || '',
+      variant_groups: transformVariantGroups(item.variant_groups),
+      addon_groups: transformAddonGroups(item.addon_groups)
     }));
 
     // Parse coordinates with better debugging - coordinates are only on order, not delivery

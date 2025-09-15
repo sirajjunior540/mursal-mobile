@@ -835,7 +835,13 @@ export class ApiEndpoints {
     try {
       const orderResponse = await this.client.get<BackendOrder>(`/api/v1/delivery/orders/${orderId}/`);
       if (orderResponse.success && orderResponse.data) {
-        const order = ApiTransformers.transformOrder(orderResponse.data);
+        let order = ApiTransformers.transformOrder(orderResponse.data);
+        
+        // Enhance order items with product details from marketplace API
+        if (order.items && order.items.length > 0) {
+          order = await this.enhanceOrderItemsWithProductDetails(order);
+        }
+        
         return {
           success: true,
           data: order,
@@ -850,7 +856,12 @@ export class ApiEndpoints {
       const response = await this.client.get<BackendDelivery>(`/api/v1/delivery/deliveries/${orderId}/`);
       
       if (response.success && response.data) {
-        const order = ApiTransformers.transformOrder(response.data);
+        let order = ApiTransformers.transformOrder(response.data);
+        
+        // Enhance order items with product details from marketplace API
+        if (order.items && order.items.length > 0) {
+          order = await this.enhanceOrderItemsWithProductDetails(order);
+        }
         
         return {
           success: true,
@@ -866,6 +877,61 @@ export class ApiEndpoints {
         data: null!,
         error: 'Failed to fetch order details'
       };
+    }
+  }
+
+  /**
+   * Enhance order items with product details from marketplace API
+   * This fetches variants and addons that are not included in delivery API responses
+   */
+  private async enhanceOrderItemsWithProductDetails(order: Order): Promise<Order> {
+    try {
+      console.log('[API] Enhancing order items with product details...');
+      
+      // For each item in the order, fetch product details from marketplace API
+      const enhancedItems = await Promise.all(
+        order.items.map(async (item) => {
+          try {
+            // Extract product ID from item (you may need to adjust this based on your data structure)
+            const productId = item.id || item.name; // Adjust based on how you identify products
+            
+            if (!productId) {
+              console.warn('[API] No product ID found for item:', item.name);
+              return item;
+            }
+            
+            // Fetch product details from marketplace API
+            const productResponse = await this.client.get<any>(`/api/v1/marketplace/mobile/products/${productId}/`);
+            
+            if (productResponse.success && productResponse.data) {
+              console.log('[API] Product details fetched for:', item.name);
+              
+              // Merge product details into order item
+              return {
+                ...item,
+                variant_groups: productResponse.data.variant_groups || [],
+                addon_groups: productResponse.data.addon_groups || []
+              };
+            } else {
+              console.warn('[API] Failed to fetch product details for:', item.name);
+              return item;
+            }
+          } catch (error) {
+            console.error('[API] Error fetching product details for item:', item.name, error);
+            return item;
+          }
+        })
+      );
+      
+      console.log('[API] Enhanced', enhancedItems.length, 'order items with product details');
+      
+      return {
+        ...order,
+        items: enhancedItems
+      };
+    } catch (error) {
+      console.error('[API] Failed to enhance order items with product details:', error);
+      return order; // Return original order if enhancement fails
     }
   }
 

@@ -130,12 +130,37 @@ export interface DriverBalance {
   };
 }
 
+// Product variant and addon structures
+export interface VariantOption {
+  name: string;
+  price_adjustment: number;
+}
+
+export interface VariantGroup {
+  id: string;
+  name: string;
+  options: VariantOption[];
+}
+
+export interface Addon {
+  name: string;
+  price: number;
+}
+
+export interface AddonGroup {
+  id: string;
+  name: string;
+  addons: Addon[];
+}
+
 export interface OrderItem {
   id: string;
   name: string;
   quantity: number;
   price: number;
   specialInstructions?: string;
+  variant_groups?: VariantGroup[];
+  addon_groups?: AddonGroup[];
 }
 
 export interface Customer {
@@ -250,6 +275,7 @@ export interface Order {
     name: string;
     status: string;
     batch_type: string;
+    orders?: Order[];
     is_consolidated?: boolean;
     delivery_address_info?: {
       address: string;
@@ -283,6 +309,28 @@ export interface Order {
   // QR Code fields
   qr_code_id?: string;
   qr_code_url?: string;
+  
+  // Warehouse consolidation fields
+  is_consolidated?: boolean;
+  delivery_address_info?: {
+    address: string;
+    latitude?: number;
+    longitude?: number;
+    is_warehouse: boolean;
+    delivery_type: string;
+  };
+  warehouse_info?: {
+    id?: string;
+    name?: string;
+    address?: string;
+    warehouse_address?: string;
+    consolidate_to_warehouse?: boolean;
+    warehouse_id?: number;
+    warehouse_latitude?: number;
+    warehouse_longitude?: number;
+    latitude?: number;
+    longitude?: number;
+  };
   
   // Additional fields
   tenantId?: string;

@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import QRCode from 'react-native-qrcode-svg';
-import { Order, OrderItem } from '../../types';
+import { Order, OrderItem, VariantGroup, AddonGroup } from '../../types';
 import { flatColors } from '../../design/dashboard/flatColors';
 import { premiumTypography } from '../../design/dashboard/premiumTypography';
 import { premiumShadows } from '../../design/dashboard/premiumShadows';
@@ -95,11 +95,46 @@ export const OrderHistoryDetailsModal: React.FC<OrderHistoryDetailsModalProps> =
                 </View>
                 <View style={styles.itemDetails}>
                   <Text style={styles.itemName}>
-                    {item.product?.name || item.item_name || 'Unknown Item'}
+                    {item.name || 'Unknown Item'}
                   </Text>
-                  <Text style={styles.itemDescription}>
-                    {item.product?.description || item.description || 'No description'}
-                  </Text>
+                  
+                  {/* Display Variants */}
+                  {item.variant_groups && item.variant_groups.length > 0 && (
+                    <View style={styles.variantsContainer}>
+                      {item.variant_groups.map((group: VariantGroup) => (
+                        <View key={group.id} style={styles.variantGroup}>
+                          <Text style={styles.variantGroupName}>{group.name}:</Text>
+                          {group.options.map((option, optionIndex) => (
+                            <Text key={optionIndex} style={styles.variantOption}>
+                              {option.name}
+                              {option.price_adjustment !== 0 && (
+                                <Text style={styles.priceAdjustment}>
+                                  {option.price_adjustment > 0 ? ' +' : ' '}{option.price_adjustment.toFixed(2)}
+                                </Text>
+                              )}
+                            </Text>
+                          ))}
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                  
+                  {/* Display Addons */}
+                  {item.addon_groups && item.addon_groups.length > 0 && (
+                    <View style={styles.addonsContainer}>
+                      {item.addon_groups.map((group: AddonGroup) => (
+                        <View key={group.id} style={styles.addonGroup}>
+                          <Text style={styles.addonGroupName}>{group.name}:</Text>
+                          {group.addons.map((addon, addonIndex) => (
+                            <Text key={addonIndex} style={styles.addonItem}>
+                              {addon.name}
+                              <Text style={styles.addonPrice}> +{addon.price.toFixed(2)}</Text>
+                            </Text>
+                          ))}
+                        </View>
+                      ))}
+                    </View>
+                  )}
                 </View>
               </View>
               <View style={styles.itemQuantity}>
@@ -510,5 +545,57 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     lineHeight: premiumTypography.footnote.lineHeight,
     color: flatColors.neutral[800],
+  },
+  variantsContainer: {
+    marginTop: 8,
+    paddingLeft: 8,
+  },
+  variantGroup: {
+    marginBottom: 4,
+  },
+  variantGroupName: {
+    fontSize: premiumTypography.caption.small.fontSize,
+    fontWeight: '600',
+    lineHeight: premiumTypography.caption.small.lineHeight,
+    color: flatColors.accent.blue,
+    marginBottom: 2,
+  },
+  variantOption: {
+    fontSize: premiumTypography.caption.small.fontSize,
+    fontWeight: premiumTypography.caption.small.fontWeight,
+    lineHeight: premiumTypography.caption.small.lineHeight,
+    color: flatColors.neutral[600],
+    marginLeft: 12,
+  },
+  priceAdjustment: {
+    fontSize: premiumTypography.caption.small.fontSize,
+    fontWeight: '600',
+    color: flatColors.accent.green,
+  },
+  addonsContainer: {
+    marginTop: 8,
+    paddingLeft: 8,
+  },
+  addonGroup: {
+    marginBottom: 4,
+  },
+  addonGroupName: {
+    fontSize: premiumTypography.caption.small.fontSize,
+    fontWeight: '600',
+    lineHeight: premiumTypography.caption.small.lineHeight,
+    color: flatColors.accent.orange,
+    marginBottom: 2,
+  },
+  addonItem: {
+    fontSize: premiumTypography.caption.small.fontSize,
+    fontWeight: premiumTypography.caption.small.fontWeight,
+    lineHeight: premiumTypography.caption.small.lineHeight,
+    color: flatColors.neutral[600],
+    marginLeft: 12,
+  },
+  addonPrice: {
+    fontSize: premiumTypography.caption.small.fontSize,
+    fontWeight: '600',
+    color: flatColors.accent.green,
   },
 });

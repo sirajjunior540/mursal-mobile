@@ -93,6 +93,9 @@ export interface BackendOrder {
   final_delivery_address?: string;
   final_delivery_latitude?: string | number;
   final_delivery_longitude?: string | number;
+  // QR Code fields
+  qr_code_id?: string;
+  qr_code_url?: string;
 }
 
 export interface BackendCustomer {
@@ -187,6 +190,28 @@ export interface BackendTransactionData {
   metadata?: Record<string, unknown>;
 }
 
+export interface BackendVariantOption {
+  name?: string;
+  price_adjustment?: number;
+}
+
+export interface BackendVariantGroup {
+  id?: string;
+  name?: string;
+  options?: BackendVariantOption[];
+}
+
+export interface BackendAddon {
+  name?: string;
+  price?: number;
+}
+
+export interface BackendAddonGroup {
+  id?: string;
+  name?: string;
+  addons?: BackendAddon[];
+}
+
 export interface BackendOrderItem {
   id?: string;
   product_details?: {
@@ -199,6 +224,8 @@ export interface BackendOrderItem {
   quantity?: number;
   price?: string | number;
   notes?: string;
+  variant_groups?: BackendVariantGroup[];
+  addon_groups?: BackendAddonGroup[];
 }
 
 export interface RouteOptimizationResponse {

@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Linking } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { Order } from '../../types';
+import { Order, VariantGroup, AddonGroup } from '../../types';
 import { flatColors } from '../../design/dashboard/flatColors';
 import { premiumTypography } from '../../design/dashboard/premiumTypography';
 
@@ -217,9 +217,48 @@ export const FlatOrderInfoSection: React.FC<FlatOrderInfoSectionProps> = ({
               <Text style={styles.itemsTitle}>Package Items</Text>
               <View style={styles.itemsList}>
                 {order.items.slice(0, 3).map((item, index) => (
-                  <View key={index} style={styles.itemRow}>
-                    <Text style={styles.itemName}>{item.name}</Text>
-                    <Text style={styles.itemQuantity}>×{item.quantity}</Text>
+                  <View key={index} style={styles.itemContainer}>
+                    <View style={styles.itemRow}>
+                      <Text style={styles.itemName}>{item.name}</Text>
+                      <Text style={styles.itemQuantity}>×{item.quantity}</Text>
+                    </View>
+                    
+                    {/* Display Variants */}
+                    {item.variant_groups && item.variant_groups.length > 0 && (
+                      <View style={styles.variantsContainer}>
+                        {item.variant_groups.map((group: VariantGroup) => (
+                          <View key={group.id} style={styles.variantGroup}>
+                            <Text style={styles.variantGroupName}>{group.name}:</Text>
+                            {group.options.map((option, optionIndex) => (
+                              <Text key={optionIndex} style={styles.variantOption}>
+                                {option.name}
+                                {option.price_adjustment !== 0 && (
+                                  <Text style={styles.priceAdjustment}>
+                                    {option.price_adjustment > 0 ? ' +' : ' '}{option.price_adjustment.toFixed(2)}
+                                  </Text>
+                                )}
+                              </Text>
+                            ))}
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                    
+                    {/* Display Addons */}
+                    {item.addon_groups && item.addon_groups.length > 0 && (
+                      <View style={styles.addonsContainer}>
+                        {item.addon_groups.map((group: AddonGroup) => (
+                          <View key={group.id} style={styles.addonGroup}>
+                            <Text style={styles.addonGroupName}>{group.name}:</Text>
+                            {group.addons.map((addon, addonIndex) => (
+                              <Text key={addonIndex} style={styles.addonItem}>
+                                {addon.name}<Text style={styles.addonPrice}> +{addon.price.toFixed(2)}</Text>
+                              </Text>
+                            ))}
+                          </View>
+                        ))}
+                      </View>
+                    )}
                   </View>
                 ))}
                 {order.items.length > 3 && (
@@ -344,5 +383,60 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     textAlign: 'center',
     marginTop: 4,
+  },
+  itemContainer: {
+    marginBottom: 8,
+  },
+  variantsContainer: {
+    marginTop: 4,
+    paddingLeft: 8,
+  },
+  variantGroup: {
+    marginBottom: 2,
+  },
+  variantGroupName: {
+    fontSize: premiumTypography.caption.small.fontSize,
+    fontWeight: '600',
+    lineHeight: premiumTypography.caption.small.lineHeight,
+    color: flatColors.accent.blue,
+    marginBottom: 1,
+  },
+  variantOption: {
+    fontSize: premiumTypography.caption.small.fontSize,
+    fontWeight: premiumTypography.caption.small.fontWeight,
+    lineHeight: premiumTypography.caption.small.lineHeight,
+    color: flatColors.neutral[600],
+    marginLeft: 8,
+  },
+  priceAdjustment: {
+    fontSize: premiumTypography.caption.small.fontSize,
+    fontWeight: '600',
+    color: flatColors.accent.green,
+  },
+  addonsContainer: {
+    marginTop: 4,
+    paddingLeft: 8,
+  },
+  addonGroup: {
+    marginBottom: 2,
+  },
+  addonGroupName: {
+    fontSize: premiumTypography.caption.small.fontSize,
+    fontWeight: '600',
+    lineHeight: premiumTypography.caption.small.lineHeight,
+    color: flatColors.accent.orange,
+    marginBottom: 1,
+  },
+  addonItem: {
+    fontSize: premiumTypography.caption.small.fontSize,
+    fontWeight: premiumTypography.caption.small.fontWeight,
+    lineHeight: premiumTypography.caption.small.lineHeight,
+    color: flatColors.neutral[600],
+    marginLeft: 8,
+  },
+  addonPrice: {
+    fontSize: premiumTypography.caption.small.fontSize,
+    fontWeight: '600',
+    color: flatColors.accent.green,
   },
 });
