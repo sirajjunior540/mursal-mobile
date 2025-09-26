@@ -42,7 +42,7 @@ const defaultSettings: TenantSettings = {
   company_name: 'Delivery Service',
   primary_color: '#007bff',
   secondary_color: '#6c757d',
-  currency: 'USD',
+  currency: 'SDG',
 };
 
 // Reducer

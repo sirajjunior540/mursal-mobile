@@ -46,7 +46,7 @@ export const CURRENCY_CONFIGS: Record<string, CurrencyConfig> = {
     decimalSeparator: '.'
   },
   USD: {
-    code: 'USD',
+    code: 'SDG',
     symbol: '$',
     position: 'before',
     decimals: 2,
@@ -74,7 +74,7 @@ export const CURRENCY_CONFIGS: Record<string, CurrencyConfig> = {
 /**
  * Format amount with currency
  * @param amount The numeric amount
- * @param currencyCode The currency code (e.g., 'SAR', 'USD')
+ * @param currencyCode The currency code (e.g., 'SAR', 'SDG')
  * @param options Optional formatting options
  */
 export function formatCurrency(

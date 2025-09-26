@@ -177,25 +177,43 @@ export class PushNotificationClient {
       // (required) Called when a remote or local notification is opened or received
       onNotification: (notification) => {
         console.log('[PushNotificationClient] Notification received:', notification);
-        
+
         // Extract data from notification
         const data = Platform.OS === 'ios'
           ? notification.data
           : notification.data || {};
-        
+
+        // Check if this is a notification tap (user clicked/tapped the notification)
+        const isNotificationTap = notification.userInteraction === true ||
+                                 notification.foreground === false ||
+                                 notification.clicked === true;
+
+        console.log('[PushNotificationClient] Notification details:', {
+          userInteraction: notification.userInteraction,
+          foreground: notification.foreground,
+          clicked: notification.clicked,
+          isNotificationTap,
+          data
+        });
+
+        // Handle notification tap for navigation
+        if (isNotificationTap) {
+          this.handleNotificationTap(data);
+        }
+
         // Handle high priority notifications (wake screen)
         if (data.wake_screen === 'true' || data.priority === 'high') {
           console.log('[PushNotificationClient] High priority notification - attempting to wake screen');
-          
+
           // For Android, create a local notification to ensure it wakes the screen
           if (Platform.OS === 'android') {
             this.createWakeUpNotification(notification.title || 'New Order', notification.message || notification.body || '');
           }
         }
-        
+
         // Process notification data
         this.processNotification(data);
-        
+
         // Required on iOS only
         if (Platform.OS === 'ios') {
           notification.finish(PushNotificationIOS.FetchResult.NoData);
@@ -327,6 +345,50 @@ export class PushNotificationClient {
     }
   }
   
+  /**
+   * Handle notification tap for navigation
+   * @param data Notification data
+   */
+  private async handleNotificationTap(data: any): Promise<void> {
+    try {
+      console.log('[PushNotificationClient] Handling notification tap:', data);
+
+      // Import the app navigation service dynamically to avoid circular dependencies
+      const { appNavigationService } = await import('../services/appNavigationService');
+
+      // Extract navigation data
+      const orderId = data.orderId || data.order_id || data.id;
+      const actionType = data.action_type || 'view_order';
+
+      // Parse order data if available
+      let orderData = data.order;
+      if (typeof orderData === 'string') {
+        try {
+          orderData = JSON.parse(orderData);
+        } catch (e) {
+          console.error('[PushNotificationClient] Error parsing order data for navigation:', e);
+          orderData = null;
+        }
+      }
+
+      // Navigate using the app navigation service
+      const success = await appNavigationService.handleNotificationNavigation({
+        orderId,
+        orderData,
+        action_type: actionType,
+        params: data
+      });
+
+      if (success) {
+        console.log(`[PushNotificationClient] ✅ Successfully navigated to order ${orderId}`);
+      } else {
+        console.warn(`[PushNotificationClient] ⚠️ Failed to navigate to order ${orderId}`);
+      }
+    } catch (error) {
+      console.error('[PushNotificationClient] Error handling notification tap:', error);
+    }
+  }
+
   /**
    * Process notification data
    * @param data Notification data

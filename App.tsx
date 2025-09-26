@@ -6,6 +6,7 @@
 import React, { useEffect, useState } from 'react';
 import { StatusBar, StyleSheet, useColorScheme, View, Alert, AppState, AppStateStatus, Text } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
+import { navigationRef, appNavigationService } from './src/services/appNavigationService';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -384,11 +385,20 @@ const AppNavigator = () => {
   logger.debug('Rendering main navigation', { isLoggedIn });
 
   return (
-    <NavigationContainer>
+    <NavigationContainer
+      ref={navigationRef}
+      onReady={() => {
+        logger.info('📱 Navigation container ready');
+        appNavigationService.setReady(true);
+      }}
+      onStateChange={(state) => {
+        logger.debug('📱 Navigation state changed:', state);
+      }}
+    >
       <Stack.Navigator screenOptions={{ headerShown: false, animation: 'fade' }}>
         {!isLoggedIn ? (
-          <Stack.Screen 
-            name="Login" 
+          <Stack.Screen
+            name="Login"
             component={LoginScreen}
             options={{
               gestureEnabled: false, // Prevent swipe back on login
@@ -397,37 +407,37 @@ const AppNavigator = () => {
         ) : (
           <>
             <Stack.Screen name="Main" component={MainTabs} />
-            <Stack.Screen 
-              name="DriverProfileSettings" 
-              component={DriverProfileSettingsScreen} 
-              options={{ 
+            <Stack.Screen
+              name="DriverProfileSettings"
+              component={DriverProfileSettingsScreen}
+              options={{
                 headerShown: false,
                 presentation: 'modal',
                 animation: 'slide_from_right'
               }}
             />
-            <Stack.Screen 
-              name="AvailableOrders" 
-              component={AvailableOrdersScreen} 
-              options={{ 
+            <Stack.Screen
+              name="AvailableOrders"
+              component={AvailableOrdersScreen}
+              options={{
                 headerShown: false,
                 presentation: 'card',
                 animation: 'slide_from_right'
               }}
             />
-            <Stack.Screen 
-              name="AcceptedOrders" 
-              component={AcceptedOrdersScreen} 
-              options={{ 
+            <Stack.Screen
+              name="AcceptedOrders"
+              component={AcceptedOrdersScreen}
+              options={{
                 headerShown: false,
                 presentation: 'card',
                 animation: 'slide_from_right'
               }}
             />
-            <Stack.Screen 
-              name="SpecialOffers" 
-              component={SpecialOffersScreen} 
-              options={{ 
+            <Stack.Screen
+              name="SpecialOffers"
+              component={SpecialOffersScreen}
+              options={{
                 headerShown: false,
                 presentation: 'card',
                 animation: 'slide_from_right'
@@ -538,6 +548,24 @@ function App() {
               },
               onNavigateToOrder: (orderId: string) => {
                 logger.info(`🔔 Navigate to order from background notification: ${orderId}`);
+
+                // Handle navigation using the app navigation service
+                (async () => {
+                  try {
+                    const success = await appNavigationService.handleNotificationNavigation({
+                      orderId,
+                      action_type: 'view_order'
+                    });
+
+                    if (success) {
+                      logger.info(`✅ Successfully navigated to order ${orderId}`);
+                    } else {
+                      logger.warn(`⚠️ Failed to navigate to order ${orderId}`);
+                    }
+                  } catch (error) {
+                    logger.error('❌ Error navigating to order:', error as Error);
+                  }
+                })();
               }
             });
           } else {

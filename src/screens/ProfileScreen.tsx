@@ -19,6 +19,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { useAuth } from '../contexts/AuthContext';
 import { useDriver } from '../contexts/DriverContext';
 import { useTenant } from '../contexts/TenantContext';
+import { notificationDebugUtils } from '../utils/notificationDebugUtils';
 
 interface ProfileItemProps {
   icon: string;
@@ -372,6 +373,12 @@ const ProfileScreen: React.FC = () => {
               label="Terms & Privacy"
               value="Legal information"
               onPress={() => Alert.alert('Coming Soon', 'Legal documents will be available soon.')}
+            />
+            <ProfileItem
+              icon="bug-outline"
+              label="Debug Notifications"
+              value="Test notification navigation flow"
+              onPress={() => notificationDebugUtils.showDebugMenu()}
               showDivider={false}
             />
           </View>

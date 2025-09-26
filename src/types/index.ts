@@ -236,7 +236,7 @@ export interface Order {
   tax?: number;
   total?: number;
   total_amount?: number; // Backend field name for total
-  currency?: string; // Currency code (e.g., 'SAR', 'USD')
+  currency?: string; // Currency code (e.g., 'SAR', 'SDG')
   estimated_delivery_time?: string;
   delivery_notes?: string;
   created_at?: Date;
