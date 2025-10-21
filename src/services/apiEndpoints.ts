@@ -205,14 +205,14 @@ export class ApiEndpoints {
     }
 
     // For driver profile, always use the 'me' endpoint for current driver
-    // For admin operations, use the admin/drivers endpoint
-    const endpoint = '/api/v1/auth/drivers/me/';
+    // Changed from /auth/drivers/me/ to /drivers/me/ for delivery-service
+    const endpoint = '/api/v1/drivers/me/';
 
     let response = await this.client.get<unknown>(endpoint);
     
     // If the 'me' endpoint fails, try the driver-profile endpoint as fallback
     if (!response.success && response.error?.includes('404')) {
-      response = await this.client.get<unknown>('/api/v1/auth/driver-profile/');
+      response = await this.client.get<unknown>('/api/v1/drivers/profile/');
     }
 
     // Transform backend response to match our Driver type
@@ -253,7 +253,8 @@ export class ApiEndpoints {
     console.log(`🔄 [API] Sending status update for driver ${driverId}`);
     
     try {
-      const response = await this.client.post<void>('/api/v1/auth/drivers/update_my_status/', {
+      // Changed from /auth/drivers/update_my_status/ to /drivers/me/update-status/ for delivery-service
+      const response = await this.client.post<void>('/api/v1/drivers/me/update-status/', {
         is_online: isOnline,
         is_available: isOnline,
         is_on_duty: isOnline
@@ -297,7 +298,8 @@ export class ApiEndpoints {
       };
     }
     
-    const endpoint = `/api/v1/auth/drivers/update_my_location/`;
+    // Changed from /auth/drivers/update_my_location/ to /drivers/me/update-location/ for delivery-service
+    const endpoint = `/api/v1/drivers/me/update-location/`;
     console.log(`📍 [API] Updating location to: ${latitude}, ${longitude}`);
 
     try {
@@ -331,7 +333,8 @@ export class ApiEndpoints {
       };
     }
 
-    const endpoint = '/api/v1/auth/drivers/update_my_fcm_token/';
+    // Changed from /auth/drivers/update_my_fcm_token/ to /drivers/me/update-fcm-token/ for delivery-service
+    const endpoint = '/api/v1/drivers/me/update-fcm-token/';
     return this.client.post<void>(endpoint, { fcm_token: fcmToken });
   }
 
@@ -366,7 +369,8 @@ export class ApiEndpoints {
     // Get available orders for the driver to accept (unassigned/broadcast orders + assigned orders)
     const promise = (async () => {
       try {
-      let apiUrl = '/api/v1/delivery/deliveries/available_orders/';
+      // Changed from /delivery/deliveries/available_orders/ to /orders/available-orders/ for delivery-service
+      let apiUrl = '/api/v1/orders/available-orders/';
       
       // Try to get current location for nearby orders (optional)
       try {
@@ -516,7 +520,8 @@ export class ApiEndpoints {
       // Also get assigned orders for this driver from by_driver endpoint
       try {
         console.log('[API] Fetching assigned orders that need acceptance...');
-        const byDriverResponse = await this.client.get<any>('/api/v1/delivery/deliveries/by_driver/');
+        // Changed from /delivery/deliveries/by_driver/ to /drivers/me/current-deliveries/ for delivery-service
+        const byDriverResponse = await this.client.get<any>('/api/v1/drivers/me/current-deliveries/');
         
         if (byDriverResponse.success && byDriverResponse.data) {
           // Handle both array and paginated responses
@@ -567,8 +572,8 @@ export class ApiEndpoints {
       try {
         console.log('[API] Trying fallback endpoints for available orders...');
         
-        // 1. Try pending-deliveries endpoint
-        const pendingResponse = await this.client.get<any>('/api/v1/delivery/deliveries/pending-deliveries/');
+        // 1. Try pending orders endpoint
+        const pendingResponse = await this.client.get<any>('/api/v1/orders/?status=pending');
         if (pendingResponse.success && pendingResponse.data) {
           // Handle both array and paginated responses
           const deliveryData = Array.isArray(pendingResponse.data) 
@@ -586,8 +591,8 @@ export class ApiEndpoints {
           }
         }
         
-        // 2. Try general deliveries endpoint
-        const generalResponse = await this.client.get<any>('/api/v1/delivery/deliveries/');
+        // 2. Try general orders endpoint
+        const generalResponse = await this.client.get<any>('/api/v1/orders/');
         if (generalResponse.success && generalResponse.data) {
           // Handle both array and paginated responses
           const deliveryData = Array.isArray(generalResponse.data) 
@@ -718,8 +723,9 @@ export class ApiEndpoints {
         console.log('[API] Could not get location for caching:', error);
       }
       
-      console.log('[API] Fetching fresh driver orders from /api/v1/delivery/deliveries/by_driver/');
-      const response = await this.client.get<any>('/api/v1/delivery/deliveries/by_driver/');
+      // Changed from /delivery/deliveries/by_driver/ to /drivers/me/current-deliveries/ for delivery-service
+      console.log('[API] Fetching fresh driver orders from /api/v1/drivers/me/current-deliveries/');
+      const response = await this.client.get<any>('/api/v1/drivers/me/current-deliveries/');
       console.log('[API] Driver orders response:', response);
       
       if (response.success && response.data) {
@@ -792,7 +798,8 @@ export class ApiEndpoints {
       if (errorMessage.includes('429') || errorMessage.includes('404') || errorMessage.includes('403')) {
         
         try {
-          const fallbackResponse = await this.client.get<any>('/api/v1/delivery/deliveries/ongoing_deliveries/');
+          // Changed from /delivery/deliveries/ongoing_deliveries/ to /orders/?status=in_transit for delivery-service
+          const fallbackResponse = await this.client.get<any>('/api/v1/orders/?status=in_transit,picked_up');
           
           if (fallbackResponse.success && fallbackResponse.data) {
             // Handle both array and paginated responses
@@ -832,8 +839,9 @@ export class ApiEndpoints {
   async getOrderDetails(orderId: string): Promise<ApiResponse<Order>> {
     
     // First try the orders endpoint (has full order data)
+    // Changed from /delivery/orders/ to /orders/ for delivery-service
     try {
-      const orderResponse = await this.client.get<BackendOrder>(`/api/v1/delivery/orders/${orderId}/`);
+      const orderResponse = await this.client.get<BackendOrder>(`/api/v1/orders/${orderId}/`);
       if (orderResponse.success && orderResponse.data) {
         let order = ApiTransformers.transformOrder(orderResponse.data);
         
@@ -851,9 +859,9 @@ export class ApiEndpoints {
     } catch (orderError) {
     }
     
-    // If orders endpoint fails, try deliveries endpoint (for backward compatibility)
+    // If orders endpoint fails, try legacy endpoint (for backward compatibility)
     try {
-      const response = await this.client.get<BackendDelivery>(`/api/v1/delivery/deliveries/${orderId}/`);
+      const response = await this.client.get<BackendDelivery>(`/api/v1/orders/${orderId}/`);
       
       if (response.success && response.data) {
         let order = ApiTransformers.transformOrder(response.data);
@@ -943,8 +951,9 @@ export class ApiEndpoints {
     } catch (error) {
     }
     
-    const endpoint = `/api/v1/delivery/deliveries/${deliveryId}/accept/`;
-    
+    // Changed from /delivery/deliveries/{id}/accept/ to /orders/{id}/accept/ for delivery-service
+    const endpoint = `/api/v1/orders/${deliveryId}/accept/`;
+
     const response = await this.client.post<void>(endpoint, {});
     
     if (response.success) {
@@ -1075,7 +1084,8 @@ export class ApiEndpoints {
   }
 
   async declineOrder(orderId: string): Promise<ApiResponse<void>> {
-    const response = await this.client.post<void>(`/api/v1/delivery/deliveries/${orderId}/decline/`, {});
+    // Changed from /delivery/deliveries/{id}/decline/ to /orders/{id}/decline/ for delivery-service
+    const response = await this.client.post<void>(`/api/v1/orders/${orderId}/decline/`, {});
     
     if (response.success) {
       // Invalidate cache when order is declined
@@ -1208,9 +1218,10 @@ export class ApiEndpoints {
   }
 
   async getAvailableBatches(): Promise<ApiResponse<BatchOrder[]>> {
-    
+
     try {
-      const response = await this.client.get<BackendBatch[]>('/api/v1/delivery/batches/available/');
+      // Changed from /delivery/batches/available/ to /batches/available/ for delivery-service
+      const response = await this.client.get<BackendBatch[]>('/api/v1/batches/available/');
       
       if (response.success && response.data) {
         const batches = response.data.map((batch: BackendBatch) => ApiTransformers.transformBatchOrder(batch));
@@ -1232,8 +1243,8 @@ export class ApiEndpoints {
   }
 
   async getBatchDetails(batchId: string): Promise<ApiResponse<BatchOrder>> {
-    
-    const response = await this.client.get<BackendBatch>(`/api/v1/delivery/batches/${batchId}/`);
+    // Changed from /delivery/batches/{id}/ to /batches/{id}/ for delivery-service
+    const response = await this.client.get<BackendBatch>(`/api/v1/batches/${batchId}/`);
     
     if (response.success && response.data) {
       // Transform to BatchOrder type
@@ -1249,7 +1260,8 @@ export class ApiEndpoints {
   }
 
   async acceptBatchOrder(batchId: string): Promise<ApiResponse<void>> {
-    return this.client.post<void>(`/api/v1/delivery/batches/${batchId}/accept/`, {});
+    // Changed from /delivery/batches/{id}/accept/ to /batches/{id}/accept/ for delivery-service
+    return this.client.post<void>(`/api/v1/batches/${batchId}/accept/`, {});
   }
   
   async confirmItemPickup(batchId: string, data: {
@@ -1270,9 +1282,10 @@ export class ApiEndpoints {
     batch_status_updated?: boolean;
     new_batch_status?: string;
   }>> {
-    return this.client.post(`/api/v1/delivery/batches/${batchId}/confirm-item-pickup/`, data);
+    // Changed from /delivery/batches/ to /batch-operations/ for delivery-service
+    return this.client.post(`/api/v1/batch-operations/${batchId}/confirm-item-pickup/`, data);
   }
-  
+
   async getPickupProgress(batchId: string): Promise<ApiResponse<{
     batch_id: string;
     batch_number: string;
@@ -1302,7 +1315,8 @@ export class ApiEndpoints {
       is_complete: boolean;
     };
   }>> {
-    return this.client.get(`/api/v1/delivery/batches/${batchId}/pickup-progress/`);
+    // Changed from /delivery/batches/ to /batch-operations/ for delivery-service
+    return this.client.get(`/api/v1/batch-operations/${batchId}/pickup-progress/`);
   }
 
   // ==================== Smart Assignment ====================

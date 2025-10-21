@@ -111,7 +111,8 @@ class PhotoService {
         throw new Error('Invalid delivery ID');
       }
       
-      const url = getApiUrl(`/api/v1/delivery/deliveries/${deliveryId}/upload_photo/`);
+      // Changed from /delivery/deliveries/ to /orders/ for delivery-service
+      const url = getApiUrl(`/api/v1/orders/${deliveryId}/upload-photo/`);
       console.log('Upload URL:', url);
       console.log('Delivery ID:', deliveryId);
       console.log('Tenant:', { tenantId, tenantHost });
@@ -196,7 +197,8 @@ class PhotoService {
       if (reason) params.append('reason', reason);
       if (verifiedOnly) params.append('verified_only', 'true');
 
-      const url = getApiUrl(`/api/v1/delivery/deliveries/${deliveryId}/photos/${
+      // Changed from /delivery/deliveries/ to /orders/ for delivery-service
+      const url = getApiUrl(`/api/v1/orders/${deliveryId}/photos/${
         params.toString() ? `?${params.toString()}` : ''
       }`);
 
@@ -243,7 +245,8 @@ class PhotoService {
         params.append('has_signature', hasSignature.toString());
       }
 
-      const url = getApiUrl(`/api/v1/delivery/deliveries/${deliveryId}/photo_requirements/${
+      // Changed from /delivery/deliveries/ to /orders/ for delivery-service
+      const url = getApiUrl(`/api/v1/orders/${deliveryId}/photo-requirements/${
         params.toString() ? `?${params.toString()}` : ''
       }`);
 

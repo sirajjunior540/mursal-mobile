@@ -234,9 +234,10 @@ export class BatchOrderService {
   async getAvailableBatchOrders(): Promise<ApiResponse<BatchOrderInfo[]>> {
     try {
       console.log('📦 Fetching available batch orders...');
-      
+
       // Use unified batch API
-      const response = await apiService.get<any[]>('/api/v1/delivery/batches/?status=ready_for_pickup,driver_assigned');
+      // Changed from /delivery/batches/ to /batches/ for delivery-service
+      const response = await apiService.get<any[]>('/api/v1/batches/?status=ready_for_pickup,driver_assigned');
       
       if (response.success && response.data) {
         const batchOrders = response.data
@@ -271,9 +272,9 @@ export class BatchOrderService {
   async getBatchOrderDetails(batchId: string): Promise<ApiResponse<BatchOrderInfo>> {
     try {
       console.log(`📋 Fetching batch order details for: ${batchId}`);
-      
-      // Try step-based API first
-      const stepBasedResponse = await apiService.get<any>(`/api/v1/delivery/step-based/batches/${batchId}/`);
+
+      // Changed from /delivery/step-based/batches/ to /batches/ for delivery-service (step-based removed in new service)
+      const stepBasedResponse = await apiService.get<any>(`/api/v1/batches/${batchId}/`);
       
       if (stepBasedResponse.success && stepBasedResponse.data) {
         const batchOrder = this.transformer.transformFromBackend(stepBasedResponse.data);
@@ -285,9 +286,9 @@ export class BatchOrderService {
         };
       }
       
-      // Fallback to regular API
+      // Fallback to regular API (same endpoint now)
       console.log('🔄 Falling back to regular batch orders API...');
-      const regularResponse = await apiService.get<any>(`/api/v1/delivery/batch-orders/${batchId}/`);
+      const regularResponse = await apiService.get<any>(`/api/v1/batches/${batchId}/`);
       
       if (regularResponse.success && regularResponse.data) {
         const batchOrder = this.transformer.transformFromBackend(regularResponse.data);
@@ -321,10 +322,10 @@ export class BatchOrderService {
     try {
       console.log(`🎯 Accepting batch order: ${batchId}`);
       
-      // Try step-based API first (if the batch is submitted through step-based flow)
+      // Changed from step-based API to unified batch API for delivery-service
       try {
         const stepBasedResponse = await apiService.post<BatchAcceptResponse>(
-          `/api/v1/delivery/step-based/batches/${batchId}/accept/`,
+          `/api/v1/batches/${batchId}/accept/`,
           {}
         );
         
@@ -340,9 +341,9 @@ export class BatchOrderService {
         console.log('🔄 Step-based accept failed, trying regular API...');
       }
       
-      // Fallback to regular batch accept API
+      // Fallback to regular batch accept API (same endpoint now)
       const regularResponse = await apiService.post<BatchAcceptResponse>(
-        `/api/v1/delivery/batch-orders/${batchId}/assign_driver/`,
+        `/api/v1/batches/${batchId}/accept/`,
         { action: 'accept' }
       );
       

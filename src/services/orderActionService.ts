@@ -76,8 +76,9 @@ class OrderActionService {
       if (unifiedOrder.isBatchLeg) {
         try {
           // Try skip endpoint first
+          // Changed from /delivery/batch-legs/ to /batch-legs/ for delivery-service
           const response = await apiService.getClient().post<void>(
-            `/api/v1/delivery/batch-legs/${orderId}/skip/`
+            `/api/v1/batch-legs/${orderId}/skip/`
           );
           return response;
         } catch (error) {
@@ -100,9 +101,11 @@ class OrderActionService {
    */
   getAcceptEndpoint(orderData: any, orderId: string): string {
     if (unifiedOrderService.isOrderBatchLeg(orderData)) {
-      return `/api/v1/delivery/batch-legs/${orderId}/assign_driver/`;
+      // Changed from /delivery/batch-legs/ to /batch-legs/ for delivery-service
+      return `/api/v1/batch-legs/${orderId}/assign_driver/`;
     }
-    return `/api/v1/delivery/deliveries/${orderId}/accept/`;
+    // Changed from /delivery/deliveries/ to /orders/ for delivery-service
+    return `/api/v1/orders/${orderId}/accept/`;
   }
   
   /**
@@ -115,8 +118,9 @@ class OrderActionService {
   }): Promise<ApiResponse<void>> {
     try {
       // Skip is implemented as mark_viewed in the backend
+      // Changed from /delivery/deliveries/ to /orders/ for delivery-service
       const response = await apiService.getClient().post<void>(
-        `/api/v1/delivery/deliveries/${deliveryId}/mark_viewed/`
+        `/api/v1/orders/${deliveryId}/mark-viewed/`
       );
       
       if (options?.onSuccess) {
@@ -152,14 +156,16 @@ class OrderActionService {
       
       if (isBatchOrder) {
         // For batch orders, use the batch accept endpoint with the batch ID
+        // Changed from /delivery/batches/ to /batches/ for delivery-service
         const batchId = data?.current_batch?.id || routeId;
         response = await apiService.getClient().post<void>(
-          `/api/v1/delivery/batches/${batchId}/accept/`
+          `/api/v1/batches/${batchId}/accept/`
         );
       } else {
         // For regular orders, use the delivery accept endpoint
+        // Changed from /delivery/deliveries/ to /orders/ for delivery-service
         response = await apiService.getClient().post<void>(
-          `/api/v1/delivery/deliveries/${routeId}/accept/`
+          `/api/v1/orders/${routeId}/accept/`
         );
       }
       
