@@ -23,27 +23,28 @@ interface EnvironmentConfig {
   IS_DEVELOPMENT: boolean;
   IS_PRODUCTION: boolean;
   IS_STAGING: boolean;
-  
+
   // Server configuration
   SERVER_IP: string;
   SERVER_PORT: number;
   SERVER_PROTOCOL: 'http' | 'https';
-  
+
   // API configuration
   API_BASE_URL: string;
   API_HOST: string;
   API_TIMEOUT: number;
 
-  
+
   // Tenant configuration
   TENANT_ID: string;
   DEFAULT_TENANT_ID: string;
   TENANT_SUBDOMAIN: string;
-  
-  // WebSocket configuration
+
+  // WebSocket configuration (Go websocket-service)
   WS_BASE_URL: string;
   WS_HOST: string;
   WS_PROTOCOL: 'ws' | 'wss';
+  WS_SERVICE_PORT: number;  // Go websocket-service port (default 8085)
   
   // Feature flags
   FEATURES: {
@@ -134,7 +135,9 @@ const buildConfig = (): EnvironmentConfig => {
   // Build URLs from components
   const apiBaseUrl = `${serverProtocol}://${serverIP}:${serverPort}`;
   const wsProtocol = serverProtocol === 'https' ? 'wss' : 'ws';
-  const wsBaseUrl = `${wsProtocol}://${serverIP}:${serverPort}`;
+  // WebSocket connects to Go websocket-service on port 8085
+  const wsServicePort = getNumberEnv('WS_SERVICE_PORT', 8085);
+  const wsBaseUrl = `${wsProtocol}://${serverIP}:${wsServicePort}`;
   
   // Tenant configuration
   const tenantId = getEnvVar('TENANT_ID', 'sirajjunior');
@@ -164,10 +167,11 @@ const buildConfig = (): EnvironmentConfig => {
     DEFAULT_TENANT_ID: getEnvVar('DEFAULT_TENANT_ID', tenantId),
     TENANT_SUBDOMAIN: tenantSubdomain,
     
-    // WebSocket configuration
+    // WebSocket configuration (Go websocket-service)
     WS_BASE_URL: wsBaseUrl,
     WS_HOST: wsHost,
     WS_PROTOCOL: wsProtocol,
+    WS_SERVICE_PORT: wsServicePort,
     
     // Feature flags (can be overridden per environment)
     FEATURES: {
@@ -199,25 +203,26 @@ try {
   // Provide emergency fallback configuration to prevent app crash
   console.warn('🚨 Using emergency fallback configuration');
   /* eslint-enable no-console */
-  const fallbackIP = '192.168.1.192'; // Fallback to current network IP
-  
+  const fallbackHost = 'api.murrsal.com'; // Fallback to production
+
   config = {
-    NODE_ENV: 'development',
-    IS_DEVELOPMENT: true,
-    IS_PRODUCTION: false,
+    NODE_ENV: 'production',
+    IS_DEVELOPMENT: false,
+    IS_PRODUCTION: true,
     IS_STAGING: false,
-    SERVER_IP: fallbackIP,
-    SERVER_PORT: 8000,
-    SERVER_PROTOCOL: 'http',
-    API_BASE_URL: `http://${fallbackIP}:8000`,
-    API_HOST: `sirajjunior.${fallbackIP}`,
-    API_TIMEOUT: 30000,
+    SERVER_IP: fallbackHost,
+    SERVER_PORT: 443,
+    SERVER_PROTOCOL: 'https',
+    API_BASE_URL: `https://${fallbackHost}`,
+    API_HOST: fallbackHost,
+    API_TIMEOUT: 15000,
     TENANT_ID: 'sirajjunior',
     DEFAULT_TENANT_ID: 'sirajjunior',
     TENANT_SUBDOMAIN: 'sirajjunior',
-    WS_BASE_URL: `ws://${fallbackIP}:8000`,
-    WS_HOST: `sirajjunior.${fallbackIP}`,
-    WS_PROTOCOL: 'ws',
+    WS_BASE_URL: `wss://${fallbackHost}`,
+    WS_HOST: fallbackHost,
+    WS_PROTOCOL: 'wss',
+    WS_SERVICE_PORT: 443,
     FEATURES: {
       WEBSOCKET: true,
       PUSH_NOTIFICATIONS: true,
@@ -225,10 +230,10 @@ try {
       OFFLINE_MODE: false,
     },
     DEBUG: {
-      API_CALLS: true,
-      REALTIME: true,
-      LOCATION: true,
-      PERFORMANCE: true,
+      API_CALLS: false,
+      REALTIME: false,
+      LOCATION: false,
+      PERFORMANCE: false,
     },
   };
   

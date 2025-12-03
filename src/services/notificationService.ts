@@ -11,6 +11,7 @@ class NotificationService {
     onOrderReceived?: (orderId: string, action: 'accept' | 'decline') => void;
     onNavigateToOrder?: (orderId: string) => void;
     onNewOrder?: (order: Order) => void;
+    isDriverActive?: () => boolean;
   } = {};
 
   constructor() {
@@ -86,28 +87,46 @@ class NotificationService {
 
   private async handlePushNotification(data: any) {
     try {
+      console.log('[NotificationService] Received push notification data:', JSON.stringify(data, null, 2));
+
       // Check if notification is for current tenant
       const currentTenantId = await this.getCurrentTenantId();
       const notificationTenantId = data.tenant_id || data.tenantId || data.tenant;
-      
+
+      console.log(`[NotificationService] Tenant check - current: ${currentTenantId}, notification: ${notificationTenantId}`);
+
       // Only process notifications for the current tenant
-      if (notificationTenantId && currentTenantId && notificationTenantId !== currentTenantId) {
+      // Skip check if notification tenant is a UUID (backend sends UUID, mobile stores slug)
+      const isUUID = notificationTenantId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(notificationTenantId);
+      if (notificationTenantId && currentTenantId && notificationTenantId !== currentTenantId && !isUUID) {
         console.log(`[NotificationService] Ignoring notification for different tenant: ${notificationTenantId}`);
         return;
       }
-      
+
+      // Check if this is a new order notification - need to check driver status first
+      const isNewOrderNotification = data.type === 'new_order' || data.type === 'new_batch' || data.order || data.orderId || data.batch_id;
+
+      // For new order notifications, check if driver is active/online
+      if (isNewOrderNotification) {
+        const isDriverOnline = await this.checkDriverActiveStatus();
+        if (!isDriverOnline) {
+          console.log('[NotificationService] Ignoring new order notification - driver is not active/online');
+          return;
+        }
+      }
+
       // Check if this is a high priority notification that should wake the screen
       const isHighPriority = data.priority === 'high' || data.wake_screen === 'true' || data.show_when_locked === 'true';
-      
+
       if (isHighPriority) {
         console.log('[NotificationService] High priority notification detected - attempting wake-up');
-        
+
         // Enhanced wake-up sequence for high priority notifications
         this.performWakeUpSequence();
       }
-      
+
       // Check if this is a new order notification
-      if (data.type === 'new_order' || data.type === 'new_batch' || data.order || data.orderId || data.batch_id) {
+      if (isNewOrderNotification) {
         // Parse order data if it's a string
         let orderData = data.order;
         if (typeof orderData === 'string') {
@@ -136,29 +155,77 @@ class NotificationService {
         }
         
         // If no order data but we have essential fields, create a minimal order object
-        if (!orderData && (data.order_id || data.delivery_id)) {
-          console.log('[NotificationService] Creating order from notification data:', data);
+        if (!orderData && (data.order_id || data.delivery_id || data.id)) {
+          console.log('[NotificationService] Creating order from notification data:', JSON.stringify(data, null, 2));
+
+          // Build customer name from available fields - check multiple possible sources
+          const customerName = data.customer_name ||
+            data.dropoff_contact_name ||
+            (data.customer && typeof data.customer === 'object' ? data.customer.name : null) ||
+            (data.customer && typeof data.customer === 'string' ? data.customer : null) ||
+            'Customer';
+
+          // Build customer phone from available fields
+          const customerPhone = data.customer_phone ||
+            data.dropoff_contact_phone ||
+            (data.customer && typeof data.customer === 'object' ? data.customer.phone : null) ||
+            '';
+
+          // Parse addresses - handle both string and object formats
+          const pickupAddress = data.pickup_address ||
+            (data.pickup && typeof data.pickup === 'object' ? data.pickup.address : null) ||
+            'Pickup Location';
+
+          const deliveryAddress = data.delivery_address ||
+            data.dropoff_address ||
+            (data.delivery && typeof data.delivery === 'object' ? data.delivery.address : null) ||
+            (data.dropoff && typeof data.dropoff === 'object' ? data.dropoff.address : null) ||
+            'Delivery Location';
+
+          // Parse monetary values - ensure they're numbers
+          const totalAmount = parseFloat(data.total || data.total_amount || '0') || 0;
+          const deliveryFee = parseFloat(data.delivery_fee || '0') || 0;
+
           orderData = {
-            id: data.delivery_id || data.order_id || data.id,
-            order_number: data.order_number || `#${data.order_id || data.id}`,
-            customer: data.customer || {
-              name: data.customer_name || 'Customer',
-              phone: data.customer_phone || '',
+            id: data.order_id || data.delivery_id || data.id,
+            order_number: data.order_number || `ORD-${(data.order_id || data.id || '').substring(0, 8).toUpperCase()}`,
+            customer: {
+              id: data.customer_id || '',
+              name: customerName,
+              phone: customerPhone,
             },
+            customer_name: customerName,
             customer_details: {
-              name: data.customer_name || 'Customer',
-              phone: data.customer_phone || ''
+              name: customerName,
+              phone: customerPhone,
+              customer_name: customerName,
             },
-            pickup_address: data.pickup_address || 'Pickup Location',
-            delivery_address: data.delivery_address || 'Delivery Location',
-            total: parseFloat(data.total || data.total_amount || '0') || 0,
+            pickup_address: pickupAddress,
+            delivery_address: deliveryAddress,
+            dropoff_address: deliveryAddress,
+            total: totalAmount,
+            total_amount: totalAmount,
             subtotal: parseFloat(data.subtotal || '0') || 0,
-            delivery_fee: parseFloat(data.delivery_fee || '0') || 0,
+            delivery_fee: deliveryFee,
             items: data.items || [],
-            status: 'pending',
-            created_at: new Date().toISOString(),
-            currency: data.currency || 'SAR' // Default to SAR if not provided
+            status: data.status || 'pending',
+            created_at: data.created_at || new Date().toISOString(),
+            currency: data.currency || 'SAR',
+            // Include pickup/dropoff contact info
+            pickup_contact_name: data.pickup_contact_name || '',
+            pickup_contact_phone: data.pickup_contact_phone || '',
+            dropoff_contact_name: data.dropoff_contact_name || customerName,
+            dropoff_contact_phone: data.dropoff_contact_phone || customerPhone,
+            // Instructions
+            pickup_instructions: data.pickup_instructions || '',
+            dropoff_instructions: data.dropoff_instructions || data.delivery_instructions || '',
+            notes: data.notes || data.special_instructions || '',
+            // Payment info
+            payment_method: data.payment_method || (deliveryFee > 0 ? 'cash' : ''),
+            payment_status: data.payment_status || 'pending',
           };
+
+          console.log('[NotificationService] Created order object:', JSON.stringify(orderData, null, 2));
         }
         
         const appState = AppState.currentState;
@@ -226,6 +293,47 @@ class NotificationService {
       console.error('[NotificationService] Error getting tenant ID');
       // Ultimate fallback
       return 'sirajjunior';
+    }
+  }
+
+  /**
+   * Check if the driver is currently active/online
+   * Returns true if driver is active and should receive new order notifications
+   */
+  private async checkDriverActiveStatus(): Promise<boolean> {
+    try {
+      // First check if we have a callback to check driver status
+      if (this.notificationCallbacks.isDriverActive) {
+        const isActive = this.notificationCallbacks.isDriverActive();
+        console.log(`[NotificationService] Driver active status from callback: ${isActive}`);
+        return isActive;
+      }
+
+      // Fallback: check from storage
+      try {
+        const { Storage, STORAGE_KEYS } = await import('../utils');
+        if (Storage && STORAGE_KEYS) {
+          // Try to get driver data from storage
+          const driverDataStr = await Storage.getItem(STORAGE_KEYS.DRIVER_DATA);
+          if (driverDataStr) {
+            const driverData = JSON.parse(driverDataStr);
+            const isOnline = driverData.isOnline === true || driverData.is_online === true || driverData.status === 'active' || driverData.status === 'available';
+            console.log(`[NotificationService] Driver active status from storage: ${isOnline}`);
+            return isOnline;
+          }
+        }
+      } catch (storageError) {
+        console.warn('[NotificationService] Could not check driver status from storage:', storageError);
+      }
+
+      // If we can't determine status, default to PROCESSING (allow notifications to show)
+      // The modal will still show but won't disturb user if they dismiss it
+      console.log('[NotificationService] Could not determine driver status, defaulting to active (allowing notifications)');
+      return true;
+    } catch (error) {
+      console.error('[NotificationService] Error checking driver active status:', error);
+      // On error, allow notifications through - better to show than to silently fail
+      return true;
     }
   }
 
@@ -384,6 +492,7 @@ class NotificationService {
     onOrderReceived?: (orderId: string, action: 'accept' | 'decline') => void;
     onNavigateToOrder?: (orderId: string) => void;
     onNewOrder?: (order: Order) => void;
+    isDriverActive?: () => boolean;
   }) {
     this.notificationCallbacks = { ...this.notificationCallbacks, ...callbacks };
   }

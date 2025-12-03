@@ -233,7 +233,7 @@ export class PushNotificationClient {
       requestPermissions: false,
       
       // Android specific settings for wake-up capability
-      senderID: '1234567890', // Replace with your actual sender ID from Firebase project
+      senderID: '730518770932', // Firebase project number from google-services.json
       permissions: {
         alert: true,
         badge: true,

@@ -47,20 +47,20 @@ export const APP_SETTINGS = {
   LOCATION_UPDATE_INTERVAL: 5000, // 5 seconds
 } as const;
 
-// Order Status Colors
+/**
+ * Unified Order Status Colors - matches backend delivery-service and main Django backend
+ * Do NOT add statuses that don't exist in backend!
+ */
 export const ORDER_STATUS_COLORS = {
-  pending: '#FF9800',
-  confirmed: '#2196F3',
-  preparing: '#9C27B0',
-  ready: '#3F51B5',
-  assigned: '#2196F3',
-  accepted: '#2196F3',
-  picked_up: '#9C27B0',
-  in_transit: '#3F51B5',
-  delivered: '#4CAF50',
-  cancelled: '#F44336',
-  returned: '#795548',
-  failed: '#F44336',
+  pending: '#FF9800',      // Orange - waiting
+  confirmed: '#2196F3',    // Blue - confirmed by restaurant
+  preparing: '#9C27B0',    // Purple - being prepared
+  ready: '#3F51B5',        // Indigo - ready for pickup
+  picked_up: '#9C27B0',    // Purple - picked up by driver
+  in_transit: '#3F51B5',   // Indigo - on the way
+  delivered: '#4CAF50',    // Green - completed
+  cancelled: '#F44336',    // Red - cancelled
+  failed: '#F44336',       // Red - failed
 } as const;
 
 // Quick Deposit Amounts
@@ -73,19 +73,19 @@ export const PAYMENT_METHOD_ICONS = {
   digital_wallet: 'wallet',
 } as const;
 
-// Order Status Labels
+/**
+ * Unified Order Status Labels - matches backend delivery-service and main Django backend
+ * Do NOT add statuses that don't exist in backend!
+ */
 export const ORDER_STATUS_LABELS = {
   pending: 'Pending',
   confirmed: 'Confirmed',
   preparing: 'Preparing',
-  ready: 'Ready',
-  assigned: 'Assigned',
-  accepted: 'Accepted',
+  ready: 'Ready for Pickup',
   picked_up: 'Picked Up',
   in_transit: 'In Transit',
   delivered: 'Delivered',
   cancelled: 'Cancelled',
-  returned: 'Returned',
   failed: 'Failed',
 } as const;
 

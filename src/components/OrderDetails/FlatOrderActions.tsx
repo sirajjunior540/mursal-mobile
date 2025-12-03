@@ -197,37 +197,52 @@ export const FlatOrderActions: React.FC<FlatOrderActionsProps> = ({
     }
   };
 
+  /**
+   * Get available status actions based on current order status
+   * Uses unified statuses matching backend: pending, confirmed, preparing, ready, picked_up, in_transit, delivered, cancelled, failed
+   */
   const getStatusActions = () => {
     const actions = [];
-    
-    switch (order.status) {
-      case 'pending':
-      case 'assigned':
-      case 'accepted':
-        actions.push({
-          key: 'picked_up',
-          label: 'Mark as Picked Up',
-          color: flatColors.accent.orange,
-          icon: 'checkmark-circle',
-        });
-        break;
-      case 'picked_up':
-      case 'in_transit':
-        actions.push({
-          key: 'delivered',
-          label: 'Mark as Delivered',
-          color: flatColors.accent.green,
-          icon: 'checkmark-circle',
-        });
-        break;
+    const status = order.status;
+
+    // Statuses where driver can mark as picked up
+    // Backend flow: pending -> confirmed -> preparing -> ready -> picked_up
+    if (status === 'pending' || status === 'confirmed' || status === 'preparing' || status === 'ready') {
+      actions.push({
+        key: 'picked_up',
+        label: 'Mark as Picked Up',
+        color: flatColors.accent.orange,
+        icon: 'checkmark-circle',
+      });
     }
-    
+    // After pickup, driver can start delivery (on my way)
+    // Backend flow: picked_up -> in_transit
+    else if (status === 'picked_up') {
+      actions.push({
+        key: 'in_transit',
+        label: 'On My Way',
+        color: flatColors.accent.blue,
+        icon: 'car',
+      });
+    }
+    // When in transit, driver can mark as delivered
+    // Backend flow: in_transit -> delivered
+    else if (status === 'in_transit') {
+      actions.push({
+        key: 'delivered',
+        label: 'Mark as Delivered',
+        color: flatColors.accent.green,
+        icon: 'checkmark-circle',
+      });
+    }
+
     return actions;
   };
 
   const statusActions = getStatusActions();
-  const canAccept = order.status === 'pending' || order.status === 'assigned';
-  const canDecline = order.status === 'pending' || order.status === 'assigned';
+  // Driver can accept/decline orders that are pending or ready for pickup
+  const canAccept = order.status === 'pending' || order.status === 'ready';
+  const canDecline = order.status === 'pending' || order.status === 'ready';
 
   if (readonly && statusActions.length === 0) {
     return null;
@@ -263,7 +278,7 @@ export const FlatOrderActions: React.FC<FlatOrderActionsProps> = ({
           <Text style={styles.sectionTitle}>Update Status</Text>
           <View style={styles.statusButtonContainer}>
             {/* QR Scan Button for Pickup Confirmation */}
-            {(order.status === 'assigned' || order.status === 'accepted' || order.status === 'pending') && (
+            {(order.status === 'pending' || order.status === 'confirmed' || order.status === 'preparing' || order.status === 'ready') && (
               <TouchableOpacity
                 style={styles.qrScanButton}
                 onPress={handleQRScan}
@@ -280,15 +295,17 @@ export const FlatOrderActions: React.FC<FlatOrderActionsProps> = ({
                 key={action.key}
                 style={[
                   styles.statusButton,
+                  action.key === 'in_transit' && styles.inTransitButton,
                   action.key === 'delivered' && styles.deliveredButton,
                   action.key === 'failed' && styles.failedButton,
                 ]}
                 onPress={() => handleStatusUpdate(action.key, action.label)}
               >
-                <Ionicons 
-                  name={action.icon} 
-                  size={18} 
+                <Ionicons
+                  name={action.icon}
+                  size={18}
                   color={
+                    action.key === 'in_transit' ? '#FFFFFF' :
                     action.key === 'delivered' ? flatColors.accent.green :
                     action.key === 'failed' ? flatColors.accent.red :
                     action.color
@@ -296,6 +313,7 @@ export const FlatOrderActions: React.FC<FlatOrderActionsProps> = ({
                 />
                 <Text style={[
                   styles.statusButtonText,
+                  action.key === 'in_transit' && styles.inTransitButtonText,
                   action.key === 'delivered' && styles.deliveredButtonText,
                   action.key === 'failed' && styles.failedButtonText,
                 ]}>
@@ -320,8 +338,8 @@ export const FlatOrderActions: React.FC<FlatOrderActionsProps> = ({
             {order.currency || 'SAR'} {batchProperties.totalValue.toFixed(2)}
           </Text>
           
-          {/* Item Pickup Button for accepted batch orders */}
-          {(order.status === 'assigned' || order.status === 'accepted' || order.status === 'picked_up') && 
+          {/* Item Pickup Button for batch orders */}
+          {(order.status === 'confirmed' || order.status === 'preparing' || order.status === 'ready' || order.status === 'picked_up') &&
            batchProperties.batchId && (
             <TouchableOpacity
               style={styles.itemPickupButton}
@@ -443,6 +461,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     lineHeight: premiumTypography.callout.lineHeight,
     color: flatColors.neutral[700],
+  },
+  inTransitButton: {
+    backgroundColor: flatColors.accent.blue,
+    borderColor: flatColors.accent.blue,
+  },
+  inTransitButtonText: {
+    color: '#FFFFFF',
   },
   deliveredButton: {
     backgroundColor: flatColors.cards.green.background,

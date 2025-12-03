@@ -24,7 +24,9 @@ const DEFAULT_CONFIG: Partial<RealtimeSDKConfig> = {
   primaryMode: 'websocket',
   pollingInterval: 10000,
   pollingEndpoint: '/api/v1/delivery/deliveries/available_orders/',
-  websocketEndpoint: '/ws/driver/orders/',
+  // Go websocket-service endpoint - requires user_id and user_type query params
+  // The actual URL will be built dynamically: /ws?user_id=<driver_id>&user_type=driver
+  websocketEndpoint: '/ws',
   websocketReconnectInterval: 5000,
   websocketMaxReconnectAttempts: 5,
   pushEnabled: false,
@@ -173,6 +175,7 @@ export class RealtimeSDK {
         endpoint: this.config.websocketEndpoint,
         authToken: this.config.authToken,
         tenantId: this.config.tenantId,
+        driverId: this.config.driverId,  // Pass driver ID for Go websocket-service
         reconnectInterval: this.config.websocketReconnectInterval,
         maxReconnectAttempts: this.config.websocketMaxReconnectAttempts
       });
@@ -219,16 +222,18 @@ export class RealtimeSDK {
    */
   private initializePollingClient(): void {
     try {
+      // Use apiBaseUrl for polling (defaults to baseUrl if not set)
+      const pollingBaseUrl = this.config.apiBaseUrl || this.config.baseUrl;
       console.log('🔧 Creating PollingClient with config:', {
-        baseUrl: this.config.baseUrl,
+        baseUrl: pollingBaseUrl,
         endpoint: this.config.pollingEndpoint,
         interval: this.config.pollingInterval,
         hasAuthToken: !!this.config.authToken
       });
-      
+
       // Create PollingClient
       this.pollingClient = new PollingClient({
-        baseUrl: this.config.baseUrl,
+        baseUrl: pollingBaseUrl,
         endpoint: this.config.pollingEndpoint,
         interval: this.config.pollingInterval,
         authToken: this.config.authToken

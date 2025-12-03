@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View,
+  Text,
   StyleSheet,
   ScrollView,
   RefreshControl,
@@ -143,16 +144,21 @@ const RouteNavigationScreen: React.FC = () => {
         const order = delivery.order;
         const status = delivery.status;
 
+        // Skip delivered orders entirely - they shouldn't appear in route
+        if (status === 'delivered') {
+          return;
+        }
+
         // Add pickup point if not already picked up
-        const shouldShowPickup = !['picked_up', 'in_transit', 'delivered'].includes(status);
-        
+        const shouldShowPickup = !['picked_up', 'in_transit'].includes(status);
+
         if (shouldShowPickup && order.pickup_latitude && order.pickup_longitude) {
           const pickupKey = `${order.pickup_latitude}-${order.pickup_longitude}`;
-          
+
           if (!processedPickups.has(pickupKey)) {
-            // Check for batch orders at same pickup location
+            // Check for batch orders at same pickup location (excluding delivered orders)
             const batchOrders = backendRoute.assigned_deliveries
-              .filter(d => 
+              .filter(d =>
                 d.order.pickup_latitude === order.pickup_latitude &&
                 d.order.pickup_longitude === order.pickup_longitude &&
                 !['picked_up', 'in_transit', 'delivered'].includes(d.status)
@@ -161,7 +167,7 @@ const RouteNavigationScreen: React.FC = () => {
                 ...d.order,
                 id: d.id,
                 delivery_id: d.id,
-                status: d.status || 'assigned'
+                status: d.status || 'pending'
               } as Order));
 
             points.push({
@@ -170,7 +176,7 @@ const RouteNavigationScreen: React.FC = () => {
                 ...order,
                 id: delivery.id,
                 delivery_id: delivery.id,
-                status: status || 'assigned'
+                status: status || 'pending'
               } as Order,
               latitude: Number(order.pickup_latitude),
               longitude: Number(order.pickup_longitude),
@@ -179,12 +185,12 @@ const RouteNavigationScreen: React.FC = () => {
               sequenceNumber: sequenceNumber++,
               batchOrders: batchOrders.length > 1 ? batchOrders : undefined,
             });
-            
+
             processedPickups.add(pickupKey);
           }
         }
 
-        // Add delivery point
+        // Add delivery point only if order is not delivered
         if (order.delivery_latitude && order.delivery_longitude) {
           points.push({
             id: `delivery-${delivery.id}`,
@@ -192,7 +198,7 @@ const RouteNavigationScreen: React.FC = () => {
               ...order,
               id: delivery.id,
               delivery_id: delivery.id,
-              status: status || 'assigned'
+              status: status || 'pending'
             } as Order,
             latitude: Number(order.delivery_latitude),
             longitude: Number(order.delivery_longitude),
@@ -240,8 +246,13 @@ const RouteNavigationScreen: React.FC = () => {
       let sequenceNumber = 1;
 
       driverOrders.forEach((order) => {
+        // Skip delivered orders entirely - they shouldn't appear in route
+        if (order.status === 'delivered') {
+          return;
+        }
+
         // Add pickup if not picked up
-        if (!['picked_up', 'in_transit', 'delivered'].includes(order.status) &&
+        if (!['picked_up', 'in_transit'].includes(order.status) &&
             order.pickup_latitude && order.pickup_longitude) {
           points.push({
             id: `pickup-${order.id}`,
@@ -254,7 +265,7 @@ const RouteNavigationScreen: React.FC = () => {
           });
         }
 
-        // Add delivery - check for warehouse consolidation
+        // Add delivery point only if order is not delivered
         if (order.delivery_latitude && order.delivery_longitude) {
           // Check if this is a consolidated batch going to warehouse
           const isWarehouseConsolidation = order.is_consolidated || 
@@ -337,12 +348,22 @@ const RouteNavigationScreen: React.FC = () => {
   }, [backendRoute, driverOrders]);
 
   // Get current stop (first incomplete stop)
+  // Logic:
+  // - For pickup points: consider complete if status is picked_up, in_transit, or delivered
+  // - For delivery points: consider complete only if status is delivered
   const currentStopIndex = useMemo(() => {
     if (!optimizedRoute?.points) return -1;
-    
-    return optimizedRoute.points.findIndex(point => 
-      point.order.status !== 'delivered'
-    );
+
+    return optimizedRoute.points.findIndex(point => {
+      const status = point.order.status;
+      if (point.type === 'pickup') {
+        // Pickup is incomplete if order hasn't been picked up yet
+        return !['picked_up', 'in_transit', 'delivered'].includes(status);
+      } else {
+        // Delivery is incomplete if order hasn't been delivered yet
+        return status !== 'delivered';
+      }
+    });
   }, [optimizedRoute]);
 
   const currentStop = currentStopIndex >= 0 && optimizedRoute?.points 
@@ -417,18 +438,21 @@ const RouteNavigationScreen: React.FC = () => {
   const handleNavigateToOrder = useCallback((order: Order) => {
     let lat: number | null = null;
     let lng: number | null = null;
-    
+
     // Determine navigation target based on order status
-    if (['assigned', 'confirmed'].includes(order.status)) {
-      // Navigate to pickup
+    // Unified statuses: pending, confirmed, preparing, ready, picked_up, in_transit, delivered, cancelled, failed
+    // Before pickup: navigate to pickup location
+    // After pickup: navigate to delivery location
+    if (['pending', 'confirmed', 'preparing', 'ready'].includes(order.status)) {
+      // Navigate to pickup - order not yet picked up
       lat = order.pickup_latitude ? Number(order.pickup_latitude) : null;
       lng = order.pickup_longitude ? Number(order.pickup_longitude) : null;
     } else if (['picked_up', 'in_transit'].includes(order.status)) {
-      // Navigate to delivery
+      // Navigate to delivery - order already picked up
       lat = order.delivery_latitude ? Number(order.delivery_latitude) : null;
       lng = order.delivery_longitude ? Number(order.delivery_longitude) : null;
     }
-    
+
     if (lat && lng) {
       const url = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
       Linking.openURL(url).catch(() => {
@@ -443,6 +467,12 @@ const RouteNavigationScreen: React.FC = () => {
     setIsUpdatingStatus(true);
     try {
       await updateOrderStatus(orderId, newStatus, photoId);
+
+      // Add a delay to allow backend to process the status change
+      // and to bypass the API request throttle (2 second minimum interval)
+      await new Promise(resolve => setTimeout(resolve, 2500));
+
+      // Force refresh the route data
       await handleRefresh();
       Alert.alert('Success', 'Order status updated successfully');
     } catch (error) {
@@ -540,7 +570,7 @@ const RouteNavigationScreen: React.FC = () => {
         )}
 
         {/* Empty State */}
-        {!optimizedRoute || optimizedRoute.points.length === 0 && (
+        {(!optimizedRoute || optimizedRoute.points.length === 0) && (
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyText}>No active route</Text>
             <Text style={styles.emptySubtext}>Accept orders to start your route</Text>

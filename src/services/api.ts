@@ -147,9 +147,9 @@ export class HttpClient {
       // Handle 401 Unauthorized - token might be expired
       if (response.status === 401) {
         const refreshToken = await SecureStorage.getRefreshToken();
-        if (refreshToken && endpoint !== '/api/v1/auth/token/refresh/') {
+        if (refreshToken && endpoint !== '/api/v1/auth/refresh/') {
           console.log('[HttpClient] Got 401, attempting token refresh...');
-          
+
           // Try to refresh the token using authService
           const refreshed = await authService.refreshToken();
           if (refreshed) {
@@ -212,21 +212,25 @@ export class HttpClient {
         };
       }
 
-      const response = await fetch(`${this.baseUrl}/api/v1/auth/token/refresh/`, {
+      // Use delivery-service refresh endpoint
+      const response = await fetch(`${this.baseUrl}/api/v1/auth/refresh/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ refresh: refreshToken }),
+        body: JSON.stringify({ refresh_token: refreshToken }),
       });
 
       if (response.ok) {
         const data = await response.json();
-        if (data.access) {
-          await SecureStorage.setAuthToken(data.access);
+        if (data.access_token) {
+          await SecureStorage.setAuthToken(data.access_token);
+          if (data.refresh_token) {
+            await SecureStorage.setRefreshToken(data.refresh_token);
+          }
           return {
             success: true,
-            data: { access: data.access }
+            data: { access: data.access_token }
           };
         }
       }

@@ -1,4 +1,4 @@
-package com.driverappnew
+package com.murrsal.driver
 
 import android.app.Application
 import com.facebook.react.PackageList

@@ -28,6 +28,7 @@ import IncomingOrderModal from './src/components/IncomingOrderModal';
 // Screens
 import { SplashScreen } from './src/screens/SplashScreen';
 import LoginScreen from './src/screens/auth/LoginScreen';
+import OTPVerificationScreen from './src/screens/auth/OTPVerificationScreen';
 import AcceptedOrdersScreen from './src/screens/AcceptedOrdersScreen';
 import AvailableOrdersScreen from './src/screens/AvailableOrdersScreen';
 import RouteNavigationScreen from './src/screens/RouteNavigationScreen';
@@ -66,6 +67,7 @@ const WEBSOCKET_URL = ENV.WS_BASE_URL;
 interface RootStackParamList extends Record<string, object | undefined> {
   Splash: undefined;
   Login: undefined;
+  OTPVerification: { phoneNumber: string; sessionId: string };
   Main: undefined;
   DriverProfileSettings: undefined;
   AvailableOrders: undefined;
@@ -397,13 +399,22 @@ const AppNavigator = () => {
     >
       <Stack.Navigator screenOptions={{ headerShown: false, animation: 'fade' }}>
         {!isLoggedIn ? (
-          <Stack.Screen
-            name="Login"
-            component={LoginScreen}
-            options={{
-              gestureEnabled: false, // Prevent swipe back on login
-            }}
-          />
+          <>
+            <Stack.Screen
+              name="Login"
+              component={LoginScreen}
+              options={{
+                gestureEnabled: false, // Prevent swipe back on login
+              }}
+            />
+            <Stack.Screen
+              name="OTPVerification"
+              component={OTPVerificationScreen}
+              options={{
+                animation: 'slide_from_right',
+              }}
+            />
+          </>
         ) : (
           <>
             <Stack.Screen name="Main" component={MainTabs} />

@@ -4,6 +4,7 @@ import {
   StyleSheet,
   Animated,
   StatusBar,
+  Text,
 } from 'react-native';
 import { flatColors } from '../design/dashboard/flatColors';
 import { FlatSplashLogo } from '../components/Splash/FlatSplashLogo';
@@ -96,6 +97,15 @@ export const FlatSplashScreen: React.FC<FlatSplashScreenProps> = ({
       <View style={styles.container}>
         <Animated.View
           style={[
+            styles.gradientOverlay,
+            {
+              opacity: fadeAnim,
+            },
+          ]}
+        />
+
+        <Animated.View
+          style={[
             styles.backgroundOverlay,
             {
               opacity: fadeAnim,
@@ -148,9 +158,17 @@ export const FlatSplashScreen: React.FC<FlatSplashScreenProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: flatColors.backgrounds.secondary,
+    backgroundColor: '#050911',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  gradientOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#0b1220',
   },
   backgroundOverlay: {
     position: 'absolute',
@@ -158,7 +176,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: flatColors.backgrounds.secondary,
+    backgroundColor: 'transparent',
   },
   content: {
     flex: 1,

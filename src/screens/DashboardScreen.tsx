@@ -97,25 +97,32 @@ const DashboardScreen: React.FC = () => {
 
     // Set up notification callback for new orders
     const handleNewOrder = (order: Order) => {
-      console.log('🔥 [DashboardScreen] handleNewOrder called with order:', order.order_number || order.id);
-      console.log('🔥 [DashboardScreen] Setting incoming order and showing modal...');
+      console.log('[DashboardScreen] handleNewOrder called with order:', order.order_number || order.id);
       setIncomingOrder(order);
       setShowIncomingModal(true);
       Haptics.trigger('notificationSuccess');
-      console.log('🔥 [DashboardScreen] Modal should now be visible!');
+      console.log('[DashboardScreen] Modal should now be visible');
     };
     
     setOrderNotificationCallback(handleNewOrder);
 
     // Also set up push notification callback for background wake-up
     notificationService.setNotificationCallbacks({
-      onNewOrder: handleNewOrder
+      onNewOrder: handleNewOrder,
+      // Check if driver is active before processing notifications (prevents wake-up when offline)
+      isDriverActive: () => {
+        // Use correct field names from Driver type
+        const isOnline = driver?.isOnline === true;
+        const isAvailable = driver?.isAvailable !== false;
+        const statusOk = !driver?.status || driver?.status === 'available' || driver?.status === 'online' || driver?.status === 'active';
+        return isOnline && isAvailable && statusOk;
+      }
     });
 
     return () => {
       setOrderNotificationCallback(null);
     };
-  }, [setOrderNotificationCallback, fadeAnim, slideAnim]);
+  }, [setOrderNotificationCallback, fadeAnim, slideAnim, driver]);
 
   // Load flash deals on initial load
   useEffect(() => {

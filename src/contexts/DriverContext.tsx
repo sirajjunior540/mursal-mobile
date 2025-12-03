@@ -312,7 +312,7 @@ export const DriverProvider: React.FC<DriverProviderProps> = ({ children }) => {
 
             const { apiService: api } = await import('../services/api');
             const updateResult = await api.updateLocation(
-              currentLocation.latitude, 
+              currentLocation.latitude,
               currentLocation.longitude
             );
 
@@ -324,7 +324,26 @@ export const DriverProvider: React.FC<DriverProviderProps> = ({ children }) => {
           } catch (error) {
             console.error('⚠️ Failed to get/update immediate location:', error);
           }
-          
+
+          // Re-register FCM token when going online to ensure push notifications work
+          try {
+            console.log('[DriverContext] Re-registering FCM token on going online...');
+            const messaging = require('@react-native-firebase/messaging').default;
+            const token = await messaging().getToken();
+            if (token) {
+              console.log('[DriverContext] FCM token obtained:', token.substring(0, 20) + '...');
+              const { apiService: api } = await import('../services/api');
+              const tokenResult = await api.updateFCMToken(token);
+              if (tokenResult.success) {
+                console.log('[DriverContext] FCM token re-registered successfully');
+              } else {
+                console.warn('[DriverContext] FCM token registration failed:', tokenResult.error);
+              }
+            }
+          } catch (fcmError) {
+            console.warn('[DriverContext] Failed to re-register FCM token:', fcmError);
+          }
+
           // Order refresh is now handled by OrderProvider watching driver.isOnline
           console.log('📦 Driver is online - OrderProvider will refresh orders automatically');
         } else {

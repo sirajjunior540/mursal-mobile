@@ -128,26 +128,31 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
     const initializeRealtimeService = async () => {
       try {
         // Set up notification service callbacks for push notifications
-        console.log('🔔 [OrderProvider] Setting up notification service callbacks');
+        console.log('[OrderProvider] Setting up notification service callbacks');
         const { notificationService } = await import('../../../services/notificationService');
         notificationService.setNotificationCallbacks({
+          // Callback to check if driver is active/online - used to filter notifications BEFORE sound/vibration
+          isDriverActive: () => {
+            // Check isOnline - this is the main toggle for receiving orders
+            // isAvailable and status are optional additional checks
+            const isOnline = driver?.isOnline === true;
+            const isAvailable = driver?.isAvailable !== false; // Default to true if not set
+            const statusOk = !driver?.status || driver?.status === 'available' || driver?.status === 'online' || driver?.status === 'active';
+            const result = isOnline && isAvailable && statusOk;
+            console.log(`[OrderProvider] isDriverActive check: isOnline=${driver?.isOnline}, isAvailable=${driver?.isAvailable}, status=${driver?.status}, result=${result}`);
+            return result;
+          },
           onNewOrder: (order: Order) => {
-            console.log('📱 [OrderProvider] New order from push notification:', order.order_number);
-            
-            // Check driver online status
-            const isDriverOnline = driver?.isOnline && driver?.is_available && driver?.is_on_duty;
-            
-            if (!isDriverOnline) {
-              console.log('🚫 [OrderProvider] Driver is offline, ignoring push notification');
-              return;
-            }
-            
+            console.log('[OrderProvider] New order from push notification:', order.order_number);
+            // Note: Driver status check is already done by notificationService.checkDriverActiveStatus()
+            // before this callback is called. No need to double-check here.
+
             // Handle batch notifications
             const batchId = order.current_batch?.id;
             if (batchId) {
               // Check if we've already seen this batch
               if (!seenBatchIds.has(batchId)) {
-                console.log('🆕 [OrderProvider] New batch from push notification:', batchId);
+                console.log('[OrderProvider] New batch from push notification:', batchId);
                 setSeenBatchIds(prev => new Set([...prev, batchId]));
                 
                 // Trigger the incoming order modal
@@ -179,34 +184,15 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
         // Set up realtime service callbacks
         realtimeService.setCallbacks({
           onNewOrder: (order: Order) => {
-            // Check driver online status from context
-            const isDriverOnline = driver?.isOnline && driver?.is_available && driver?.is_on_duty;
-            
+            // Note: The realtime service only runs when driver is online (checked in start())
+            // so we don't need to double-check here. This fixes stale closure issues.
             if (__DEV__) {
-              console.log('🔔 [OrderProvider] New order received:', {
+              console.log('[OrderProvider] New order received from realtime service:', {
                 orderNumber: order.order_number,
-                orderId: order.id,
-                driverOnline: isDriverOnline,
-                driverStatus: {
-                  isOnline: driver?.isOnline,
-                  isAvailable: driver?.is_available,
-                  isOnDuty: driver?.is_on_duty
-                }
+                orderId: order.id
               });
             }
-            
-            // Only process new orders if driver is online
-            if (!isDriverOnline) {
-              if (__DEV__) {
-                console.log('🚫 [OrderProvider] Driver is offline, ignoring incoming order:', order.order_number);
-              }
-              return;
-            }
-            
-            if (__DEV__) {
-              console.log('📱 [OrderProvider] Driver is online, processing incoming order:', order.order_number);
-            }
-            
+
             // Check if this order is part of a batch
             const batchId = order.current_batch?.id;
             if (batchId) {
@@ -215,7 +201,7 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
                 const batchAlreadySeen = prev.has(batchId);
                 if (batchAlreadySeen) {
                   if (__DEV__) {
-                    console.log('⚠️ [OrderProvider] Batch already seen, skipping notification for order:', order.order_number);
+                    console.log('[OrderProvider] Batch already seen, skipping notification for order:', order.order_number);
                   }
                   return prev;
                 }
@@ -498,77 +484,109 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
   }, [orders, driverOrders]);
 
   const acceptOrder = useCallback(async (orderId: string): Promise<boolean> => {
-    console.log('🚀 [OrderProvider] acceptOrder called with ID:', orderId);
-    
+    console.log('[OrderProvider] acceptOrder called with ID:', orderId);
+
     // Find the order in our current orders to debug
     const order = orders.find(o => o.id === orderId);
+
+    // If order is not in state (e.g., from push notification), make a direct API call
     if (!order) {
-      console.log('❌ [OrderProvider] Order not found in state:', orderId);
-      console.log('📋 [OrderProvider] Available order IDs:', orders.map(o => o.id));
-      // Don't try to accept an order that's not in our state
-      Alert.alert(
-        'Order Not Available',
-        'This order is not available. Please refresh the order list.',
-        [{ text: 'OK' }]
-      );
-      return false;
+      console.log('[OrderProvider] Order not found in state, attempting direct API accept:', orderId);
+      console.log('[OrderProvider] Available order IDs:', orders.map(o => o.id));
+
+      try {
+        // Direct API call for orders from push notifications
+        const response = await apiService.acceptOrder(orderId);
+
+        if (response.success) {
+          console.log('[OrderProvider] Order accepted via direct API call');
+
+          // Invalidate caches when order is accepted
+          await cacheService.invalidateByEvent('orderAccepted');
+
+          // Wait for backend to process
+          await new Promise(resolve => setTimeout(resolve, 1500));
+
+          // Refresh orders
+          await getDriverOrders(true);
+          await refreshOrders(true);
+
+          return true;
+        } else {
+          console.log('[OrderProvider] Direct API accept failed:', response.error);
+          Alert.alert(
+            'Accept Order Failed',
+            response.error || 'Failed to accept order. Please try again.',
+            [{ text: 'OK' }]
+          );
+          return false;
+        }
+      } catch (error: any) {
+        console.error('[OrderProvider] Direct API accept exception:', error);
+        Alert.alert(
+          'Accept Order Failed',
+          error.message || 'Failed to accept order. Please try again.',
+          [{ text: 'OK' }]
+        );
+        return false;
+      }
     }
-    
-    console.log('✅ [OrderProvider] Order found:', {
+
+    console.log('[OrderProvider] Order found in state:', {
       id: order.id,
       orderNumber: order.order_number,
       status: order.status,
       customer: order.customer?.name || 'Unknown'
     });
-    
+
     try {
-      console.log('🔄 [OrderProvider] Calling orderActionService.acceptUnifiedOrder...');
+      console.log('[OrderProvider] Calling orderActionService.acceptUnifiedOrder...');
       // Use the new unified order action service
       const response = await orderActionService.acceptUnifiedOrder(order, orderId);
       
-      console.log('📨 [OrderProvider] Response received:', {
+      console.log('[OrderProvider] Response received:', {
         success: response.success,
         error: response.error,
         hasData: !!response.data
       });
-      
+
       if (response.success) {
-        console.log('✅ [OrderProvider] Order accepted successfully, removing from available orders');
+        console.log('[OrderProvider] Order accepted successfully, removing from available orders');
         // Remove the accepted order from available orders
         setOrders(prev => prev.filter(o => o.id !== orderId));
-        
+
         // Invalidate caches when order is accepted
         await cacheService.invalidateByEvent('orderAccepted');
-        
+
         // Add a small delay to ensure backend has updated the order status
-        console.log('⏱️ [OrderProvider] Waiting for backend to process order acceptance...');
+        console.log('[OrderProvider] Waiting for backend to process order acceptance...');
         await new Promise(resolve => setTimeout(resolve, 1500)); // 1.5 second delay
-        
+
         // Refresh driver orders to get the newly accepted order
-        console.log('🔄 [OrderProvider] Refreshing driver orders after acceptance');
+        console.log('[OrderProvider] Refreshing driver orders after acceptance');
         await getDriverOrders(true); // Force refresh
-        
+
         // Also refresh available orders to ensure consistency
-        console.log('🔄 [OrderProvider] Refreshing available orders after acceptance');
+        console.log('[OrderProvider] Refreshing available orders after acceptance');
         await refreshOrders(true); // Force refresh
-        
+
         return true;
       } else {
-        console.log('❌ [OrderProvider] Order acceptance failed:', response.error);
+        console.log('[OrderProvider] Order acceptance failed:', response.error);
         throw new Error(response.error || 'Failed to accept order');
       }
     } catch (error: any) {
-      console.error('💥 [OrderProvider] Exception in acceptOrder:', error);
-      console.log('🔍 [OrderProvider] Error details:', {
+      console.error('[OrderProvider] Exception in acceptOrder:', error);
+      console.log('[OrderProvider] Error details:', {
         message: error.message,
         status: error.response?.status,
         type: typeof error,
         hasResponseData: !!error.response?.data
       });
-      
+
       // Check if it's a 404 error (order not found)
       if (error.response?.status === 404 || error.message?.includes('404')) {
-        console.log('🗑️ [OrderProvider] 404 error - removing order from state');
+        console.log('[OrderProvider] 404 error - removing order from state');
         // Remove the order from local state since it doesn't exist in backend
         setOrders(prev => prev.filter(o => o.id !== orderId));
         
@@ -589,7 +607,7 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
       
       return false;
     }
-  }, [orders, getDriverOrders]);
+  }, [orders, getDriverOrders, refreshOrders]);
 
   const declineOrder = useCallback(async (orderId: string, reason?: string) => {
     // Check if order exists in state
@@ -631,19 +649,25 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
     try {
       const response = await apiService.updateOrderStatus(deliveryId, status, photoId);
       if (response.success) {
-        // Update order in state (using delivery ID since order.id contains delivery ID)
-        setOrders(prev => prev.map(o => 
+        // Update order in both orders and driverOrders state
+        // (using delivery ID since order.id contains delivery ID)
+        setOrders(prev => prev.map(o =>
           o.id === deliveryId ? { ...o, status } : o
         ));
-        
+
+        // Also update driverOrders state to ensure UI reflects the change immediately
+        setDriverOrders(prev => prev.map(o =>
+          o.id === deliveryId ? { ...o, status } : o
+        ));
+
         // Invalidate caches when status changes
         await cacheService.invalidateByEvent('orderStatusChanged');
-        
+
         // If order is completed, invalidate history cache too
         if (status === 'delivered' || status === 'failed') {
           await cacheService.invalidateByEvent('orderCompleted');
         }
-        
+
         return true;
       } else {
         return false;

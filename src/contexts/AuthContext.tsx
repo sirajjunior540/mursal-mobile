@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
-import { AuthContextType, AuthUser, Driver, Tenant } from '../types';
+import { AuthContextType, AuthUser, Driver, Tenant, OtpSendResponse, OtpVerifyResponse } from '../types';
 import { STORAGE_KEYS, TENANT_CONFIG, USER_ROLES } from '../constants';
 import { Storage, SecureStorage } from '../utils';
 import { apiService } from '../services/api';
@@ -268,6 +268,110 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  // OTP Authentication Methods
+  const sendOTP = async (phoneNumber: string): Promise<OtpSendResponse> => {
+    try {
+      const response = await apiService.sendOTP(phoneNumber);
+      if (response.success && response.data) {
+        return response.data;
+      }
+      throw new Error(response.error || 'Failed to send OTP');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to send OTP';
+      throw new Error(message);
+    }
+  };
+
+  const verifyOTP = async (phoneNumber: string, otp: string, sessionId: string): Promise<OtpVerifyResponse> => {
+    dispatch({ type: 'LOGIN_START' });
+
+    try {
+      const response = await apiService.verifyOTP(phoneNumber, otp, sessionId);
+
+      if (response.success && response.data) {
+        // If this is an existing driver, complete the login
+        if (!response.data.is_new_driver && response.data.user && response.data.driver) {
+          const { user, driver, tenant } = response.data;
+
+          // Create AuthUser from the response
+          const authUser: AuthUser = {
+            id: user.id?.toString() || '',
+            username: user.phone || phoneNumber,
+            email: user.email || '',
+            firstName: user.first_name || '',
+            lastName: user.last_name || '',
+            phone: user.phone || phoneNumber,
+            token: response.data.access_token,
+            role: 'driver',
+            is_active: user.is_active,
+            is_staff: false,
+            is_superuser: false
+          };
+
+          // Create Driver from the response
+          const driverInfo: Driver = {
+            id: driver.id?.toString() || '',
+            firstName: driver.firstName || '',
+            lastName: driver.lastName || '',
+            email: driver.email || '',
+            phone: driver.phone || phoneNumber,
+            rating: driver.rating || 0,
+            totalDeliveries: driver.totalDeliveries || 0,
+            isOnline: driver.isOnline || false,
+            profileImage: undefined
+          };
+
+          // Store auth data
+          await Promise.all([
+            SecureStorage.setAuthToken(response.data.access_token),
+            SecureStorage.setRefreshToken(response.data.refresh_token),
+            Storage.setItem(STORAGE_KEYS.USER_DATA, authUser),
+            Storage.setItem(STORAGE_KEYS.DRIVER_DATA, driverInfo),
+            tenant ? Storage.setItem('@tenant_data', tenant) : Promise.resolve(),
+          ]);
+
+          dispatch({
+            type: 'LOGIN_SUCCESS',
+            payload: { user: authUser, driver: driverInfo, tenant },
+          });
+
+          // Setup auto-refresh for the session
+          await authService.setupAutoRefresh();
+
+          // Enable realtime service
+          try {
+            const { realtimeService } = await import('../services/realtimeService');
+            realtimeService.enableInitialization();
+          } catch (realtimeError) {
+            console.warn('Failed to enable realtime service:', realtimeError);
+          }
+        }
+
+        return response.data;
+      }
+
+      dispatch({ type: 'LOGIN_FAILURE', payload: response.error || 'Failed to verify OTP' });
+      throw new Error(response.error || 'Failed to verify OTP');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to verify OTP';
+      dispatch({ type: 'LOGIN_FAILURE', payload: message });
+      throw error;
+    }
+  };
+
+  const resendOTP = async (phoneNumber: string, sessionId: string): Promise<OtpSendResponse> => {
+    try {
+      const response = await apiService.resendOTP(phoneNumber, sessionId);
+      if (response.success && response.data) {
+        return response.data;
+      }
+      throw new Error(response.error || 'Failed to resend OTP');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to resend OTP';
+      throw new Error(message);
+    }
+  };
+
   const logout = async (): Promise<void> => {
     try {
       // Clear auto-refresh timer
@@ -333,6 +437,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     login,
     logout,
     setTenant,
+    // OTP Authentication
+    sendOTP,
+    verifyOTP,
+    resendOTP,
     hasPermission: hasPermission(state.user),
     getSessionInfo,
   };

@@ -33,6 +33,18 @@ export interface BackendDelivery {
   batch?: BackendBatch;
   pickup_address?: string;
   delivery_address?: string;
+  dropoff_address?: string;
+  // Instructions for driver
+  pickup_instructions?: string;
+  dropoff_instructions?: string;
+  delivery_instructions?: string;
+  notes?: string;
+  // Amount fields
+  subtotal?: string | number;
+  delivery_fee?: string | number;
+  tax?: string | number;
+  total?: string | number;
+  total_amount?: string | number;
   // Missing fields that are used in apiTransformers
   location?: string;
   latitude?: number;
@@ -60,7 +72,13 @@ export interface BackendOrder {
   order_items?: BackendOrderItem[];
   created_at?: string;
   delivery_address?: string;
+  dropoff_address?: string;
   delivery_notes?: string;
+  notes?: string;
+  // Instructions for driver
+  pickup_instructions?: string;
+  dropoff_instructions?: string;
+  delivery_instructions?: string;
   estimated_delivery_time?: string;
   pickup_time?: string;
   delivery_time?: string;

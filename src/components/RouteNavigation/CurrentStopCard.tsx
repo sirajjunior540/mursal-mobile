@@ -40,26 +40,48 @@ export const CurrentStopCard: React.FC<CurrentStopCardProps> = ({
   const getStatusUpdateOptions = () => {
     if (type === 'pickup') {
       return [
-        { 
-          status: 'picked_up', 
-          label: 'Mark as Picked Up', 
-          color: flatColors.accent.orange, 
-          icon: 'checkmark-circle' 
+        {
+          status: 'picked_up',
+          label: 'Mark as Picked Up',
+          color: flatColors.accent.orange,
+          icon: 'checkmark-circle'
         },
       ];
     } else {
+      // For delivery stops, show different options based on order status
+      const currentStatus = order.status;
+
+      // If order is picked_up, show "On My Way" button first
+      if (currentStatus === 'picked_up') {
+        return [
+          {
+            status: 'in_transit',
+            label: 'On My Way',
+            color: flatColors.accent.blue,
+            icon: 'car'
+          },
+          {
+            status: 'failed',
+            label: 'Mark as Failed',
+            color: flatColors.accent.red,
+            icon: 'close-circle'
+          },
+        ];
+      }
+
+      // If order is in_transit, show "Mark as Delivered"
       return [
-        { 
-          status: 'delivered', 
-          label: 'Mark as Delivered', 
-          color: flatColors.accent.green, 
-          icon: 'checkmark-circle' 
+        {
+          status: 'delivered',
+          label: 'Mark as Delivered',
+          color: flatColors.accent.green,
+          icon: 'checkmark-circle'
         },
-        { 
-          status: 'failed', 
-          label: 'Mark as Failed', 
-          color: flatColors.accent.red, 
-          icon: 'close-circle' 
+        {
+          status: 'failed',
+          label: 'Mark as Failed',
+          color: flatColors.accent.red,
+          icon: 'close-circle'
         },
       ];
     }
@@ -360,6 +382,34 @@ export const CurrentStopCard: React.FC<CurrentStopCardProps> = ({
           </View>
         )}
 
+        {/* Delivery Instructions */}
+        {(type === 'delivery' && (order.delivery_instructions || order.special_instructions)) && (
+          <View style={styles.instructionsSection}>
+            <View style={styles.instructionsIcon}>
+              <Ionicons name="document-text" size={16} color={flatColors.accent.purple} />
+            </View>
+            <View style={styles.instructionsContent}>
+              <Text style={styles.instructionsLabel}>Delivery Instructions</Text>
+              <Text style={styles.instructionsText}>
+                {order.delivery_instructions || order.special_instructions}
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {/* Pickup Instructions */}
+        {(type === 'pickup' && order.pickup_instructions) && (
+          <View style={styles.instructionsSection}>
+            <View style={styles.instructionsIcon}>
+              <Ionicons name="document-text" size={16} color={flatColors.accent.orange} />
+            </View>
+            <View style={styles.instructionsContent}>
+              <Text style={styles.instructionsLabel}>Pickup Instructions</Text>
+              <Text style={styles.instructionsText}>{order.pickup_instructions}</Text>
+            </View>
+          </View>
+        )}
+
         {/* Special Handling */}
         {order.special_handling && (
           <View style={styles.specialSection}>
@@ -400,23 +450,26 @@ export const CurrentStopCard: React.FC<CurrentStopCardProps> = ({
               <TouchableOpacity
                 style={[
                   styles.actionButton,
+                  statusOptions[0].status === 'in_transit' && styles.inTransitButton,
                   statusOptions[0].status === 'delivered' && styles.deliveredButton,
                   statusOptions[0].status === 'failed' && styles.failedButton,
                 ]}
                 onPress={() => handleStatusUpdate(statusOptions[0].status, statusOptions[0].label)}
                 disabled={isLoading || isCheckingPhotoRequirements || isUploadingPhoto}
               >
-                <Ionicons 
-                  name={statusOptions[0].icon} 
-                  size={20} 
+                <Ionicons
+                  name={statusOptions[0].icon}
+                  size={20}
                   color={
+                    statusOptions[0].status === 'in_transit' ? '#FFFFFF' :
                     statusOptions[0].status === 'delivered' ? flatColors.accent.green :
                     statusOptions[0].status === 'failed' ? flatColors.accent.red :
                     flatColors.neutral[700]
-                  } 
+                  }
                 />
                 <Text style={[
                   styles.actionButtonText,
+                  statusOptions[0].status === 'in_transit' && styles.inTransitButtonText,
                   statusOptions[0].status === 'delivered' && styles.deliveredButtonText,
                   statusOptions[0].status === 'failed' && styles.failedButtonText,
                 ]}>
@@ -802,6 +855,38 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     marginTop: 4,
   },
+  instructionsSection: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: flatColors.cards.purple?.background || '#F3E8FF',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: flatColors.accent.purple || '#8B5CF6',
+  },
+  instructionsIcon: {
+    marginRight: 10,
+    marginTop: 2,
+  },
+  instructionsContent: {
+    flex: 1,
+  },
+  instructionsLabel: {
+    fontSize: premiumTypography.caption.small.fontSize,
+    fontWeight: '600',
+    lineHeight: premiumTypography.caption.small.lineHeight,
+    color: flatColors.accent.purple || '#8B5CF6',
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  instructionsText: {
+    fontSize: premiumTypography.body.medium.fontSize,
+    fontWeight: premiumTypography.body.medium.fontWeight,
+    lineHeight: premiumTypography.body.medium.lineHeight,
+    color: flatColors.neutral[700],
+  },
   specialSection: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -923,6 +1008,13 @@ const styles = StyleSheet.create({
     lineHeight: premiumTypography.footnote.lineHeight,
     color: flatColors.neutral[700],
   },
+  inTransitButton: {
+    backgroundColor: flatColors.accent.blue,
+    borderColor: flatColors.accent.blue,
+  },
+  inTransitButtonText: {
+    color: '#FFFFFF',
+  },
   deliveredButton: {
     backgroundColor: flatColors.cards.green.background,
     borderColor: flatColors.accent.green,
@@ -937,7 +1029,7 @@ const styles = StyleSheet.create({
   failedButtonText: {
     color: flatColors.accent.red,
   },
-  
+
   // Modal Styles
   modalOverlay: {
     flex: 1,

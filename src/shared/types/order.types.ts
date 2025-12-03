@@ -55,15 +55,20 @@ export interface OrderLocation {
   instructions?: string;
 }
 
+/**
+ * Unified Order Status - matches backend delivery-service and main Django backend
+ * Do NOT add statuses that don't exist in backend!
+ */
 export enum OrderStatus {
   PENDING = 'pending',
-  ASSIGNED = 'assigned',
-  ACCEPTED = 'accepted',
+  CONFIRMED = 'confirmed',
+  PREPARING = 'preparing',
+  READY = 'ready',
   PICKED_UP = 'picked_up',
   IN_TRANSIT = 'in_transit',
   DELIVERED = 'delivered',
   CANCELLED = 'cancelled',
-  DECLINED = 'declined',
+  FAILED = 'failed',
 }
 
 export enum OrderPriority {

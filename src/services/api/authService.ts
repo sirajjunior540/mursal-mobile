@@ -130,21 +130,23 @@ class AuthService {
       }
 
       console.log('[AuthService] Refreshing access token...');
-      
-      // Use the existing refreshToken method from HttpClient
-      const response = await apiService.refreshToken();
-      
-      if (response.success && response.data?.access) {
+
+      // Use the refreshAuthToken method from apiService
+      const refreshed = await apiService.refreshAuthToken();
+
+      if (refreshed) {
         console.log('[AuthService] Token refreshed successfully');
-        
-        // Setup next refresh cycle
-        const newToken = response.data.access;
-        const timeUntilExpiry = this.getTimeUntilExpiry(newToken);
-        console.log(`[AuthService] New token expires in ${Math.round(timeUntilExpiry / 1000 / 60)} minutes`);
-        
+
+        // Get the new token to check expiry
+        const newToken = await SecureStorage.getAuthToken();
+        if (newToken) {
+          const timeUntilExpiry = this.getTimeUntilExpiry(newToken);
+          console.log(`[AuthService] New token expires in ${Math.round(timeUntilExpiry / 1000 / 60)} minutes`);
+        }
+
         return true;
       } else {
-        console.error('[AuthService] Failed to refresh token:', response.error);
+        console.error('[AuthService] Failed to refresh token');
         return false;
       }
     } catch (error) {

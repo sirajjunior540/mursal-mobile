@@ -151,12 +151,12 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
   
   // Debug logging
   React.useEffect(() => {
-    console.log('🔔 [IncomingOrderModal] Modal state changed:', { visible, hasOrder: !!order });
-    
+    console.log('[IncomingOrderModal] Modal state changed:', { visible, hasOrder: !!order });
+
     if (order && visible) {
-      console.log('📋 IncomingOrderModal - Full Order data:', JSON.stringify(order, null, 2));
-      console.log('📋 IncomingOrderModal - Order type:', order.type);
-      console.log('📋 IncomingOrderModal - Order fields:', {
+      console.log('[IncomingOrderModal] Full Order data:', JSON.stringify(order, null, 2));
+      console.log('[IncomingOrderModal] Order type:', order.type);
+      console.log('[IncomingOrderModal] Order fields:', {
         id: order.id,
         order_number: order.order_number,
         customer: order.customer,
@@ -164,6 +164,7 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
         customer_details: order.customer_details,
         pickup_address: order.pickup_address,
         delivery_address: order.delivery_address,
+        dropoff_address: order.dropoff_address,
         total: order.total,
         delivery_fee: order.delivery_fee,
         items: order.items,
@@ -172,21 +173,21 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
         cod_amount: order.cod_amount,
         consolidation_warehouse_address: order.consolidation_warehouse_address
       });
-      console.log('📋 IncomingOrderModal - Is batch order:', isBatchOrder);
-      console.log('📋 IncomingOrderModal - Batch properties:', batchProperties);
-      console.log('📋 IncomingOrderModal - Is warehouse consolidation:', isWarehouseConsolidation);
+      console.log('[IncomingOrderModal] Is batch order:', isBatchOrder);
+      console.log('[IncomingOrderModal] Batch properties:', batchProperties);
+      console.log('[IncomingOrderModal] Is warehouse consolidation:', isWarehouseConsolidation);
       if (order.type === 'batch') {
         const batchOrder = order as BatchOrder;
-        console.log('📋 IncomingOrderModal - Batch warehouse info:', batchOrder.warehouse_info);
-        console.log('📋 IncomingOrderModal - Batch delivery address info:', batchOrder.delivery_address_info);
-        console.log('📋 IncomingOrderModal - Batch is_consolidated:', batchOrder.is_consolidated);
-        console.log('📋 IncomingOrderModal - Batch orders count:', batchOrder.current_batch?.orders?.length || 0);
+        console.log('[IncomingOrderModal] Batch warehouse info:', batchOrder.warehouse_info);
+        console.log('[IncomingOrderModal] Batch delivery address info:', batchOrder.delivery_address_info);
+        console.log('[IncomingOrderModal] Batch is_consolidated:', batchOrder.is_consolidated);
+        console.log('[IncomingOrderModal] Batch orders count:', batchOrder.current_batch?.orders?.length || 0);
       }
       if (order.current_batch) {
-        console.log('📋 IncomingOrderModal - Current batch:', order.current_batch);
-        console.log('📋 IncomingOrderModal - Current batch warehouse info:', order.current_batch.warehouse_info);
-        console.log('📋 IncomingOrderModal - Current batch delivery address info:', order.current_batch.delivery_address_info);
-        console.log('📋 IncomingOrderModal - Current batch orders:', order.current_batch.orders?.length || 0);
+        console.log('[IncomingOrderModal] Current batch:', order.current_batch);
+        console.log('[IncomingOrderModal] Current batch warehouse info:', order.current_batch.warehouse_info);
+        console.log('[IncomingOrderModal] Current batch delivery address info:', order.current_batch.delivery_address_info);
+        console.log('[IncomingOrderModal] Current batch orders:', order.current_batch.orders?.length || 0);
       }
     }
   }, [order, visible, isBatchOrder, batchProperties, isWarehouseConsolidation]);
@@ -500,17 +501,52 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
   // Generate sections for FlatList
   const sections = React.useMemo(() => {
     if (!order) {
-      console.log('⚠️ IncomingOrderModal - No order data available');
+      console.log('[IncomingOrderModal] No order data available');
       return [];
     }
-    
-    console.log('📋 Generating sections for order:', {
+
+    console.log('[IncomingOrderModal] Generating sections for order:', {
       orderId: order.id,
+      orderNumber: order.order_number,
       orderType: order.type,
       isBatchOrder,
-      hasCustomer: !!order.customer,
-      hasPickupAddress: !!order.pickup_address,
-      hasDeliveryAddress: !!order.delivery_address
+      customer: order.customer,
+      customer_name: order.customer_name,
+      customer_details: order.customer_details,
+      pickup_address: order.pickup_address,
+      delivery_address: order.delivery_address,
+      dropoff_address: order.dropoff_address,
+      total: order.total,
+      delivery_fee: order.delivery_fee,
+    });
+
+    // Extract customer name with multiple fallbacks
+    const extractedCustomerName =
+      (order.customer && typeof order.customer === 'object' && order.customer.name) ||
+      order.customer_name ||
+      (order.customer_details && typeof order.customer_details === 'object' && order.customer_details.name) ||
+      (order.customer_details && typeof order.customer_details === 'object' && order.customer_details.customer_name) ||
+      (order.dropoff_contact_name) ||
+      (typeof order.customer === 'string' ? order.customer : null) ||
+      'Customer';
+
+    // Extract pickup address with fallbacks
+    const extractedPickupAddress =
+      order.pickup_address ||
+      (order as any).restaurant_address ||
+      'Pickup location';
+
+    // Extract delivery address with fallbacks
+    const extractedDeliveryAddress =
+      order.delivery_address ||
+      order.dropoff_address ||
+      (order as any).customer_address ||
+      'Delivery location';
+
+    console.log('[IncomingOrderModal] Extracted values:', {
+      customerName: extractedCustomerName,
+      pickupAddress: extractedPickupAddress,
+      deliveryAddress: extractedDeliveryAddress,
     });
     
     // Calculate values within this useMemo to avoid forward references
@@ -534,32 +570,27 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
     });
     
     if (!isBatchOrder || (batchProperties?.orders?.length || 0) <= 1) {
-      // Single order sections
+      // Single order sections - use extracted values with fallbacks
       sectionsList.push(
         {
           id: 'customer-info',
           type: 'customer-info',
           data: {
-            customerName: order.customer?.name || 
-                        order.customer_name || 
-                        order.customer_details?.name || 
-                        order.customer_details?.customer_name ||
-                        (order.customer && typeof order.customer === 'string' ? order.customer : null) ||
-                        'Customer'
+            customerName: extractedCustomerName
           }
         },
         {
           id: 'location-pickup',
           type: 'location-pickup',
           data: {
-            pickupAddress: order.pickup_address || 'Pickup location'
+            pickupAddress: extractedPickupAddress
           }
         },
         {
           id: 'location-delivery',
           type: 'location-delivery',
           data: {
-            deliveryAddress: getDeliveryAddress(),
+            deliveryAddress: getDeliveryAddress() || extractedDeliveryAddress,
             isWarehouseConsolidation
           }
         }
@@ -572,14 +603,14 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
           id: 'location-pickup',
           type: 'location-pickup',
           data: {
-            pickupAddress: order.pickup_address || 'Pickup location'
+            pickupAddress: extractedPickupAddress
           }
         },
         {
           id: 'location-delivery',
           type: 'location-delivery',
           data: {
-            deliveryAddress: getDeliveryAddress(),
+            deliveryAddress: getDeliveryAddress() || extractedDeliveryAddress,
             isWarehouseConsolidation
           }
         }
@@ -597,7 +628,7 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
       });
       
       if (batchProperties?.orders && batchProperties.orders.length > 0) {
-        console.log('📦 [IncomingOrderModal] Adding batch orders list section:', {
+        console.log('[IncomingOrderModal] Adding batch orders list section:', {
           ordersCount: batchProperties.orders.length,
           firstOrder: batchProperties.orders[0],
           orders: batchProperties.orders
@@ -610,7 +641,7 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
           }
         });
       } else {
-        console.log('📦 [IncomingOrderModal] No batch orders to display:', {
+        console.log('[IncomingOrderModal] No batch orders to display:', {
           isBatchOrder,
           batchProperties,
           hasOrders: !!batchProperties?.orders,

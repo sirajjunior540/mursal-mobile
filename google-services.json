@@ -7,9 +7,9 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:730518770932:android:6a379124a1850f3ba9faa1",
+        "mobilesdk_app_id": "1:730518770932:android:dd7b6faecbd23cd2a9faa1",
         "android_client_info": {
-          "package_name": "com.driverappnew"
+          "package_name": "com.murrsal.customerapp"
         }
       },
       "oauth_client": [],
@@ -28,7 +28,7 @@
       "client_info": {
         "mobilesdk_app_id": "1:730518770932:android:6a379124a1850f3ba9faa1",
         "android_client_info": {
-          "package_name": "com.murrsal.driver"
+          "package_name": "com.mursal.driver"
         }
       },
       "oauth_client": [],

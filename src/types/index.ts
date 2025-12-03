@@ -185,17 +185,19 @@ export interface Address {
   };
 }
 
-export type OrderStatus = 
-  | 'pending' 
+/**
+ * Unified Order Status - matches backend delivery-service and main Django backend
+ * Do NOT add statuses that don't exist in backend!
+ */
+export type OrderStatus =
+  | 'pending'
   | 'confirmed'
   | 'preparing'
   | 'ready'
-  | 'assigned'
-  | 'picked_up' 
-  | 'in_transit' 
-  | 'delivered' 
+  | 'picked_up'
+  | 'in_transit'
+  | 'delivered'
   | 'cancelled'
-  | 'returned'
   | 'failed';
 
 export type PaymentMethod = 'cash' | 'card' | 'digital_wallet';
@@ -426,6 +428,10 @@ export interface AuthContextType {
   logout: () => Promise<void>;
   setTenant: (tenantId: string) => Promise<void>;
   error: string | null;
+  // OTP Authentication
+  sendOTP: (phoneNumber: string) => Promise<OtpSendResponse>;
+  verifyOTP: (phoneNumber: string, otp: string, sessionId: string) => Promise<OtpVerifyResponse>;
+  resendOTP: (phoneNumber: string, sessionId: string) => Promise<OtpSendResponse>;
   hasPermission: {
     isPlatformSuperuser: () => boolean;
     isPlatformAdmin: () => boolean;
@@ -502,6 +508,29 @@ export interface LoginResponse {
   user: AuthUser;
   driver: Driver;
   tenant?: Tenant;
+}
+
+// OTP Authentication Types
+export interface OtpSendResponse {
+  message: string;
+  session_id: string;
+  expires_in: number;
+  is_existing_driver: boolean;
+  otp_code?: string; // Only included in development mode
+}
+
+export interface OtpVerifyResponse {
+  access_token: string;
+  refresh_token: string;
+  token_type: string;
+  expires_in: number;
+  message: string;
+  is_new_driver: boolean;
+  user: AuthUser;
+  driver: Driver;
+  tenant?: Tenant;
+  phone_number?: string; // For new drivers
+  session_id?: string; // For new drivers
 }
 
 // Navigation Types

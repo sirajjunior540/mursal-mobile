@@ -15,10 +15,12 @@ export type CommunicationMode = 'polling' | 'websocket' | 'push' | 'all';
  */
 export interface RealtimeSDKConfig {
   // Base configuration
-  baseUrl: string;
+  baseUrl: string;          // WebSocket service URL (Go websocket-service)
+  apiBaseUrl?: string;      // API service URL for polling (delivery-service), defaults to baseUrl
   authToken?: string;
-  tenantId?: string; // Tenant identifier for multi-tenant support
-  
+  tenantId?: string;        // Tenant identifier for multi-tenant support
+  driverId?: string;        // Driver ID for WebSocket connection (required for Go websocket-service)
+
   // Communication modes
   enabledModes: CommunicationMode[];
   primaryMode: CommunicationMode;

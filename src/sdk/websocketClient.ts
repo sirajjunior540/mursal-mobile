@@ -10,6 +10,7 @@ export interface WebSocketClientConfig {
   endpoint: string;
   authToken?: string;
   tenantId?: string;
+  driverId?: string;  // Driver ID for Go websocket-service
   reconnectInterval: number;
   maxReconnectAttempts: number;
 }
@@ -115,11 +116,10 @@ export class WebSocketClient {
     this.reconnectAttempts = 0;
     this.callbacks.onConnectionChange?.(true);
 
-    // Send authentication if token is available
-    // Add a small delay to ensure WebSocket is fully ready
-    setTimeout(() => {
-      this.authenticate();
-    }, 100);
+    // Note: The Go websocket-service authenticates via query parameters (user_id, user_type)
+    // which are already included in the connection URL. No need to send an authenticate message.
+    // The connection is considered authenticated once it's open.
+    console.log('[WebSocketClient] Authentication via query params - connection ready');
   }
 
   /**
@@ -237,6 +237,7 @@ export class WebSocketClient {
 
   /**
    * Get WebSocket URL
+   * Builds URL for Go websocket-service with required query params
    */
   private getWebSocketUrl(): string {
     // Convert HTTP URL to WebSocket URL
@@ -251,15 +252,30 @@ export class WebSocketClient {
     }
 
     // Remove leading slash from endpoint if present
-    const endpoint = this.config.endpoint.startsWith('/') 
-      ? this.config.endpoint.substring(1) 
+    const endpoint = this.config.endpoint.startsWith('/')
+      ? this.config.endpoint.substring(1)
       : this.config.endpoint;
 
-    const fullUrl = `${wsUrl}${endpoint}`;
+    let fullUrl = `${wsUrl}${endpoint}`;
+
+    // Add query parameters for Go websocket-service
+    // The Go service expects: /ws?user_id=<driver_id>&user_type=driver
+    const queryParams: string[] = [];
+
+    if (this.config.driverId) {
+      queryParams.push(`user_id=${encodeURIComponent(this.config.driverId)}`);
+      queryParams.push('user_type=driver');
+    }
+
+    if (queryParams.length > 0) {
+      fullUrl += `?${queryParams.join('&')}`;
+    }
+
     if (__DEV__) {
       console.log('[WebSocketClient] WebSocket URL:', fullUrl);
       console.log('[WebSocketClient] Base URL:', this.config.baseUrl);
       console.log('[WebSocketClient] Endpoint:', this.config.endpoint);
+      console.log('[WebSocketClient] Driver ID:', this.config.driverId);
     }
     return fullUrl;
   }

@@ -4,16 +4,14 @@ import {
   Text,
   StyleSheet,
   Animated,
-  Dimensions,
   StatusBar,
-  ViewStyle,
-  TextStyle,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
-import { Design } from '../constants/designSystem';
-import AppLogo from '../components/AppLogo';
+import Ionicons from 'react-native-vector-icons/Ionicons';
 
-const { height } = Dimensions.get('window');
+import { FlatSplashLogo } from '../components/Splash/FlatSplashLogo';
+import { flatColors } from '../design/dashboard/flatColors';
+import { premiumTypography } from '../design/dashboard/premiumTypography';
 
 interface SplashScreenProps {
   onAnimationComplete: () => void;
@@ -23,124 +21,106 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
   onAnimationComplete,
 }) => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const logoScale = useRef(new Animated.Value(0.9)).current;
-  const logoOpacity = useRef(new Animated.Value(0)).current;
-  const textOpacity = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(24)).current;
+  const progressAnim = useRef(new Animated.Value(0.25)).current;
 
   useEffect(() => {
     const animateEntrance = (): void => {
-      // Elegant entrance sequence - no complex animations
-      Animated.sequence([
-        // 1. Fade in background
+      Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 1,
-          duration: 600,
+          duration: 500,
           useNativeDriver: true,
         }),
-        // 2. Show logo with subtle scale
-        Animated.parallel([
-          Animated.timing(logoOpacity, {
-            toValue: 1,
-            duration: 800,
-            useNativeDriver: true,
-          }),
-          Animated.spring(logoScale, {
-            toValue: 1,
-            tension: 50,
-            friction: 7,
-            useNativeDriver: true,
-          }),
-        ]),
-        // 3. Show text
-        Animated.timing(textOpacity, {
-          toValue: 1,
-          duration: 600,
+        Animated.spring(slideAnim, {
+          toValue: 0,
           useNativeDriver: true,
+          friction: 8,
+          tension: 45,
+        }),
+        Animated.timing(progressAnim, {
+          toValue: 1,
+          duration: 1600,
+          useNativeDriver: false,
         }),
       ]).start(() => {
-        // Hold for a moment then complete
         setTimeout(() => {
           onAnimationComplete();
-        }, 1200);
+        }, 300);
       });
     };
 
-    // Start animation after brief delay
     const timeoutId = setTimeout(animateEntrance, 200);
     
     return () => clearTimeout(timeoutId);
-  }, [fadeAnim, logoScale, logoOpacity, textOpacity, onAnimationComplete]);
+  }, [fadeAnim, slideAnim, progressAnim, onAnimationComplete]);
+
+  const progressWidth = progressAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['20%', '100%'],
+  });
 
   return (
     <>
       <StatusBar
-        backgroundColor="transparent"
-        barStyle="light-content"
-        translucent={true}
+        backgroundColor={flatColors.backgrounds.secondary}
+        barStyle="dark-content"
+        translucent={false}
       />
-      <LinearGradient
-        colors={[Design.colors.primary, Design.colors.primaryDark]}
-        style={styles.container}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-      >
-        <Animated.View
-          style={[
-            styles.backgroundOverlay,
-            {
-              opacity: fadeAnim,
-            },
+      <View style={styles.container}>
+        <LinearGradient
+          colors={[
+            flatColors.primary[50],
+            flatColors.backgrounds.secondary,
+            flatColors.backgrounds.primary,
           ]}
+          style={StyleSheet.absoluteFillObject}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
         />
 
-        {/* Main Content */}
-        <View style={styles.content}>
-          <Animated.View
-            style={[
-              styles.logoContainer,
-              {
-                opacity: logoOpacity,
-                transform: [{ scale: logoScale }],
-              },
-            ]}
-          >
-            <AppLogo 
-              size="xlarge" 
-              color={Design.colors.textInverse}
-              showText={false}
-              variant="minimal"
-            />
-          </Animated.View>
+        <View style={[styles.blob, styles.blobTop]} />
+        <View style={[styles.blob, styles.blobBottom]} />
 
-          <Animated.View
-            style={[
-              styles.textContainer,
-              {
-                opacity: textOpacity,
-              },
-            ]}
-          >
-            <Text style={styles.appName}>MURSAL</Text>
-            <Text style={styles.tagline}>Driver Excellence</Text>
-          </Animated.View>
-        </View>
-
-        {/* Footer */}
         <Animated.View
           style={[
-            styles.footer,
+            styles.content,
             {
-              opacity: textOpacity,
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }],
             },
           ]}
         >
-          <View style={styles.brandIndicator}>
-            <View style={styles.dot} />
-            <View style={[styles.dot, styles.activeDot]} />
-            <View style={styles.dot} />
+          <FlatSplashLogo size="xlarge" />
+
+          <Text style={styles.appName}>MURSAL DRIVER</Text>
+          <Text style={styles.tagline}>
+            Calm flat styling from the home screen, right from launch.
+          </Text>
+
+          <View style={styles.metaRow}>
+            <View style={styles.metaChip}>
+              <Ionicons name="cellular" size={16} color={flatColors.accent.blue} />
+              <Text style={styles.metaText}>Live sync</Text>
+            </View>
+            <View style={styles.metaChip}>
+              <Ionicons name="shield-checkmark" size={16} color={flatColors.accent.green} />
+              <Text style={styles.metaText}>Secure</Text>
+            </View>
+          </View>
+
+          <View style={styles.progressContainer}>
+            <View style={styles.progressTrack}>
+              <Animated.View style={[styles.progressFill, { width: progressWidth }]} />
+            </View>
+            <View style={styles.progressDots}>
+              <View style={styles.dot} />
+              <View style={[styles.dot, styles.activeDot]} />
+              <View style={styles.dot} />
+            </View>
           </View>
         </Animated.View>
-      </LinearGradient>
+      </View>
     </>
   );
 };
@@ -150,79 +130,97 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-  } as ViewStyle,
-  
-  backgroundOverlay: {
+    backgroundColor: flatColors.backgrounds.secondary,
+  },
+  blob: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.1)',
-  } as ViewStyle,
-
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    backgroundColor: flatColors.primary[100],
+    opacity: 0.6,
+  },
+  blobTop: {
+    top: -60,
+    right: -30,
+  },
+  blobBottom: {
+    bottom: -70,
+    left: -40,
+    backgroundColor: flatColors.accent.blue,
+    opacity: 0.12,
+  },
   content: {
-    flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: Design.spacing[8],
-  } as ViewStyle,
-
-  logoContainer: {
-    marginBottom: Design.spacing[8],
-  } as ViewStyle,
-
-  textContainer: {
-    alignItems: 'center',
-  } as ViewStyle,
-
+    gap: 12,
+    paddingHorizontal: 32,
+  },
   appName: {
-    fontSize: 42,
-    fontWeight: '700',
-    color: Design.colors.textInverse,
-    letterSpacing: 8,
+    ...premiumTypography.display.small,
+    letterSpacing: 4,
+    color: flatColors.neutral[800],
     textAlign: 'center',
-    marginBottom: Design.spacing[3],
-    textShadowColor: 'rgba(0, 0, 0, 0.3)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
-    fontFamily: 'System',
-  } as TextStyle,
-
+    fontWeight: '800',
+  },
   tagline: {
-    fontSize: 16,
-    color: 'rgba(255, 255, 255, 0.9)',
-    letterSpacing: 2,
+    ...premiumTypography.body.medium,
+    color: flatColors.neutral[600],
     textAlign: 'center',
-    fontWeight: '300',
-    textShadowColor: 'rgba(0, 0, 0, 0.2)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
-    fontFamily: 'System',
-  } as TextStyle,
-
-  footer: {
-    position: 'absolute',
-    bottom: height * 0.1,
-    alignItems: 'center',
-  } as ViewStyle,
-
-  brandIndicator: {
+    marginTop: 4,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 10,
+  },
+  metaChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Design.spacing[2],
-  } as ViewStyle,
-
+    gap: 6,
+    backgroundColor: flatColors.cards.blue.background,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: flatColors.neutral[200],
+  },
+  metaText: {
+    ...premiumTypography.caption.medium,
+    color: flatColors.neutral[700],
+    fontWeight: '700',
+  },
+  progressContainer: {
+    marginTop: 18,
+    alignItems: 'center',
+    gap: 10,
+    width: 200,
+  },
+  progressTrack: {
+    width: '100%',
+    height: 6,
+    backgroundColor: flatColors.neutral[100],
+    borderRadius: 999,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: flatColors.accent.blue,
+    borderRadius: 999,
+  },
+  progressDots: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+  },
   dot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: 'rgba(255, 255, 255, 0.4)',
-  } as ViewStyle,
-
+    backgroundColor: flatColors.neutral[300],
+  },
   activeDot: {
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
     width: 20,
     borderRadius: 10,
-  } as ViewStyle,
+    backgroundColor: flatColors.accent.blue,
+  },
 });

@@ -1,16 +1,18 @@
-import { 
-  ApiResponse, 
-  AuthUser, 
-  Driver, 
-  DriverBalance, 
+import {
+  ApiResponse,
+  AuthUser,
+  Driver,
+  DriverBalance,
   Order,
-  BatchOrder, 
+  BatchOrder,
   OrderStatus,
   BalanceTransaction,
   LoginRequest,
   LoginResponse,
   Tenant,
-  TenantSettings
+  TenantSettings,
+  OtpSendResponse,
+  OtpVerifyResponse
 } from '../types';
 import { 
   BatchLeg, 
@@ -71,74 +73,264 @@ export class ApiEndpoints {
   constructor(protected client: HttpClient) {}
 
   // ==================== Authentication ====================
-  
+
+  // OTP-based authentication methods
+  async sendOTP(phoneNumber: string): Promise<ApiResponse<OtpSendResponse>> {
+    try {
+      const response = await this.client.request<OtpSendResponse>('/api/v1/auth/driver/otp/send/', {
+        method: 'POST',
+        body: JSON.stringify({ phone_number: phoneNumber }),
+      });
+
+      if (response.success && response.data) {
+        console.log('[API] OTP sent successfully');
+        return {
+          success: true,
+          data: response.data,
+          message: response.data.message
+        };
+      }
+
+      return {
+        success: false,
+        data: {} as OtpSendResponse,
+        error: response.error || 'Failed to send OTP'
+      };
+    } catch (error) {
+      console.error('[API] Send OTP error:', error);
+      return {
+        success: false,
+        data: {} as OtpSendResponse,
+        error: error instanceof Error ? error.message : 'Failed to send OTP'
+      };
+    }
+  }
+
+  async verifyOTP(phoneNumber: string, otp: string, sessionId: string): Promise<ApiResponse<OtpVerifyResponse>> {
+    try {
+      const response = await this.client.request<OtpVerifyResponse>('/api/v1/auth/driver/otp/verify/', {
+        method: 'POST',
+        body: JSON.stringify({
+          phone_number: phoneNumber,
+          otp: otp,
+          session_id: sessionId
+        }),
+      });
+
+      if (response.success && response.data) {
+        // If this is an existing driver, store tokens
+        if (!response.data.is_new_driver && response.data.access_token) {
+          await SecureStorage.setAuthToken(response.data.access_token);
+          await SecureStorage.setRefreshToken(response.data.refresh_token);
+
+          // Store user and driver data
+          const userInfo: AuthUser = {
+            id: response.data.user.id,
+            username: response.data.user.phone || '',
+            email: response.data.user.email || '',
+            firstName: response.data.user.first_name || '',
+            lastName: response.data.user.last_name || '',
+            phone: response.data.user.phone || '',
+            token: response.data.access_token,
+            role: 'driver',
+            is_active: response.data.user.is_active,
+            is_staff: false,
+            is_superuser: false
+          };
+
+          await Storage.setItem(STORAGE_KEYS.USER_DATA, userInfo);
+
+          const driverInfo: Driver = {
+            id: response.data.driver.id,
+            firstName: response.data.driver.firstName || '',
+            lastName: response.data.driver.lastName || '',
+            email: response.data.driver.email || '',
+            phone: response.data.driver.phone || '',
+            rating: response.data.driver.rating || 0,
+            totalDeliveries: response.data.driver.totalDeliveries || 0,
+            isOnline: response.data.driver.isOnline || false,
+            profileImage: undefined
+          };
+
+          await Storage.setItem(STORAGE_KEYS.DRIVER_DATA, driverInfo);
+
+          if (response.data.tenant) {
+            await Storage.setItem(STORAGE_KEYS.TENANT_ID, response.data.tenant.slug || response.data.tenant.id);
+            await Storage.setItem('@tenant_data', response.data.tenant);
+          }
+        }
+
+        return {
+          success: true,
+          data: response.data,
+          message: response.data.message
+        };
+      }
+
+      return {
+        success: false,
+        data: {} as OtpVerifyResponse,
+        error: response.error || 'Failed to verify OTP'
+      };
+    } catch (error) {
+      console.error('[API] Verify OTP error:', error);
+      return {
+        success: false,
+        data: {} as OtpVerifyResponse,
+        error: error instanceof Error ? error.message : 'Failed to verify OTP'
+      };
+    }
+  }
+
+  async resendOTP(phoneNumber: string, sessionId: string): Promise<ApiResponse<OtpSendResponse>> {
+    try {
+      const response = await this.client.request<OtpSendResponse>('/api/v1/auth/driver/otp/resend/', {
+        method: 'POST',
+        body: JSON.stringify({
+          phone_number: phoneNumber,
+          session_id: sessionId
+        }),
+      });
+
+      if (response.success && response.data) {
+        console.log('[API] OTP resent successfully');
+        return {
+          success: true,
+          data: response.data,
+          message: response.data.message
+        };
+      }
+
+      return {
+        success: false,
+        data: {} as OtpSendResponse,
+        error: response.error || 'Failed to resend OTP'
+      };
+    } catch (error) {
+      console.error('[API] Resend OTP error:', error);
+      return {
+        success: false,
+        data: {} as OtpSendResponse,
+        error: error instanceof Error ? error.message : 'Failed to resend OTP'
+      };
+    }
+  }
+
   async login(credentials: LoginRequest): Promise<ApiResponse<LoginResponse>> {
     try {
-      // Convert camelCase tenantId to snake_case tenant_id for backend
+      // Driver login uses phone number and password
+      // The tenant_slug is optional for multi-tenant filtering
       const requestBody = {
-        username: credentials.username,
+        phone: credentials.username,  // username field contains phone number for drivers
         password: credentials.password,
-        ...(credentials.tenantId && { tenant_id: credentials.tenantId })
+        ...(credentials.tenantId && { tenant_slug: credentials.tenantId })
       };
-      
-      const response = await this.client.request<TokenResponse>('/api/v1/auth/token/', {
+
+      // Use the driver-specific login endpoint on delivery-service
+      const response = await this.client.request<{
+        access_token: string;
+        refresh_token: string;
+        token_type: string;
+        expires_in: number;
+        user: {
+          id: string;
+          username: string;
+          email: string;
+          first_name: string;
+          last_name: string;
+          phone: string;
+          role: string;
+          is_active: boolean;
+          is_staff: boolean;
+          is_superuser: boolean;
+          rating: number;
+          total_deliveries: number;
+          is_online: boolean;
+          is_verified: boolean;
+        };
+        driver: {
+          id: string;
+          firstName: string;
+          lastName: string;
+          email: string;
+          phone: string;
+          rating: number;
+          totalDeliveries: number;
+          isOnline: boolean;
+          vehicleType: string;
+          vehiclePlate: string;
+          status: string;
+        };
+        tenant: {
+          id: string;
+          name: string;
+          slug: string;
+          logo: string | null;
+        } | null;
+      }>('/api/v1/auth/driver/login/', {
         method: 'POST',
         body: JSON.stringify(requestBody),
       });
 
       if (response.success && response.data) {
-        const { access, refresh, ...userData } = response.data;
-        
-        if (access && refresh) {
+        const { access_token, refresh_token, user, driver, tenant } = response.data;
+
+        if (access_token && refresh_token) {
           // Store tokens securely
-          await SecureStorage.setAuthToken(access);
-          await SecureStorage.setRefreshToken(refresh);
-          
+          await SecureStorage.setAuthToken(access_token);
+          await SecureStorage.setRefreshToken(refresh_token);
+
           // Store user data
           const userInfo: AuthUser = {
-            id: String(userData.user_id || ''),
-            username: userData.username || credentials.username,
-            email: userData.email || '',
-            firstName: '',
-            lastName: '',
-            phone: '',
-            token: access,
-            role: userData.role || '',
-            is_active: true,
-            is_staff: userData.is_staff || false,
-            is_superuser: userData.is_superuser || false
+            id: user.id,
+            username: user.username,
+            email: user.email || '',
+            firstName: user.first_name || '',
+            lastName: user.last_name || '',
+            phone: user.phone || '',
+            token: access_token,
+            role: user.role || 'driver',
+            is_active: user.is_active,
+            is_staff: user.is_staff || false,
+            is_superuser: user.is_superuser || false
           };
-          
+
           await Storage.setItem(STORAGE_KEYS.USER_DATA, userInfo);
-          
-          
-          // Create driver data from user info
+
+          // Create driver data from response
           const driverInfo: Driver = {
-            id: String(userData.user_id || ''),
-            firstName: userData.first_name || '',
-            lastName: userData.last_name || '',
-            email: userData.email || '',
-            phone: userData.phone || '',
-            rating: userData.rating || 0,
-            totalDeliveries: userData.total_deliveries || 0,
-            isOnline: userData.is_online || false,
-            profileImage: userData.profile_image || undefined
+            id: driver.id,
+            firstName: driver.firstName || '',
+            lastName: driver.lastName || '',
+            email: driver.email || '',
+            phone: driver.phone || '',
+            rating: driver.rating || 0,
+            totalDeliveries: driver.totalDeliveries || 0,
+            isOnline: driver.isOnline || false,
+            profileImage: undefined
           };
-          
+
+          // Store tenant info if available
+          if (tenant) {
+            await Storage.setItem(STORAGE_KEYS.TENANT_ID, tenant.slug);
+            await Storage.setItem('@tenant_data', tenant);
+          }
+
           return {
             success: true,
             data: {
               user: userInfo,
-              driver: driverInfo
+              driver: driverInfo,
+              tenant: tenant || undefined
             }
           };
         }
       }
-      
+
       return {
         success: false,
         data: {} as LoginResponse,
-        error: 'Invalid response from server'
+        error: response.error || 'Invalid response from server'
       };
     } catch (error) {
       throw error;
@@ -166,13 +358,17 @@ export class ApiEndpoints {
         return false;
       }
 
-      const response = await this.client.request<{ access: string }>('/api/v1/auth/token/refresh/', {
+      // Use delivery-service refresh endpoint
+      const response = await this.client.request<{ access_token: string; refresh_token: string }>('/api/v1/auth/refresh/', {
         method: 'POST',
-        body: JSON.stringify({ refresh: refreshToken }),
+        body: JSON.stringify({ refresh_token: refreshToken }),
       });
 
-      if (response.success && response.data?.access) {
-        await SecureStorage.setAuthToken(response.data.access);
+      if (response.success && response.data?.access_token) {
+        await SecureStorage.setAuthToken(response.data.access_token);
+        if (response.data.refresh_token) {
+          await SecureStorage.setRefreshToken(response.data.refresh_token);
+        }
         return true;
       }
 
@@ -290,22 +486,27 @@ export class ApiEndpoints {
     // Use the new update_my_location endpoint that doesn't require driver ID
     // Validate coordinates before sending
     if (!latitude || !longitude || isNaN(latitude) || isNaN(longitude)) {
-      console.error(`❌ [API] Invalid coordinates: lat=${latitude}, lon=${longitude}`);
+      console.error(`[API] Invalid coordinates: lat=${latitude}, lon=${longitude}`);
       return {
         success: false,
         data: undefined,
         error: 'Invalid coordinates provided'
       };
     }
-    
+
+    // Truncate to 8 decimal places to fit backend max_digits=12, decimal_places=8
+    // This gives ~1.1mm precision which is more than enough for delivery tracking
+    const truncatedLat = Math.round(latitude * 100000000) / 100000000;
+    const truncatedLng = Math.round(longitude * 100000000) / 100000000;
+
     // Changed from /auth/drivers/update_my_location/ to /drivers/me/update-location/ for delivery-service
     const endpoint = `/api/v1/drivers/me/update-location/`;
-    console.log(`📍 [API] Updating location to: ${latitude}, ${longitude}`);
+    console.log(`[API] Updating location to: ${truncatedLat}, ${truncatedLng}`);
 
     try {
       const response = await this.client.post<void>(endpoint, {
-        latitude: Number(latitude),
-        longitude: Number(longitude)
+        latitude: truncatedLat,
+        longitude: truncatedLng
       });
 
       if (response.success) {

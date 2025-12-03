@@ -1,8 +1,7 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   StyleSheet,
   Alert,
@@ -10,183 +9,63 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  Animated,
   StatusBar,
-  Dimensions,
-  TextInputProps,
+  Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import LinearGradient from 'react-native-linear-gradient';
-import { useAuth } from '../../contexts/AuthContext';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { Design } from '../../constants/designSystem';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+
 import AppLogo from '../../components/AppLogo';
+import { FlatInputField } from '../../components/Auth/FlatInputField';
+import { flatColors } from '../../design/dashboard/flatColors';
+import { premiumTypography } from '../../design/dashboard/premiumTypography';
+import { useAuth } from '../../contexts/AuthContext';
 
-const { width } = Dimensions.get('window');
-
-interface LoginFormData {
-  username: string;
-  password: string;
-  deliveryProvider: string;
-  rememberMe: boolean;
-}
-
-interface InputFieldProps extends Omit<TextInputProps, 'style'> {
-  label: string;
-  icon: React.ComponentProps<typeof Ionicons>['name'];
-  value: string;
-  onChangeText: (text: string) => void;
-  showPasswordToggle?: boolean;
-  onTogglePassword?: () => void;
-  showPassword?: boolean;
-  error?: string;
-}
-
-const InputField: React.FC<InputFieldProps> = ({
-  label,
-  icon,
-  value,
-  onChangeText,
-  showPasswordToggle,
-  onTogglePassword,
-  showPassword,
-  error,
-  ...props
-}) => {
-  const [isFocused, setIsFocused] = useState(false);
-  const animatedLabel = useRef(new Animated.Value(value ? 1 : 0)).current;
-  const animatedBorder = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.timing(animatedLabel, {
-      toValue: isFocused || value ? 1 : 0,
-      duration: 200,
-      useNativeDriver: false,
-    }).start();
-
-    Animated.timing(animatedBorder, {
-      toValue: isFocused ? 1 : 0,
-      duration: 200,
-      useNativeDriver: false,
-    }).start();
-  }, [isFocused, value, animatedLabel, animatedBorder]);
-
-  const labelStyle = {
-    top: animatedLabel.interpolate({
-      inputRange: [0, 1],
-      outputRange: [18, 0],
-    }),
-    fontSize: animatedLabel.interpolate({
-      inputRange: [0, 1],
-      outputRange: [16, 12],
-    }),
-    color: animatedLabel.interpolate({
-      inputRange: [0, 1],
-      outputRange: [Design.colors.textTertiary, Design.colors.primary],
-    }),
-  };
-
-  const borderStyle = {
-    borderColor: animatedBorder.interpolate({
-      inputRange: [0, 1],
-      outputRange: [Design.colors.border, Design.colors.primary],
-    }),
-  };
-
-  return (
-    <View style={styles.inputGroup}>
-      <Animated.View style={[styles.inputContainer, borderStyle, error && styles.inputError]}>
-        <View style={styles.inputIconWrapper}>
-          <Ionicons 
-            name={icon} 
-            size={20} 
-            color={isFocused ? Design.colors.primary : Design.colors.textSecondary} 
-          />
-        </View>
-        
-        <View style={styles.inputTextContainer}>
-          <Animated.Text style={[styles.inputLabel, labelStyle]}>
-            {label}
-          </Animated.Text>
-          <TextInput
-            style={styles.textInput}
-            value={value}
-            onChangeText={onChangeText}
-            onFocus={() => setIsFocused(true)}
-            onBlur={() => setIsFocused(false)}
-            placeholderTextColor="transparent"
-            {...props}
-          />
-        </View>
-
-        {showPasswordToggle && (
-          <TouchableOpacity
-            style={styles.passwordToggle}
-            onPress={onTogglePassword}
-          >
-            <Ionicons 
-              name={showPassword ? "eye-off" : "eye"} 
-              size={20} 
-              color={Design.colors.textSecondary} 
-            />
-          </TouchableOpacity>
-        )}
-      </Animated.View>
-      
-      {error && (
-        <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle" size={14} color={Design.colors.error} />
-          <Text style={styles.errorText}>{error}</Text>
-        </View>
-      )}
-    </View>
-  );
+// Navigation types
+type RootStackParamList = {
+  Login: undefined;
+  OTPVerification: { phoneNumber: string; sessionId: string };
+  Main: undefined;
 };
 
+type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
+
+interface LoginFormData {
+  phone: string;
+}
+
 const LoginScreen: React.FC = () => {
-  const { login, isLoading, error } = useAuth();
+  const navigation = useNavigation<NavigationProp>();
+  const { sendOTP, isLoading, error } = useAuth();
   const [formData, setFormData] = useState<LoginFormData>({
-    username: '',
-    password: '',
-    deliveryProvider: '',
-    rememberMe: true, // Default to true for better UX
+    phone: '',
   });
-  const [showPassword, setShowPassword] = useState(false);
+  const [sendingOTP, setSendingOTP] = useState(false);
   const [validationErrors, setValidationErrors] = useState<Partial<LoginFormData>>({});
-  
-  // Animation refs
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(50)).current;
-  const logoScale = useRef(new Animated.Value(0.8)).current;
-  
-  // Default tenant for backend compatibility
-  const selectedTenant = 'sirajjunior';
+  const slideAnim = useRef(new Animated.Value(24)).current;
 
   useEffect(() => {
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 800,
+        duration: 550,
         useNativeDriver: true,
       }),
       Animated.spring(slideAnim, {
         toValue: 0,
-        tension: 60,
-        friction: 8,
         useNativeDriver: true,
-      }),
-      Animated.spring(logoScale, {
-        toValue: 1,
-        tension: 60,
-        friction: 8,
-        useNativeDriver: true,
+        friction: 7,
+        tension: 40,
       }),
     ]).start();
-  }, [fadeAnim, slideAnim, logoScale]);
+  }, [fadeAnim, slideAnim]);
 
   const updateFormData = (field: keyof LoginFormData) => (value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
-    // Clear validation error when user starts typing
     if (validationErrors[field]) {
       setValidationErrors(prev => ({ ...prev, [field]: undefined }));
     }
@@ -194,211 +73,167 @@ const LoginScreen: React.FC = () => {
 
   const validateForm = (): boolean => {
     const errors: Partial<LoginFormData> = {};
-    
-    if (!formData.username.trim()) {
-      errors.username = 'Username is required';
-    }
-    
-    if (!formData.password.trim()) {
-      errors.password = 'Password is required';
-    }
-    
-    if (!formData.deliveryProvider.trim()) {
-      errors.deliveryProvider = 'Delivery provider is required';
+
+    if (!formData.phone.trim()) {
+      errors.phone = 'Phone number is required';
+    } else if (formData.phone.length < 9) {
+      errors.phone = 'Enter a valid phone number';
     }
 
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
-  const handleLogin = async (): Promise<void> => {
+  const handleSendOTP = async (): Promise<void> => {
     if (!validateForm()) {
       return;
     }
 
+    setSendingOTP(true);
     try {
-      await login(formData.username, formData.password, selectedTenant);
+      // Format phone number - add + if not present
+      let phone = formData.phone.trim();
+      if (!phone.startsWith('+')) {
+        // Assume Saudi Arabia if no country code
+        phone = phone.startsWith('0') ? `+966${phone.substring(1)}` : `+966${phone}`;
+      }
+
+      // Send OTP to phone number
+      const response = await sendOTP(phone);
+
+      // Navigate to OTP verification screen
+      navigation.navigate('OTPVerification', {
+        phoneNumber: phone,
+        sessionId: response.session_id,
+      });
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Login failed';
-      
-      // Show error message
-      Alert.alert(
-        'Login Error',
-        errorMessage,
-        [
-          {
-            text: 'OK',
-            style: 'cancel'
-          }
-        ]
-      );
+      const errorMessage = err instanceof Error ? err.message : 'Failed to send OTP';
+      Alert.alert('Error', errorMessage);
+    } finally {
+      setSendingOTP(false);
     }
   };
 
-
   return (
-    <>
-      <StatusBar barStyle="light-content" backgroundColor={Design.colors.primary} translucent />
-      <LinearGradient
-        colors={[Design.colors.primary, Design.colors.primaryDark]}
-        style={styles.container}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-      >
-        <SafeAreaView style={styles.safeArea}>
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            style={styles.keyboardContainer}
+    <View style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor={flatColors.backgrounds.secondary} />
+      <SafeAreaView style={styles.safeArea}>
+        <LinearGradient
+          colors={[flatColors.primary[50], flatColors.backgrounds.secondary]}
+          style={styles.backgroundGradient}
+        />
+        <View style={[styles.decorativeBlob, styles.blobTopRight]} />
+        <View style={[styles.decorativeBlob, styles.blobBottomLeft]} />
+
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.keyboardContainer}
+        >
+          <ScrollView
+            contentContainerStyle={styles.scrollContainer}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
           >
-            <ScrollView 
-              contentContainerStyle={styles.scrollContainer}
-              showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
+            <Animated.View
+              style={[
+                styles.content,
+                {
+                  opacity: fadeAnim,
+                  transform: [{ translateY: slideAnim }],
+                },
+              ]}
             >
-              <Animated.View
-                style={[
-                  styles.contentContainer,
-                  {
-                    opacity: fadeAnim,
-                    transform: [{ translateY: slideAnim }],
-                  }
-                ]}
-              >
-                {/* Header with Logo */}
-                <Animated.View
-                  style={[
-                    styles.header,
-                    {
-                      transform: [{ scale: logoScale }],
-                    }
-                  ]}
+              <View style={styles.heroCard}>
+                <View style={styles.heroHeader}>
+                  <View style={styles.logoBadge}>
+                    <AppLogo size="small" color={flatColors.accent.blue} />
+                  </View>
+                  <View style={styles.tagBadge}>
+                    <Ionicons name="sparkles" size={16} color={flatColors.accent.blue} />
+                    <Text style={styles.tagText}>Driver Home Look</Text>
+                  </View>
+                </View>
+
+                <Text style={styles.heroTitle}>Drive the Mursal way</Text>
+                <Text style={styles.heroSubtitle}>
+                  Same crisp cards and calm palette from the home screen, now on sign-in.
+                </Text>
+
+                <View style={styles.heroPills}>
+                  <View style={styles.pill}>
+                    <Ionicons name="flash" size={16} color={flatColors.accent.blue} />
+                    <Text style={styles.pillText}>Live dispatch ready</Text>
+                  </View>
+                  <View style={styles.pill}>
+                    <Ionicons name="shield-checkmark" size={16} color={flatColors.accent.green} />
+                    <Text style={styles.pillText}>Secure session</Text>
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.formCard}>
+                <View style={styles.formHeader}>
+                  <Text style={styles.formTitle}>Sign in to continue</Text>
+                  <Text style={styles.formSubtitle}>Enter your phone number to receive a verification code</Text>
+                </View>
+
+                <FlatInputField
+                  label="Phone number"
+                  icon="call"
+                  value={formData.phone}
+                  onChangeText={updateFormData('phone')}
+                  keyboardType="phone-pad"
+                  autoCapitalize="none"
+                  editable={!isLoading && !sendingOTP}
+                  error={validationErrors.phone}
+                  placeholder="e.g., 0501234567"
+                />
+
+                {error && (
+                  <View style={styles.errorBanner}>
+                    <Ionicons name="alert-circle" size={18} color={flatColors.accent.red} />
+                    <Text style={styles.errorBannerText}>{error}</Text>
+                  </View>
+                )}
+
+                <TouchableOpacity
+                  style={[styles.loginButton, (isLoading || sendingOTP) && styles.loginButtonDisabled]}
+                  onPress={handleSendOTP}
+                  disabled={isLoading || sendingOTP}
+                  activeOpacity={0.85}
                 >
-                  <View style={styles.logoContainer}>
-                    <AppLogo size="large" color={Design.colors.textInverse} />
-                  </View>
-                  <Text style={styles.welcomeText}>Welcome Back</Text>
-                  <Text style={styles.subtitle}>Sign in to start delivering</Text>
-                </Animated.View>
-
-                {/* Form Card */}
-                <View style={styles.formCard}>
-                  <InputField
-                    label="Delivery Provider"
-                    icon="business"
-                    value={formData.deliveryProvider}
-                    onChangeText={updateFormData('deliveryProvider')}
-                    autoCapitalize="words"
-                    editable={!isLoading}
-                    error={validationErrors.deliveryProvider}
-                  />
-
-                  <InputField
-                    label="Username"
-                    icon="person"
-                    value={formData.username}
-                    onChangeText={updateFormData('username')}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    editable={!isLoading}
-                    error={validationErrors.username}
-                  />
-
-                  <InputField
-                    label="Password"
-                    icon="lock-closed"
-                    value={formData.password}
-                    onChangeText={updateFormData('password')}
-                    secureTextEntry={!showPassword}
-                    showPasswordToggle
-                    showPassword={showPassword}
-                    onTogglePassword={() => setShowPassword(!showPassword)}
-                    editable={!isLoading}
-                    error={validationErrors.password}
-                  />
-
-                  {/* Remember Me Checkbox */}
-                  <View style={styles.rememberMeContainer}>
-                    <TouchableOpacity
-                      style={styles.checkboxContainer}
-                      onPress={() => updateFormData('rememberMe')(String(!formData.rememberMe))}
-                      activeOpacity={0.7}
-                    >
-                      <View style={[styles.checkbox, formData.rememberMe && styles.checkboxChecked]}>
-                        {formData.rememberMe && (
-                          <Ionicons name="checkmark" size={16} color={Design.colors.textInverse} />
-                        )}
-                      </View>
-                      <Text style={styles.rememberMeText}>Keep me signed in</Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  {/* Global Error Display */}
-                  {error && (
-                    <View style={styles.globalErrorContainer}>
-                      <Ionicons name="alert-circle" size={16} color={Design.colors.error} />
-                      <Text style={styles.globalErrorText}>{error}</Text>
+                  {sendingOTP ? (
+                    <View style={styles.buttonContent}>
+                      <ActivityIndicator color={flatColors.backgrounds.primary} size="small" />
+                      <Text style={styles.loginButtonText}>Sending code...</Text>
+                    </View>
+                  ) : (
+                    <View style={styles.buttonContent}>
+                      <Text style={styles.loginButtonText}>Send verification code</Text>
+                      <Ionicons name="chatbubbles" size={18} color={flatColors.backgrounds.primary} />
                     </View>
                   )}
+                </TouchableOpacity>
 
-                  {/* Login Button */}
-                  <TouchableOpacity
-                    style={[styles.loginButton, isLoading && styles.disabledButton]}
-                    onPress={handleLogin}
-                    disabled={isLoading}
-                    activeOpacity={0.8}
-                  >
-                    <LinearGradient
-                      colors={isLoading 
-                        ? [Design.colors.gray400, Design.colors.gray500] 
-                        : [Design.colors.success, '#48bb78']}
-                      style={styles.buttonGradient}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 0 }}
-                    >
-                      {isLoading ? (
-                        <View style={styles.loadingContainer}>
-                          <ActivityIndicator color={Design.colors.textInverse} size="small" />
-                          <Text style={styles.buttonText}>Signing in...</Text>
-                        </View>
-                      ) : (
-                        <View style={styles.buttonContent}>
-                          <Text style={styles.buttonText}>Sign In</Text>
-                          <Ionicons name="arrow-forward" size={20} color={Design.colors.textInverse} />
-                        </View>
-                      )}
-                    </LinearGradient>
-                  </TouchableOpacity>
-
-                  {/* Help Section */}
-                  <View style={styles.helpSection}>
-                    <Text style={styles.helpText}>
-                      Need help getting started? Contact your delivery provider
-                    </Text>
-                    <Text style={styles.securityNote}>
-                      🔒 Your login is secured and will be remembered for convenience
-                    </Text>
-                    
-                  </View>
+                <View style={styles.supportRow}>
+                  <Ionicons name="information-circle" size={16} color={flatColors.neutral[500]} />
+                  <Text style={styles.supportText}>
+                    You'll receive a 6-digit code via SMS. If you're not registered, contact your operations lead.
+                  </Text>
                 </View>
-
-                {/* Bottom Decoration */}
-                <View style={styles.bottomDecoration}>
-                  <View style={styles.decorativeDot} />
-                  <View style={styles.decorativeDot} />
-                  <View style={styles.decorativeDot} />
-                </View>
-              </Animated.View>
-            </ScrollView>
-          </KeyboardAvoidingView>
-        </SafeAreaView>
-      </LinearGradient>
-    </>
+              </View>
+            </Animated.View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: flatColors.backgrounds.secondary,
   },
   safeArea: {
     flex: 1,
@@ -409,217 +244,180 @@ const styles = StyleSheet.create({
   scrollContainer: {
     flexGrow: 1,
     justifyContent: 'center',
-    paddingHorizontal: Design.spacing[5],
-    paddingVertical: Design.spacing[8],
+    paddingVertical: 40,
+    paddingHorizontal: 20,
   },
-  contentContainer: {
+  content: {
+    flex: 1,
+    gap: 20,
+  },
+  backgroundGradient: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  decorativeBlob: {
+    position: 'absolute',
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    backgroundColor: flatColors.primary[100],
+    opacity: 0.6,
+  },
+  blobTopRight: {
+    top: -40,
+    right: -30,
+  },
+  blobBottomLeft: {
+    bottom: -50,
+    left: -20,
+  },
+  heroCard: {
+    backgroundColor: flatColors.backgrounds.primary,
+    borderRadius: 18,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: flatColors.neutral[200],
+    shadowColor: flatColors.neutral[800],
+    shadowOpacity: 0.06,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
+  },
+  heroHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 16,
   },
-  
-  // Header Styles
-  header: {
+  logoBadge: {
+    padding: 12,
+    borderRadius: 16,
+    backgroundColor: flatColors.cards.blue.background,
+    borderWidth: 1,
+    borderColor: flatColors.neutral[200],
+  },
+  tagBadge: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: Design.spacing[8],
+    backgroundColor: flatColors.backgrounds.secondary,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    gap: 6,
   },
-  logoContainer: {
-    marginBottom: Design.spacing[6],
+  tagText: {
+    ...premiumTypography.caption.medium,
+    color: flatColors.neutral[700],
+    fontWeight: '600',
   },
-  welcomeText: {
-    ...Design.typography.h2,
-    color: Design.colors.textInverse,
-    textAlign: 'center',
-    marginBottom: Design.spacing[2],
+  heroTitle: {
+    ...premiumTypography.display.small,
+    color: flatColors.neutral[800],
+    marginBottom: 6,
+  },
+  heroSubtitle: {
+    ...premiumTypography.body.medium,
+    color: flatColors.neutral[600],
+    marginBottom: 14,
+  },
+  heroPills: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  pill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: flatColors.cards.blue.background,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: flatColors.neutral[200],
+  },
+  pillText: {
+    ...premiumTypography.caption.medium,
+    color: flatColors.accent.blue,
     fontWeight: '700',
   },
-  subtitle: {
-    ...Design.typography.body,
-    color: 'rgba(255, 255, 255, 0.8)',
-    textAlign: 'center',
-    fontWeight: '500',
-  },
-  
-  // Form Styles
   formCard: {
-    width: width * 0.9,
-    backgroundColor: Design.colors.background,
-    borderRadius: Design.borderRadius.xl,
-    padding: Design.spacing[8],
-    ...Design.shadows.large,
-  },
-  inputGroup: {
-    marginBottom: Design.spacing[6],
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Design.colors.backgroundSecondary,
-    borderRadius: Design.borderRadius.md,
-    borderWidth: 2,
-    borderColor: Design.colors.border,
-    paddingHorizontal: Design.spacing[4],
-    minHeight: 64,
-    position: 'relative',
-  },
-  inputError: {
-    borderColor: Design.colors.error,
-  },
-  inputIconWrapper: {
-    width: 32,
-    height: 32,
-    borderRadius: Design.borderRadius.base,
-    backgroundColor: `${Design.colors.primary}10`,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: Design.spacing[3],
-  },
-  inputTextContainer: {
-    flex: 1,
-    position: 'relative',
-  },
-  inputLabel: {
-    position: 'absolute',
-    left: 0,
-    fontWeight: '500',
-    backgroundColor: 'transparent',
-  },
-  textInput: {
-    ...Design.typography.body,
-    color: Design.colors.text,
-    paddingVertical: Design.spacing[4],
-    paddingTop: Design.spacing[5],
-    margin: 0,
-  },
-  passwordToggle: {
-    padding: Design.spacing[2],
-    marginLeft: Design.spacing[2],
-  },
-  
-  // Error Styles
-  errorContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: Design.spacing[2],
-  },
-  errorText: {
-    ...Design.typography.bodySmall,
-    color: Design.colors.error,
-    marginLeft: Design.spacing[1],
-    flex: 1,
-  },
-  globalErrorContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Design.colors.errorBackground,
-    padding: Design.spacing[4],
-    borderRadius: Design.borderRadius.md,
-    marginBottom: Design.spacing[6],
+    backgroundColor: flatColors.backgrounds.primary,
+    borderRadius: 18,
+    padding: 20,
     borderWidth: 1,
-    borderColor: Design.colors.errorBorder,
+    borderColor: flatColors.neutral[200],
+    shadowColor: flatColors.neutral[800],
+    shadowOpacity: 0.06,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
   },
-  globalErrorText: {
-    ...Design.typography.bodySmall,
-    color: Design.colors.errorText,
-    marginLeft: Design.spacing[2],
+  formHeader: {
+    marginBottom: 12,
+    gap: 6,
+  },
+  formTitle: {
+    ...premiumTypography.headline.large,
+    color: flatColors.neutral[800],
+    fontWeight: '700',
+  },
+  formSubtitle: {
+    ...premiumTypography.body.medium,
+    color: flatColors.neutral[600],
+  },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: flatColors.cards.red.background,
+    borderWidth: 1,
+    borderColor: flatColors.accent.red,
+    padding: 12,
+    borderRadius: 12,
+    gap: 8,
+    marginBottom: 12,
+    marginTop: 2,
+  },
+  errorBannerText: {
+    ...premiumTypography.callout,
+    color: flatColors.accent.red,
     flex: 1,
   },
-  
-  // Button Styles
   loginButton: {
-    borderRadius: Design.borderRadius.md,
-    overflow: 'hidden',
-    marginTop: Design.spacing[4],
-    ...Design.shadows.medium,
-  },
-  disabledButton: {
-    opacity: 0.7,
-  },
-  buttonGradient: {
-    paddingVertical: Design.spacing[4],
+    backgroundColor: flatColors.accent.blue,
+    borderRadius: 14,
+    paddingVertical: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 56,
+    marginTop: 4,
+    shadowColor: flatColors.accent.blue,
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 6,
+  },
+  loginButtonDisabled: {
+    opacity: 0.7,
+    shadowOpacity: 0.08,
   },
   buttonContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: Design.spacing[2],
+    gap: 10,
   },
-  loadingContainer: {
+  loginButtonText: {
+    ...premiumTypography.button.large,
+    color: flatColors.backgrounds.primary,
+    fontWeight: '700',
+  },
+  supportRow: {
     flexDirection: 'row',
+    gap: 8,
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: Design.spacing[3],
+    marginTop: 16,
   },
-  buttonText: {
-    ...Design.typography.button,
-    color: Design.colors.textInverse,
-    fontWeight: '600',
-  },
-  
-  // Remember Me Styles
-  rememberMeContainer: {
-    marginBottom: Design.spacing[4],
-  },
-  checkboxContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: Design.spacing[2],
-  },
-  checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: Design.borderRadius.base,
-    borderWidth: 2,
-    borderColor: Design.colors.border,
-    marginRight: Design.spacing[3],
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: Design.colors.backgroundSecondary,
-  },
-  checkboxChecked: {
-    backgroundColor: Design.colors.primary,
-    borderColor: Design.colors.primary,
-  },
-  rememberMeText: {
-    ...Design.typography.body,
-    color: Design.colors.text,
-    fontWeight: '500',
-  },
-
-  // Help Section
-  helpSection: {
-    marginTop: Design.spacing[8],
-    alignItems: 'center',
-  },
-  helpText: {
-    ...Design.typography.bodySmall,
-    color: Design.colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: Design.spacing[3],
-  },
-  securityNote: {
-    ...Design.typography.bodySmall,
-    color: Design.colors.textTertiary,
-    textAlign: 'center',
-    lineHeight: 18,
-    fontStyle: 'italic',
-  },
-  
-  // Bottom Decoration
-  bottomDecoration: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: Design.spacing[8],
-    gap: Design.spacing[2],
-  },
-  decorativeDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+  supportText: {
+    ...premiumTypography.footnote,
+    color: flatColors.neutral[600],
+    flex: 1,
   },
 });
 

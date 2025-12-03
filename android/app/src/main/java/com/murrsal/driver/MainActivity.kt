@@ -1,4 +1,4 @@
-package com.driverappnew
+package com.murrsal.driver
 
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate

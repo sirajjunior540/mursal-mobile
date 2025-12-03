@@ -273,7 +273,12 @@ export const UpcomingStops: React.FC<UpcomingStopsProps> = ({
   };
 
   const renderIndividualStop = (stop: typeof stops[0], index: number) => {
-    const isCompleted = stop.order.status === 'delivered';
+    // A stop is completed if:
+    // - For pickup: order status is picked_up, in_transit, or delivered
+    // - For delivery: order status is delivered
+    const isCompleted = stop.type === 'pickup'
+      ? ['picked_up', 'in_transit', 'delivered'].includes(stop.order.status || '')
+      : stop.order.status === 'delivered';
     
     return (
       <TouchableOpacity

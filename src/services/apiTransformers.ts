@@ -61,33 +61,25 @@ export class ApiTransformers {
 
   /**
    * Determine order status based on delivery and order data
+   *
+   * Unified statuses matching backend: pending, confirmed, preparing, ready, picked_up, in_transit, delivered, cancelled, failed
    */
   static determineOrderStatus(
-    delivery: BackendDelivery | null, 
+    delivery: BackendDelivery | null,
     order: BackendOrder
   ): OrderStatus {
     const deliveryStatus = delivery?.status || delivery?.delivery_status;
     const orderStatus = order.status || order.order_status;
-    
+
     perfLog('Determining order status', { deliveryStatus, orderStatus });
 
-    // Map backend status to frontend OrderStatus enum
-    const statusMap: Record<string, OrderStatus> = {
-      'pending': 'pending',
-      'confirmed': 'confirmed',
-      'accepted': 'confirmed',
-      'preparing': 'preparing',
-      'ready': 'ready',
-      'assigned': 'assigned',
-      'picked_up': 'picked_up',
-      'in_transit': 'in_transit',
-      'delivered': 'delivered',
-      'cancelled': 'cancelled',
-      'returned': 'returned',
-      'failed': 'failed'
-    };
+    // Valid backend statuses - do not add statuses that don't exist in backend!
+    const validStatuses: OrderStatus[] = [
+      'pending', 'confirmed', 'preparing', 'ready',
+      'picked_up', 'in_transit', 'delivered', 'cancelled', 'failed'
+    ];
 
-    // Available orders are those that drivers can accept
+    // Available orders are those that drivers can accept (no driver assigned yet)
     if (!delivery?.driver || delivery?.driver === null || delivery?.driver === '') {
       perfLog('Order has no driver assigned - setting status to pending');
       return 'pending';
@@ -96,13 +88,23 @@ export class ApiTransformers {
     // If delivery has a driver, use the delivery status directly
     if (delivery?.driver && deliveryStatus) {
       perfLog('Order has driver - using delivery status', deliveryStatus);
-      return deliveryStatus as OrderStatus;
+      // Validate and return the status
+      if (validStatuses.includes(deliveryStatus as OrderStatus)) {
+        return deliveryStatus as OrderStatus;
+      }
+      // Fallback for unknown statuses
+      perfLog('Unknown delivery status, defaulting to pending', deliveryStatus);
+      return 'pending';
     }
 
     // Use delivery status if available, then order status, default to pending
     const finalStatus = deliveryStatus || orderStatus || 'pending';
     perfLog('Final order status determined', finalStatus);
-    return statusMap[finalStatus] || 'pending';
+
+    if (validStatuses.includes(finalStatus as OrderStatus)) {
+      return finalStatus as OrderStatus;
+    }
+    return 'pending';
   }
 
   /**
@@ -354,8 +356,10 @@ export class ApiTransformers {
       customer,
       customer_details: customer, // For backward compatibility
       items,
-      delivery_address: delivery?.delivery_address || 
-                       order?.delivery_address || 
+      delivery_address: delivery?.delivery_address ||
+                       delivery?.dropoff_address ||
+                       order?.delivery_address ||
+                       order?.dropoff_address ||
                        `${customer.name}'s Address`,
       pickup_address: delivery?.pickup_address || order?.pickup_address,
       // Use the parsed coordinates
@@ -363,29 +367,44 @@ export class ApiTransformers {
       pickup_longitude: parsedCoords.pickup_lng,
       delivery_latitude: parsedCoords.delivery_lat,
       delivery_longitude: parsedCoords.delivery_lng,
-      
+
+      // Instructions for driver
+      pickup_instructions: delivery?.pickup_instructions || order?.pickup_instructions || '',
+      delivery_instructions: delivery?.dropoff_instructions ||
+                            delivery?.delivery_instructions ||
+                            order?.dropoff_instructions ||
+                            order?.delivery_instructions || '',
+      special_instructions: order?.special_instructions || order?.notes || delivery?.notes || '',
+
       status: ApiTransformers.determineOrderStatus(delivery, order || {} as BackendOrder),
       payment_method: (order?.payment_method as PaymentMethod) || 'cash',
-      
-      // Parse amounts as numbers - check order level only
-      subtotal: order?.subtotal ? parseFloat(String(order.subtotal)) : 0,
-      delivery_fee: order?.delivery_fee ? parseFloat(String(order.delivery_fee)) : 0,
-      tax: order?.tax ? parseFloat(String(order.tax)) : 0,
-      total: order?.total ? parseFloat(String(order.total)) : 0,
+
+      // Parse amounts as numbers - check order level and delivery level
+      // Backend may use total_amount instead of total
+      subtotal: order?.subtotal ? parseFloat(String(order.subtotal)) :
+                delivery?.subtotal ? parseFloat(String(delivery.subtotal)) : 0,
+      delivery_fee: order?.delivery_fee ? parseFloat(String(order.delivery_fee)) :
+                    delivery?.delivery_fee ? parseFloat(String(delivery.delivery_fee)) : 0,
+      tax: order?.tax ? parseFloat(String(order.tax)) :
+           delivery?.tax ? parseFloat(String(delivery.tax)) : 0,
+      total: order?.total ? parseFloat(String(order.total)) :
+             order?.total_amount ? parseFloat(String(order.total_amount)) :
+             delivery?.total ? parseFloat(String(delivery.total)) :
+             delivery?.total_amount ? parseFloat(String(delivery.total_amount)) : 0,
       estimated_delivery_time: delivery?.estimated_delivery_time || order?.scheduled_delivery_time || '',
       delivery_notes: order?.delivery_notes || '',
       created_at: order?.created_at ? new Date(order.created_at) : delivery?.created_at ? new Date(delivery.created_at) : new Date(),
       // Add delivery-specific fields if this is a delivery object
       driverId: delivery?.driver || undefined,
       driverName: delivery?.driver_name || undefined,
-      
+
       // Batch order support - use current_batch structure
       current_batch: order?.current_batch || null,
       consolidation_warehouse_id: order?.consolidation_warehouse_id,
       final_delivery_address: order?.final_delivery_address,
       final_delivery_latitude: order?.final_delivery_latitude ? parseFloat(String(order.final_delivery_latitude)) : undefined,
       final_delivery_longitude: order?.final_delivery_longitude ? parseFloat(String(order.final_delivery_longitude)) : undefined,
-      
+
       // QR Code fields
       qr_code_id: order?.qr_code_id || undefined,
       qr_code_url: order?.qr_code_url || undefined,

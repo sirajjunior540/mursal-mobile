@@ -185,22 +185,40 @@ class RealtimeService {
         return;
       }
 
+      // Extract driver ID from JWT token for WebSocket connection
+      let driverId: string | undefined;
+      try {
+        const tokenParts = token.split('.');
+        if (tokenParts.length === 3) {
+          const payload = JSON.parse(atob(tokenParts[1]));
+          driverId = payload.driver_id || payload.user_id || payload.sub;
+          console.log('🔐 Extracted driver ID from token:', driverId);
+        }
+      } catch (error) {
+        console.warn('⚠️ Could not extract driver ID from token:', error);
+      }
+
       console.log('🌐 Environment configuration:', {
         apiUrl: ENV.API_BASE_URL,
         wsUrl: ENV.WS_BASE_URL,
+        driverId,
         hasToken: !!token
       });
 
       // Create SDK configuration
+      // Note: API calls use ENV.API_BASE_URL, WebSocket uses ENV.WS_BASE_URL (Go service on port 8085)
       const sdkConfig: Partial<RealtimeSDKConfig> = {
-        baseUrl: ENV.API_BASE_URL,
+        baseUrl: ENV.WS_BASE_URL,       // WebSocket service URL (Go websocket-service on port 8085)
+        apiBaseUrl: ENV.API_BASE_URL,   // API service URL for polling (delivery-service on port 9000)
         authToken: token,
         tenantId: ENV.TENANT_ID,
+        driverId,  // Driver ID for Go websocket-service connection
         enabledModes: this.getSdkEnabledModes(),
         primaryMode: this.getSdkPrimaryMode(),
         pollingInterval: this.config.pollingInterval,
         pollingEndpoint: '/api/v1/delivery/deliveries/available_orders/',
-        websocketEndpoint: '/ws/driver/orders/',
+        // Go websocket-service expects /ws with query params user_id and user_type
+        websocketEndpoint: '/ws',
         websocketReconnectInterval: 10000, // Start with 10 seconds (exponential backoff in WebSocketClient)
         websocketMaxReconnectAttempts: 5,
         pushEnabled: false,
