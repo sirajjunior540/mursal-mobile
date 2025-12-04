@@ -133,11 +133,16 @@ const buildConfig = (): EnvironmentConfig => {
   }
   
   // Build URLs from components
-  const apiBaseUrl = `${serverProtocol}://${serverIP}:${serverPort}`;
+  const apiBaseUrl = serverPort === 443 || serverPort === 80
+    ? `${serverProtocol}://${serverIP}`
+    : `${serverProtocol}://${serverIP}:${serverPort}`;
   const wsProtocol = serverProtocol === 'https' ? 'wss' : 'ws';
-  // WebSocket connects to Go websocket-service on port 8085
-  const wsServicePort = getNumberEnv('WS_SERVICE_PORT', 8085);
-  const wsBaseUrl = `${wsProtocol}://${serverIP}:${wsServicePort}`;
+  // WebSocket connects to Go websocket-service (via ws.murrsal.com or custom host)
+  const wsServiceHost = getEnvVar('WS_SERVICE_HOST', serverIP);
+  const wsServicePort = getNumberEnv('WS_SERVICE_PORT', 443);
+  const wsBaseUrl = wsServicePort === 443 || wsServicePort === 80
+    ? `${wsProtocol}://${wsServiceHost}`
+    : `${wsProtocol}://${wsServiceHost}:${wsServicePort}`;
   
   // Tenant configuration
   const tenantId = getEnvVar('TENANT_ID', 'sirajjunior');
@@ -203,7 +208,8 @@ try {
   // Provide emergency fallback configuration to prevent app crash
   console.warn('🚨 Using emergency fallback configuration');
   /* eslint-enable no-console */
-  const fallbackHost = 'api.murrsal.com'; // Fallback to production
+  const fallbackHost = 'delivery.murrsal.com'; // Fallback to delivery service
+  const fallbackWsHost = 'ws.murrsal.com'; // Fallback WebSocket host
 
   config = {
     NODE_ENV: 'production',
@@ -219,8 +225,8 @@ try {
     TENANT_ID: 'sirajjunior',
     DEFAULT_TENANT_ID: 'sirajjunior',
     TENANT_SUBDOMAIN: 'sirajjunior',
-    WS_BASE_URL: `wss://${fallbackHost}`,
-    WS_HOST: fallbackHost,
+    WS_BASE_URL: `wss://${fallbackWsHost}`,
+    WS_HOST: fallbackWsHost,
     WS_PROTOCOL: 'wss',
     WS_SERVICE_PORT: 443,
     FEATURES: {
