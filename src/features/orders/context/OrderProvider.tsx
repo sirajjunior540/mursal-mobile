@@ -663,9 +663,29 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
         // Invalidate caches when status changes
         await cacheService.invalidateByEvent('orderStatusChanged');
 
-        // If order is completed, invalidate history cache too
-        if (status === 'delivered' || status === 'failed') {
+        // If order is completed, invalidate history cache too and check if driver needs status reset
+        if (status === 'delivered' || status === 'failed' || status === 'cancelled') {
           await cacheService.invalidateByEvent('orderCompleted');
+
+          // Check if driver has any remaining active orders and reset status to available if not
+          // This ensures driver can receive new push notifications
+          setTimeout(async () => {
+            try {
+              // Get current driver orders excluding the one just completed
+              const activeOrders = driverOrders.filter(o =>
+                o.id !== deliveryId &&
+                !['delivered', 'failed', 'cancelled'].includes(o.status)
+              );
+
+              if (activeOrders.length === 0) {
+                console.log('[OrderProvider] No active orders remaining, resetting driver to available');
+                // Call API to ensure driver status is set to available
+                await apiService.updateDriverStatus(true);
+              }
+            } catch (err) {
+              console.warn('[OrderProvider] Failed to reset driver status:', err);
+            }
+          }, 500);
         }
 
         return true;
@@ -675,7 +695,7 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
     } catch (error) {
       return false;
     }
-  }, []);
+  }, [driverOrders]);
 
   const getOrderHistory = useCallback(async (filters?: any, forceRefresh = false) => {
     setIsLoading(true);
