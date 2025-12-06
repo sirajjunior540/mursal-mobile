@@ -16,7 +16,7 @@ export const dashboardColors = {
   // Stat card colors
   statCards: {
     blue: {
-      background: '#3B82F6',
+      background: '#F5A623',
       icon: '#FFFFFF',
       text: '#FFFFFF',
     },
@@ -52,16 +52,16 @@ export const dashboardColors = {
   
   // Card colors
   cardHeader: {
-    iconBackground: '#EFF6FF',
-    iconColor: '#3B82F6',
+    iconBackground: '#FFF7ED',
+    iconColor: '#F5A623',
   },
   
   // Order status colors
   orderStatus: {
     pending: '#F59E0B',
-    accepted: '#3B82F6',
+    accepted: '#F5A623',
     picked_up: '#8B5CF6',
-    in_transit: '#6366F1',
+    in_transit: '#F5A623',
     delivered: '#10B981',
     cancelled: '#EF4444',
   },

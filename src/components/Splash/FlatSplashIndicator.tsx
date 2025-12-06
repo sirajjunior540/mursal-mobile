@@ -32,13 +32,13 @@ const styles = StyleSheet.create({
   indicatorTrack: {
     width: 120,
     height: 4,
-    backgroundColor: 'rgba(255,255,255,0.16)',
+    backgroundColor: flatColors.brand.light,
     borderRadius: 2,
     overflow: 'hidden',
   },
   indicatorFill: {
     height: '100%',
-    backgroundColor: '#86c5ff',
+    backgroundColor: flatColors.brand.secondary,
     borderRadius: 2,
   },
   dotsContainer: {
@@ -50,10 +50,10 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: flatColors.brand.border,
   },
   activeDot: {
-    backgroundColor: '#86c5ff',
+    backgroundColor: flatColors.brand.secondary,
     width: 20,
     borderRadius: 10,
   },

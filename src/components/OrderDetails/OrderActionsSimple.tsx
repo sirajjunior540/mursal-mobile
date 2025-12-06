@@ -781,9 +781,9 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   photoModalText: {
-    fontSize: premiumTypography.body.fontSize,
-    fontWeight: premiumTypography.body.fontWeight,
-    lineHeight: premiumTypography.body.lineHeight,
+    fontSize: premiumTypography.body.medium.fontSize,
+    fontWeight: premiumTypography.body.medium.fontWeight,
+    lineHeight: premiumTypography.body.medium.lineHeight,
     color: flatColors.neutral[600],
     textAlign: 'center',
     paddingHorizontal: 40,

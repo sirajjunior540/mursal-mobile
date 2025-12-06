@@ -11,8 +11,10 @@ import {
   AppState,
   FlatList,
   ListRenderItem,
+  ScrollView,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import LinearGradient from 'react-native-linear-gradient';
 import { extractOrderApiIds, getOrderDisplayId, isBatchOrder as checkIsBatchOrder, getBatchProperties, isSpecialHandlingObject, Order, BatchOrder } from '../types';
 import { ExtendedOrder, BatchOrderItem, RouteStop } from '../types/orderModal.types';
 import { /* COLORS, FONTS */ } from '../constants';
@@ -93,7 +95,7 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
 }) => {
   // Get tenant settings for currency
   const { tenantSettings } = useTenant();
-  const currency = order?.currency || tenantSettings?.currency || 'SAR';
+  const currency = order?.currency || tenantSettings?.currency || 'SDG';
   
   // Animation refs
   const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
@@ -498,442 +500,60 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
     return isBatchOrder ? (batchProperties?.orders?.length || 1) : 1;
   }, [isBatchOrder, batchProperties]);
 
-  // Generate sections for FlatList
-  const sections = React.useMemo(() => {
+  // Simplified data extraction - use first available value, no complex fallbacks
+  const orderData = React.useMemo(() => {
+    console.log('📊 [IncomingOrderModal] Calculating orderData, order:', !!order);
     if (!order) {
-      console.log('[IncomingOrderModal] No order data available');
-      return [];
+      console.log('📊 [IncomingOrderModal] No order, returning null');
+      return null;
     }
 
-    console.log('[IncomingOrderModal] Generating sections for order:', {
-      orderId: order.id,
-      orderNumber: order.order_number,
-      orderType: order.type,
-      isBatchOrder,
-      customer: order.customer,
-      customer_name: order.customer_name,
-      customer_details: order.customer_details,
-      pickup_address: order.pickup_address,
-      delivery_address: order.delivery_address,
-      dropoff_address: order.dropoff_address,
-      total: order.total,
-      delivery_fee: order.delivery_fee,
-    });
+    // Extract customer name - simple fallback chain
+    const customerName = order.customer_name ||
+                        order.customer?.name ||
+                        order.customer_details?.name ||
+                        order.dropoff_contact_name ||
+                        'Customer';
+    console.log('📊 [IncomingOrderModal] customerName:', customerName);
 
-    // Extract customer name with multiple fallbacks
-    const extractedCustomerName =
-      (order.customer && typeof order.customer === 'object' && order.customer.name) ||
-      order.customer_name ||
-      (order.customer_details && typeof order.customer_details === 'object' && order.customer_details.name) ||
-      (order.customer_details && typeof order.customer_details === 'object' && order.customer_details.customer_name) ||
-      (order.dropoff_contact_name) ||
-      (typeof order.customer === 'string' ? order.customer : null) ||
-      'Customer';
+    // Extract addresses - simple fallback chain
+    const pickupAddress = order.pickup_address || 'Pickup location';
+    console.log('📊 [IncomingOrderModal] pickupAddress:', pickupAddress);
 
-    // Extract pickup address with fallbacks
-    const extractedPickupAddress =
-      order.pickup_address ||
-      (order as any).restaurant_address ||
-      'Pickup location';
+    const deliveryAddress = getDeliveryAddress();
+    console.log('📊 [IncomingOrderModal] deliveryAddress:', deliveryAddress);
 
-    // Extract delivery address with fallbacks
-    const extractedDeliveryAddress =
-      order.delivery_address ||
-      order.dropoff_address ||
-      (order as any).customer_address ||
-      'Delivery location';
+    // Extract amounts
+    const total = Number(order.total || order.total_amount || 0);
+    const deliveryFee = Number(order.delivery_fee || 0);
+    console.log('📊 [IncomingOrderModal] total:', total, 'deliveryFee:', deliveryFee);
 
-    console.log('[IncomingOrderModal] Extracted values:', {
-      customerName: extractedCustomerName,
-      pickupAddress: extractedPickupAddress,
-      deliveryAddress: extractedDeliveryAddress,
-    });
-    
-    // Calculate values within this useMemo to avoid forward references
-    const totalPickupStops = routeStops.filter(stop => stop.type === 'pickup').length;
-    const totalDeliveryStops = routeStops.filter(stop => stop.type === 'delivery').length;
-    const batchTotalAmount = isBatchOrder && batchProperties?.orders 
-      ? batchProperties.orders.reduce((sum, o) => sum + (Number(o.total) || 0), 0)
-      : Number(order?.total) || 0;
+    // Distance and time
     const distance = order.distance ? `${(order.distance / 1000).toFixed(1)} km` : '2.5 km';
     const estimatedTime = order.estimated_delivery_time || '15 min';
-    
-    const sectionsList: SectionData[] = [];
-    
-    // Order number section
-    sectionsList.push({
-      id: 'order-number',
-      type: 'order-number',
-      data: {
-        orderNumber: isBatchOrder ? `Route #${batchProperties?.batchId || getOrderDisplayId(order)}` : getOrderDisplayId(order)
-      }
-    });
-    
-    if (!isBatchOrder || (batchProperties?.orders?.length || 0) <= 1) {
-      // Single order sections - use extracted values with fallbacks
-      sectionsList.push(
-        {
-          id: 'customer-info',
-          type: 'customer-info',
-          data: {
-            customerName: extractedCustomerName
-          }
-        },
-        {
-          id: 'location-pickup',
-          type: 'location-pickup',
-          data: {
-            pickupAddress: extractedPickupAddress
-          }
-        },
-        {
-          id: 'location-delivery',
-          type: 'location-delivery',
-          data: {
-            deliveryAddress: getDeliveryAddress() || extractedDeliveryAddress,
-            isWarehouseConsolidation
-          }
-        }
-      );
-    } else {
-      // Batch order sections
-      // Always show pickup and delivery locations first
-      sectionsList.push(
-        {
-          id: 'location-pickup',
-          type: 'location-pickup',
-          data: {
-            pickupAddress: extractedPickupAddress
-          }
-        },
-        {
-          id: 'location-delivery',
-          type: 'location-delivery',
-          data: {
-            deliveryAddress: getDeliveryAddress() || extractedDeliveryAddress,
-            isWarehouseConsolidation
-          }
-        }
-      );
-      
-      // Then show route summary
-      sectionsList.push({
-        id: 'route-summary',
-        type: 'route-summary',
-        data: {
-          totalPickupStops,
-          totalDeliveryStops,
-          batchTotalOrders
-        }
-      });
-      
-      if (batchProperties?.orders && batchProperties.orders.length > 0) {
-        console.log('[IncomingOrderModal] Adding batch orders list section:', {
-          ordersCount: batchProperties.orders.length,
-          firstOrder: batchProperties.orders[0],
-          orders: batchProperties.orders
-        });
-        sectionsList.push({
-          id: 'batch-orders-list',
-          type: 'batch-orders-list',
-          data: {
-            orders: batchProperties.orders
-          }
-        });
-      } else {
-        console.log('[IncomingOrderModal] No batch orders to display:', {
-          isBatchOrder,
-          batchProperties,
-          hasOrders: !!batchProperties?.orders,
-          ordersLength: batchProperties?.orders?.length
-        });
-      }
-      
-      if (showRouteDetails && routeStops.length > 0) {
-        sectionsList.push({
-          id: 'route-stops',
-          type: 'route-stops',
-          data: {
-            stops: routeStops
-          }
-        });
-      }
-    }
-    
-    // Metrics section
-    sectionsList.push({
-      id: 'metrics',
-      type: 'metrics',
-      data: {
-        estimatedTime,
-        distance,
-        totalAmount: Number(isBatchOrder ? batchTotalAmount : (order?.total || 0)) || 0,
-        batchTotalOrders: isBatchOrder ? batchTotalOrders : undefined,
-        deliveryFee: !isBatchOrder ? order?.delivery_fee : undefined
-      }
-    });
-    
-    return sectionsList;
-  }, [order, isBatchOrder, batchProperties, showRouteDetails, routeStops, getDeliveryAddress, isWarehouseConsolidation, batchTotalOrders]);
+    console.log('📊 [IncomingOrderModal] distance:', distance, 'estimatedTime:', estimatedTime);
 
-  // Render functions for each section type
-  const renderSection: ListRenderItem<SectionData> = ({ item }) => {
-    switch (item.type) {
-      case 'order-number':
-        return (
-          <Text style={styles.orderNumber}>
-            {item.data?.orderNumber}
-          </Text>
-        );
-        
-      case 'customer-info':
-        return (
-          <View style={styles.locationSection}>
-            <View style={styles.locationIcon}>
-              <Ionicons name="person-outline" size={20} color={flatColors.primary[500]} />
-            </View>
-            <View style={styles.locationInfo}>
-              <Text style={styles.locationLabel}>CUSTOMER</Text>
-              <Text style={styles.locationAddress} numberOfLines={1}>
-                {item.data?.customerName}
-              </Text>
-            </View>
-          </View>
-        );
-        
-      case 'location-pickup':
-        return (
-          <View style={styles.locationSection}>
-            <View style={styles.locationIcon}>
-              <Ionicons name="bag-outline" size={20} color={flatColors.accent.blue} />
-            </View>
-            <View style={styles.locationInfo}>
-              <Text style={styles.locationLabel}>PICKUP</Text>
-              <Text style={styles.locationAddress} numberOfLines={2}>
-                {item.data?.pickupAddress}
-              </Text>
-            </View>
-          </View>
-        );
-        
-      case 'location-delivery':
-        return (
-          <View style={styles.locationSection}>
-            <View style={styles.locationIcon}>
-              <Ionicons 
-                name={item.data?.isWarehouseConsolidation ? "business-outline" : "home-outline"} 
-                size={20} 
-                color={item.data?.isWarehouseConsolidation ? flatColors.accent.orange : flatColors.accent.green} 
-              />
-            </View>
-            <View style={styles.locationInfo}>
-              <Text style={styles.locationLabel}>
-                {item.data?.isWarehouseConsolidation ? 'DELIVER TO WAREHOUSE' : 'DELIVERY'}
-              </Text>
-              <Text style={styles.locationAddress} numberOfLines={2}>
-                {item.data?.deliveryAddress}
-              </Text>
-            </View>
-          </View>
-        );
-        
-      case 'route-summary':
-        return (
-          <View style={styles.routeSummaryContainer}>
-            <View style={styles.routeStats}>
-              <View style={styles.routeStat}>
-                <Ionicons name="bag" size={16} color={flatColors.accent.blue} />
-                <Text style={styles.routeStatText}>{item.data?.totalPickupStops} Pickups</Text>
-              </View>
-              <View style={styles.routeStat}>
-                <Ionicons name="home" size={16} color={flatColors.accent.green} />
-                <Text style={styles.routeStatText}>{item.data?.totalDeliveryStops} Deliveries</Text>
-              </View>
-              <View style={styles.routeStat}>
-                <Ionicons name="receipt" size={16} color={flatColors.accent.orange} />
-                <Text style={styles.routeStatText}>{item.data?.batchTotalOrders} Orders</Text>
-              </View>
-            </View>
-          </View>
-        );
-        
-      case 'batch-orders-list':
-        const totalBatchAmount = item.data?.orders?.reduce((sum: number, o: BatchOrderItem) => 
-          sum + (Number(o.total) || Number(o.total_amount) || 0), 0) || 0;
-        const batchTypeText = isWarehouseConsolidation ? 'Warehouse Consolidation' : 
-                             isDistributionBatch ? 'Distribution Batch' : 'Batch Orders';
-        
-        return (
-          <View style={styles.batchOrdersList}>
-            <View style={styles.batchOrdersHeader}>
-              <Text style={styles.batchOrdersTitle}>{batchTypeText}</Text>
-              <Text style={styles.batchOrdersSubtitle}>
-                {item.data?.orders?.length || 0} orders • Total: {currency} {totalBatchAmount.toFixed(2)}
-              </Text>
-            </View>
-            
-            {isWarehouseConsolidation && order && (
-              <View style={styles.warehouseInfoBox}>
-                <Ionicons name="business" size={16} color={flatColors.accent.orange} />
-                <View style={styles.warehouseInfoContent}>
-                  <Text style={styles.warehouseInfoLabel}>Warehouse Destination:</Text>
-                  <Text style={styles.warehouseInfoAddress}>
-                    {(order as BatchOrder).warehouse_info?.warehouse_address || 
-                     order.current_batch?.warehouse_info?.warehouse_address || 
-                     'Warehouse address pending'}
-                  </Text>
-                </View>
-              </View>
-            )}
-            
-            {item.data?.orders?.map((batchOrder: BatchOrderItem, index: number) => (
-              <View key={batchOrder.id || index} style={styles.batchOrderItem}>
-                <View style={styles.batchOrderHeader}>
-                  <View style={styles.batchOrderNumber}>
-                    <Text style={styles.batchOrderNumberText}>
-                      #{batchOrder.order_number || `Order ${index + 1}`}
-                    </Text>
-                  </View>
-                  <View style={styles.batchOrderAmount}>
-                    <Text style={styles.batchOrderAmountText}>
-                      {currency} {Number(batchOrder.total || batchOrder.total_amount || 0).toFixed(2)}
-                    </Text>
-                  </View>
-                </View>
-                
-                <View style={styles.batchOrderCustomer}>
-                  <Ionicons name="person" size={14} color="#666" />
-                  <Text style={styles.batchOrderCustomerText}>
-                    {batchOrder.customer?.name || 
-                     batchOrder.customer_name || 
-                     batchOrder.customer_details?.name || 
-                     'Customer'}
-                  </Text>
-                </View>
-                
-                <View style={styles.batchOrderAddress}>
-                  <Ionicons name="location" size={14} color="#666" />
-                  <Text style={styles.batchOrderAddressText} numberOfLines={1}>
-                    {isWarehouseConsolidation 
-                      ? '🏭 Via warehouse → ' + (batchOrder.delivery_address || 'Final destination') 
-                      : (batchOrder.delivery_address || 'Delivery address')}
-                  </Text>
-                </View>
-                
-                {/* Special handling indicators for each order */}
-                {(batchOrder.cash_on_delivery || batchOrder.requires_signature || batchOrder.special_handling) && (
-                  <View style={styles.batchOrderBadges}>
-                    {batchOrder.cash_on_delivery && (
-                      <View style={[styles.batchOrderBadge, styles.codBadge]}>
-                        <Ionicons name="cash" size={12} color="#fff" />
-                        <Text style={styles.batchOrderBadgeText}>COD</Text>
-                      </View>
-                    )}
-                    {batchOrder.requires_signature && (
-                      <View style={[styles.batchOrderBadge, styles.signatureBadge]}>
-                        <Ionicons name="create" size={12} color="#fff" />
-                        <Text style={styles.batchOrderBadgeText}>SIG</Text>
-                      </View>
-                    )}
-                    {batchOrder.special_handling && (
-                      <View style={[styles.batchOrderBadge, styles.specialBadge]}>
-                        <Ionicons name="warning" size={12} color="#fff" />
-                        <Text style={styles.batchOrderBadgeText}>
-                          {typeof batchOrder.special_handling === 'object' 
-                            ? (batchOrder.special_handling.fragile ? 'FRAGILE' : 'SPECIAL')
-                            : 'SPECIAL'}
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                )}
-              </View>
-            ))}
-          </View>
-        );
-        
-      case 'route-stops':
-        return (
-          <View style={styles.routeStopsList}>
-            <Text style={styles.routeListTitle}>Route Stops:</Text>
-            {item.data?.stops?.map((stop: RouteStop, index: number) => (
-              <View key={stop.id} style={styles.routeStopItem}>
-                <View style={styles.stopNumber}>
-                  <Text style={styles.stopNumberText}>{index + 1}</Text>
-                </View>
-                <View style={[
-                  styles.stopIcon,
-                  stop.type === 'pickup' ? styles.pickupIcon : styles.deliveryIcon
-                ]}>
-                  <Ionicons 
-                    name={stop.type === 'pickup' ? 'bag' : 'home'} 
-                    size={16} 
-                    color="#fff" 
-                  />
-                </View>
-                <View style={styles.stopDetails}>
-                  <Text style={styles.stopType}>
-                    {stop.type === 'pickup' ? 'PICKUP' : 'DELIVERY'}
-                  </Text>
-                  <Text style={styles.stopAddress} numberOfLines={1}>
-                    {stop.address}
-                  </Text>
-                  {stop.orderNumber && (
-                    <Text style={styles.stopOrderNumber}>
-                      Order #{stop.orderNumber}
-                    </Text>
-                  )}
-                  {stop.customerName && (
-                    <Text style={styles.stopCustomer}>
-                      {stop.customerName}
-                    </Text>
-                  )}
-                </View>
-              </View>
-            ))}
-          </View>
-        );
-        
-      case 'metrics':
-        return (
-          <View style={styles.metricsRow}>
-            <View style={styles.metric}>
-              <Ionicons name="time-outline" size={16} color="#666" />
-              <Text style={styles.metricText}>{item.data?.estimatedTime}</Text>
-            </View>
-            <View style={styles.metric}>
-              <Ionicons name="location-outline" size={16} color="#666" />
-              <Text style={styles.metricText}>{item.data?.distance}</Text>
-            </View>
-            <View style={styles.metric}>
-              <Ionicons name="cash-outline" size={16} color="#666" />
-              <Text style={styles.metricText}>
-                {currency} {(item.data?.totalAmount || 0).toFixed(2)}
-              </Text>
-            </View>
-            {item.data?.batchTotalOrders && (
-              <View style={styles.metric}>
-                <Ionicons name="layers-outline" size={16} color={flatColors.accent.green} />
-                <Text style={[styles.metricText, styles.successMetricText]}>
-                  {item.data?.batchTotalOrders} orders
-                </Text>
-              </View>
-            )}
-            {item.data?.deliveryFee && (
-              <View style={styles.metric}>
-                <Ionicons name="car-outline" size={16} color={flatColors.accent.green} />
-                <Text style={[styles.metricText, styles.successMetricText]}>
-                  +{currency} {parseFloat(String(item.data?.deliveryFee)).toFixed(2)}
-                </Text>
-              </View>
-            )}
-          </View>
-        );
-        
-      default:
-        return null;
-    }
-  };
+    // Order identifier
+    const orderNumber = getOrderDisplayId(order);
+    console.log('📊 [IncomingOrderModal] orderNumber:', orderNumber);
+
+    const result = {
+      customerName,
+      pickupAddress,
+      deliveryAddress,
+      total,
+      deliveryFee,
+      distance,
+      estimatedTime,
+      orderNumber,
+      isBatch: isBatchOrder,
+      batchCount: batchTotalOrders,
+    };
+    console.log('📊 [IncomingOrderModal] Final orderData:', JSON.stringify(result, null, 2));
+    return result;
+  }, [order, isBatchOrder, batchTotalOrders, getDeliveryAddress]);
+
+  // Simplified render - no complex sections, just straightforward layout
 
   // Effects
   useEffect(() => {
@@ -1090,34 +710,36 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
           ]}
         >
           {/* Timer Header */}
-          <Animated.View 
-            style={[
-              styles.timerHeader,
-              { transform: [{ scale: pulseAnim }] }
-            ]}
-          >
-            <View style={styles.timerContainer}>
-              <View style={[styles.timerIconContainer, isBatchOrder && styles.batchTimerIcon]}>
-                <Ionicons 
-                  name={isBatchOrder ? "map" : "cube"} 
-                  size={20} 
-                  color={isBatchOrder ? flatColors.accent.red : flatColors.accent.blue} 
-                />
+          <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+            <LinearGradient
+              colors={['#FF6B00', '#FF8F33']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.timerHeader}
+            >
+              <View style={styles.timerContainer}>
+                <View style={[styles.timerIconContainer, isBatchOrder && styles.batchTimerIcon]}>
+                  <Ionicons
+                    name={isBatchOrder ? "map" : "cube"}
+                    size={20}
+                    color="#FFFFFF"
+                  />
+                </View>
+                <View style={styles.timerInfo}>
+                  <Text style={styles.timerTitle}>
+                    {isBatchOrder ? 'New Route Available' : 'New Order Available'}
+                  </Text>
+                  <Text style={styles.timerSubtitle}>
+                    {timeRemaining > 0 ? `Auto-skip in ${timeRemaining}s` : 'Skipped'}
+                  </Text>
+                </View>
+                <View style={[styles.timerCircle, { borderColor: '#fff' }]}>
+                  <Text style={[styles.timerText, { color: '#fff' }]}>
+                    {timeRemaining}
+                  </Text>
+                </View>
               </View>
-              <View style={styles.timerInfo}>
-                <Text style={styles.timerTitle}>
-                  {isBatchOrder ? 'New Route Available' : 'New Order Available'}
-                </Text>
-                <Text style={styles.timerSubtitle}>
-                  {timeRemaining > 0 ? `Auto-skip in ${timeRemaining}s` : 'Skipped'}
-                </Text>
-              </View>
-              <View style={[styles.timerCircle, { borderColor: progressColor }]}>
-                <Text style={[styles.timerText, { color: progressColor }]}>
-                  {timeRemaining}
-                </Text>
-              </View>
-            </View>
+            </LinearGradient>
           </Animated.View>
 
           {/* Order Type Badge */}
@@ -1233,73 +855,172 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
             </View>
           )}
 
-          {/* Order Summary - Using FlatList for better performance */}
-          <FlatList
-            data={sections}
-            renderItem={renderSection}
-            keyExtractor={(item) => item.id}
+          {/* Order Summary - Simplified ScrollView */}
+          <ScrollView
             style={styles.orderSummary}
             contentContainerStyle={styles.orderSummaryContent}
-            showsVerticalScrollIndicator={true}
+            showsVerticalScrollIndicator={false}
             bounces={true}
-            scrollEnabled={true}
-            nestedScrollEnabled={true}
-            initialNumToRender={8}
-            maxToRenderPerBatch={5}
-            windowSize={10}
-            removeClippedSubviews={true}
-            getItemLayout={(data, index) => {
-              // Optimize scrolling by providing estimated item heights
-              const heights: { [key: string]: number } = {
-                'order-number': 50,
-                'customer-info': 68,
-                'location-pickup': 68,
-                'location-delivery': 68,
-                'route-summary': 100,
-                'batch-orders-list': 200, // Approximate
-                'route-stops': 300, // Approximate
-                'metrics': 80,
-              };
-              const section = data?.[index];
-              const height = section ? (heights[section.type] || 100) : 100;
-              return {
-                length: height,
-                offset: height * index,
-                index,
-              };
-            }}
-          />
+          >
+            {orderData && (
+              <>
+                {/* Earnings Card - Most Important! */}
+                <View style={styles.earningsCard}>
+                  <View style={styles.earningsRow}>
+                    <Ionicons name="cash" size={32} color={flatColors.brand.primary} />
+                    <View style={styles.earningsInfo}>
+                      <Text style={styles.earningsLabel}>TOTAL EARNINGS</Text>
+                      <Text style={styles.earningsAmount}>
+                        {currency} {orderData.total.toFixed(2)}
+                      </Text>
+                    </View>
+                  </View>
+                  {orderData.deliveryFee > 0 && (
+                    <View style={styles.deliveryFeeRow}>
+                      <Ionicons name="car" size={20} color={flatColors.accent.green} />
+                      <Text style={styles.deliveryFeeText}>
+                        Delivery Fee: +{currency} {orderData.deliveryFee.toFixed(2)}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* Distance & Time - Quick Metrics */}
+                <View style={styles.quickMetrics}>
+                  <View style={styles.quickMetric}>
+                    <Ionicons name="location" size={20} color={flatColors.brand.primary} />
+                    <Text style={styles.quickMetricText}>{orderData.distance}</Text>
+                  </View>
+                  <View style={styles.metricDivider} />
+                  <View style={styles.quickMetric}>
+                    <Ionicons name="time" size={20} color={flatColors.brand.primary} />
+                    <Text style={styles.quickMetricText}>{orderData.estimatedTime}</Text>
+                  </View>
+                  {orderData.isBatch && (
+                    <>
+                      <View style={styles.metricDivider} />
+                      <View style={styles.quickMetric}>
+                        <Ionicons name="layers" size={20} color={flatColors.accent.orange} />
+                        <Text style={styles.quickMetricText}>{orderData.batchCount} orders</Text>
+                      </View>
+                    </>
+                  )}
+                </View>
+
+                {/* Pickup Location */}
+                <View style={styles.locationCard}>
+                  <View style={styles.locationHeader}>
+                    <View style={[styles.locationDot, styles.pickupDot]} />
+                    <Text style={styles.locationLabelText}>PICKUP</Text>
+                  </View>
+                  <Text style={styles.locationAddressText} numberOfLines={2}>
+                    {orderData.pickupAddress}
+                  </Text>
+                </View>
+
+                {/* Delivery Location */}
+                <View style={styles.locationCard}>
+                  <View style={styles.locationHeader}>
+                    <View style={[styles.locationDot, styles.deliveryDot]} />
+                    <Text style={styles.locationLabelText}>
+                      {isWarehouseConsolidation ? 'WAREHOUSE DROP-OFF' : 'DELIVERY'}
+                    </Text>
+                  </View>
+                  {!orderData.isBatch && (
+                    <Text style={styles.customerNameText}>{orderData.customerName}</Text>
+                  )}
+                  <Text style={styles.locationAddressText} numberOfLines={2}>
+                    {orderData.deliveryAddress}
+                  </Text>
+                </View>
+
+                {/* Order Number */}
+                <View style={styles.orderInfoCard}>
+                  <Text style={styles.orderNumberText}>Order {orderData.orderNumber}</Text>
+                </View>
+
+                {/* Batch Orders Details - Collapsible */}
+                {isBatchOrder && batchProperties?.orders && batchProperties.orders.length > 0 && (
+                  <TouchableOpacity
+                    style={styles.batchToggleButton}
+                    onPress={() => setShowRouteDetails(!showRouteDetails)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.batchToggleHeader}>
+                      <Ionicons name="list" size={20} color={flatColors.brand.primary} />
+                      <Text style={styles.batchToggleText}>
+                        {showRouteDetails ? 'Hide' : 'Show'} {batchProperties.orders.length} Orders
+                      </Text>
+                      <Ionicons
+                        name={showRouteDetails ? 'chevron-up' : 'chevron-down'}
+                        size={20}
+                        color={flatColors.brand.primary}
+                      />
+                    </View>
+                  </TouchableOpacity>
+                )}
+
+                {showRouteDetails && batchProperties?.orders && (
+                  <View style={styles.batchOrdersList}>
+                    {batchProperties.orders.map((batchOrder, index) => (
+                      <View key={batchOrder.id || index} style={styles.batchOrderItem}>
+                        <View style={styles.batchOrderHeader}>
+                          <Text style={styles.batchOrderNumber}>
+                            #{batchOrder.order_number || `Order ${index + 1}`}
+                          </Text>
+                          <Text style={styles.batchOrderAmount}>
+                            {currency} {Number(batchOrder.total || 0).toFixed(2)}
+                          </Text>
+                        </View>
+                        <Text style={styles.batchOrderCustomer} numberOfLines={1}>
+                          {batchOrder.customer?.name || batchOrder.customer_name || 'Customer'}
+                        </Text>
+                        {batchOrder.cash_on_delivery && (
+                          <View style={styles.codBadgeSmall}>
+                            <Ionicons name="cash" size={12} color="#fff" />
+                            <Text style={styles.codBadgeText}>COD</Text>
+                          </View>
+                        )}
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </>
+            )}
+          </ScrollView>
 
           {/* Action Buttons */}
           <View style={styles.actionButtons}>
             <TouchableOpacity 
-              style={styles.declineButton} 
-              onPress={handleDecline}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="close" size={20} color="#FF4757" />
-              <Text style={styles.declineButtonText}>Decline</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={styles.skipButton} 
-              onPress={handleSkip}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="play-forward" size={20} color="#666" />
-              <Text style={styles.skipButtonText}>Skip</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
               style={styles.acceptButton} 
               onPress={handleAccept}
-              activeOpacity={0.8}
+              activeOpacity={0.9}
             >
               <Ionicons name="checkmark" size={20} color="#fff" />
               <Text style={styles.acceptButtonText}>
                 {isBatchOrder ? 'Accept Route' : 'Accept Order'}
               </Text>
             </TouchableOpacity>
+
+            <View style={styles.secondaryActions}>
+              <TouchableOpacity 
+                style={styles.declineButton} 
+                onPress={handleDecline}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="close" size={18} color="#FF4757" />
+                <Text style={styles.declineButtonText}>Decline</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={styles.skipButton} 
+                onPress={handleSkip}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="play-forward" size={18} color={flatColors.neutral[600]} />
+                <Text style={styles.skipButtonText}>Skip</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </Animated.View>
       </Animated.View>
@@ -1328,16 +1049,15 @@ const styles = StyleSheet.create({
     paddingBottom: 88, // Space for action buttons (68px height + 20px padding)
   },
   timerHeader: {
-    backgroundColor: flatColors.backgrounds.secondary,
+    borderBottomWidth: 0,
+    borderRadius: 16,
     paddingVertical: 16,
     paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: flatColors.neutral[200],
   },
   timerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    justifyContent: 'space-between',
   },
   timerCircle: {
     width: 48,
@@ -1354,35 +1074,37 @@ const styles = StyleSheet.create({
   },
   timerInfo: {
     flex: 1,
+    marginHorizontal: 12,
   },
   timerTitle: {
     ...premiumTypography.callout,
     fontSize: 16,
     fontWeight: '600',
-    color: flatColors.neutral[800],
+    color: '#FFFFFF',
   },
   timerSubtitle: {
     ...premiumTypography.caption.medium,
-    color: flatColors.neutral[600],
+    color: 'rgba(255, 255, 255, 0.9)',
     marginTop: 4,
   },
   timerIconContainer: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: flatColors.cards.blue.background,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   batchTimerIcon: {
-    backgroundColor: flatColors.cards.red.background,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
   },
   orderTypeContainer: {
     flexDirection: 'row',
-    gap: 8,
+    alignItems: 'center',
     paddingHorizontal: 20,
     paddingTop: 12,
     paddingBottom: 8,
+    flexWrap: 'wrap',
   },
   orderTypeBadge: {
     flexDirection: 'row',
@@ -1391,9 +1113,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 12,
-    gap: 8,
     borderWidth: 1,
     borderColor: flatColors.accent.blue,
+    marginRight: 8,
+    marginTop: 4,
   },
   foodBadge: {
     backgroundColor: flatColors.cards.red.background,
@@ -1415,6 +1138,8 @@ const styles = StyleSheet.create({
     backgroundColor: flatColors.cards.yellow.background,
     borderWidth: 1,
     borderColor: flatColors.accent.yellow,
+    marginRight: 8,
+    marginTop: 4,
   },
   urgentBadge: {
     backgroundColor: flatColors.cards.red.background,
@@ -1447,7 +1172,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     marginBottom: 12,
-    gap: 12,
+    marginTop: 4,
   },
   locationIcon: {
     width: 36,
@@ -1484,7 +1209,7 @@ const styles = StyleSheet.create({
   },
   metric: {
     alignItems: 'center',
-    gap: 4,
+    marginHorizontal: 6,
   },
   metricText: {
     ...premiumTypography.caption.medium,
@@ -1495,9 +1220,8 @@ const styles = StyleSheet.create({
     color: flatColors.accent.green,
   },
   actionButtons: {
-    flexDirection: 'row',
-    gap: 8,
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     backgroundColor: flatColors.backgrounds.secondary,
     borderTopWidth: 1,
     borderTopColor: flatColors.neutral[200],
@@ -1507,16 +1231,17 @@ const styles = StyleSheet.create({
     right: 0,
   },
   declineButton: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: flatColors.cards.red.background,
     borderRadius: 12,
-    paddingVertical: 12,
-    gap: 4,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
     borderWidth: 1,
     borderColor: flatColors.accent.red,
+    backgroundColor: 'transparent',
+    marginRight: 12,
+    minWidth: 120,
   },
   declineButtonText: {
     ...premiumTypography.button,
@@ -1525,16 +1250,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   skipButton: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: flatColors.backgrounds.tertiary,
     borderRadius: 12,
-    paddingVertical: 12,
-    gap: 4,
-    borderWidth: 1,
-    borderColor: flatColors.neutral[200],
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    minWidth: 80,
   },
   skipButtonText: {
     ...premiumTypography.button,
@@ -1543,21 +1265,27 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   acceptButton: {
-    flex: 2,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: flatColors.accent.green,
+    backgroundColor: flatColors.brand.primary,
     borderRadius: 12,
     paddingVertical: 12,
-    gap: 4,
+    paddingHorizontal: 12,
     ...premiumShadows.small,
+    width: '100%',
   },
   acceptButtonText: {
     ...premiumTypography.button,
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '600',
+  },
+  secondaryActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 12,
   },
   batchBadge: {
     backgroundColor: flatColors.cards.red.background,
@@ -1580,9 +1308,9 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 12,
     backgroundColor: flatColors.backgrounds.primary,
-    gap: 4,
     borderWidth: 1,
     borderColor: flatColors.neutral[200],
+    marginTop: 4,
   },
   routeDetailsText: {
     ...premiumTypography.caption.medium,
@@ -1854,6 +1582,175 @@ const styles = StyleSheet.create({
     color: flatColors.accent.orange,
     fontWeight: '600',
     fontSize: 11,
+  },
+  // New simplified styles
+  earningsCard: {
+    backgroundColor: flatColors.backgrounds.secondary,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    borderWidth: 2,
+    borderColor: flatColors.brand.primary,
+  },
+  earningsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  earningsInfo: {
+    flex: 1,
+  },
+  earningsLabel: {
+    ...premiumTypography.caption.medium,
+    fontWeight: '700',
+    color: flatColors.neutral[600],
+    marginBottom: 4,
+    letterSpacing: 0.5,
+  },
+  earningsAmount: {
+    ...premiumTypography.headline.large,
+    fontWeight: '800',
+    color: flatColors.brand.primary,
+    fontSize: 32,
+  },
+  deliveryFeeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: flatColors.neutral[200],
+  },
+  deliveryFeeText: {
+    ...premiumTypography.body,
+    fontWeight: '600',
+    color: flatColors.accent.green,
+  },
+  quickMetrics: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    backgroundColor: flatColors.backgrounds.secondary,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  quickMetric: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  quickMetricText: {
+    ...premiumTypography.body.medium,
+    fontWeight: '600',
+    color: flatColors.neutral[800],
+  },
+  metricDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: flatColors.neutral[300],
+  },
+  locationCard: {
+    backgroundColor: flatColors.backgrounds.secondary,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: flatColors.brand.primary,
+  },
+  locationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  locationDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  pickupDot: {
+    backgroundColor: flatColors.accent.blue,
+  },
+  deliveryDot: {
+    backgroundColor: flatColors.accent.green,
+  },
+  locationLabelText: {
+    ...premiumTypography.caption.medium,
+    fontWeight: '700',
+    color: flatColors.neutral[600],
+    letterSpacing: 0.5,
+  },
+  customerNameText: {
+    ...premiumTypography.body.medium,
+    fontWeight: '700',
+    color: flatColors.neutral[800],
+    marginBottom: 4,
+  },
+  locationAddressText: {
+    ...premiumTypography.body,
+    color: flatColors.neutral[700],
+    lineHeight: 20,
+  },
+  orderInfoCard: {
+    backgroundColor: flatColors.backgrounds.tertiary,
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+    alignItems: 'center',
+  },
+  orderNumberText: {
+    ...premiumTypography.body.small,
+    fontWeight: '600',
+    color: flatColors.neutral[600],
+  },
+  batchToggleButton: {
+    backgroundColor: flatColors.backgrounds.secondary,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: flatColors.neutral[200],
+  },
+  batchToggleHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  batchToggleText: {
+    ...premiumTypography.body.medium,
+    fontWeight: '600',
+    color: flatColors.brand.primary,
+    flex: 1,
+    marginLeft: 8,
+  },
+  batchOrderNumber: {
+    ...premiumTypography.caption.medium,
+    fontWeight: '600',
+    color: flatColors.accent.blue,
+  },
+  batchOrderCustomer: {
+    ...premiumTypography.caption.medium,
+    color: flatColors.neutral[700],
+    marginTop: 4,
+  },
+  codBadgeSmall: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: flatColors.accent.green,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    alignSelf: 'flex-start',
+    marginTop: 6,
+  },
+  codBadgeText: {
+    ...premiumTypography.caption.small,
+    fontWeight: '600',
+    color: '#fff',
+    fontSize: 10,
   },
 });
 

@@ -8,10 +8,12 @@ import {
   Animated,
   StatusBar,
 } from 'react-native';
+import LinearGradient from 'react-native-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import Haptics from 'react-native-haptic-feedback';
+import Ionicons from 'react-native-vector-icons/Ionicons';
 
 import IncomingOrderModal from '../components/IncomingOrderModal';
 import { FlatOrderDetailsModal } from '../components/OrderDetails';
@@ -22,9 +24,8 @@ import {
   FlatStatsCards,
   FlatPerformanceMetrics,
   FlatStatusCard,
-  FlatAvailableOrdersCard,
 } from '../components/Dashboard/flat';
-import { EnhancedActiveDeliveriesCard } from '../components/Dashboard/EnhancedActiveDeliveriesCard';
+import DriverBalanceCard from '../features/finance/components/DriverBalanceCard';
 
 import { useOrders } from '../features/orders/context/OrderProvider';
 import { useDriver } from '../contexts/DriverContext';
@@ -172,15 +173,21 @@ const DashboardScreen: React.FC = () => {
   }, [driver, updateOnlineStatus]);
 
   const handleAcceptOrder = useCallback(async (orderId: string) => {
-    
+
     Haptics.trigger('notificationSuccess');
     setShowIncomingModal(false);
-    
+
     try {
       const result = await acceptOrder(orderId);
       if (result) {
-        // Navigate directly to route screen instead of showing popup
-        navigation.navigate('Navigation');
+        // Refresh driver orders to get the latest data
+        await getDriverOrders();
+
+        // Navigate to PickupScreen with order details
+        navigation.navigate('PickupScreen', {
+          orderId: orderId,
+          deliveryId: orderId, // orderId is the delivery ID
+        });
       } else {
         Alert.alert('Error', 'Failed to accept order');
       }
@@ -188,7 +195,7 @@ const DashboardScreen: React.FC = () => {
       const errorMessage = error instanceof Error ? error.message : 'Failed to accept order';
       Alert.alert('Error', `Failed to accept order: ${errorMessage}`);
     }
-  }, [acceptOrder, navigation]);
+  }, [acceptOrder, getDriverOrders, navigation]);
 
   const handleAcceptRoute = useCallback(async (routeId: string, orderData?: any) => {
     
@@ -580,9 +587,69 @@ const DashboardScreen: React.FC = () => {
     successRate: balance?.successRate || 0,
   };
 
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return 'Pending';
+      case 'confirmed':
+        return 'Confirmed';
+      case 'preparing':
+        return 'Preparing';
+      case 'ready':
+        return 'Ready';
+      case 'picked_up':
+        return 'Picked up';
+      case 'in_transit':
+        return 'On the way';
+      case 'delivered':
+        return 'Delivered';
+      default:
+        return status.replace('_', ' ');
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return '#F59E0B';
+      case 'confirmed':
+      case 'ready':
+      case 'picked_up':
+      case 'in_transit':
+        return Design.colors.primary;
+      case 'preparing':
+        return '#8B5CF6';
+      case 'delivered':
+        return '#10B981';
+      case 'cancelled':
+      case 'failed':
+        return Design.colors.error;
+      default:
+        return Design.colors.textSecondary;
+    }
+  };
+
+  const formatCurrency = (amount?: number | string) => {
+    if (amount === undefined || amount === null) return '$0.00';
+    const val = typeof amount === 'string' ? parseFloat(amount) : amount;
+    return `$${val.toFixed(2)}`;
+  };
+
+  const availablePreview = (availableOrders || []).slice(0, 4);
+  const activePreview = (activeOrders || []).slice(0, 3);
+
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+      <StatusBar barStyle="dark-content" backgroundColor={flatColors.brand.light} />
+      <LinearGradient
+        colors={[flatColors.brand.lighter, '#FFE7C7', '#FFF7ED']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      <View style={[styles.decorativeBlob, styles.blobTopLeft]} />
+      <View style={[styles.decorativeBlob, styles.blobBottomRight]} />
+      <View style={styles.ring} />
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <FlatDashboardHeader
           driver={driver}
@@ -598,7 +665,7 @@ const DashboardScreen: React.FC = () => {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={handleRefresh}
-              tintColor="#3B82F6"
+              tintColor={flatColors.brand.secondary}
             />
           }
         >
@@ -608,7 +675,12 @@ const DashboardScreen: React.FC = () => {
           />
           
           <FlatStatsCards stats={statsData} />
-          
+
+          <DriverBalanceCard
+            compact={true}
+            onRefresh={handleRefresh}
+          />
+
           <FlashDealsSection
             deals={flashDeals}
             onDealPress={handleDealPress}
@@ -629,53 +701,213 @@ const DashboardScreen: React.FC = () => {
             }}
           />
           
-          <EnhancedActiveDeliveriesCard
-            orders={activeOrders || []}
-            isExpanded={showActiveDeliveries}
-            onToggle={() => {
-              Haptics.trigger('selection');
-              setShowActiveDeliveries(!showActiveDeliveries);
-            }}
-            onOrderPress={handleShowOrderDetails}
-            onViewAll={() => navigation.navigate('Navigation')}
-          />
-          
-          <FlatAvailableOrdersCard
-            orders={availableOrders || []}
-            isExpanded={showAvailableOrders}
-            onToggle={() => {
-              Haptics.trigger('selection');
-              setShowAvailableOrders(!showAvailableOrders);
-            }}
-            onRefresh={handleRefresh}
-            onOrderPress={handleShowOrderDetails}
-            onViewAll={() => navigation.navigate('AvailableOrders')}
-            canAcceptOrder={canAcceptOrder}
-            isOnline={driver?.isOnline || false}
-            onAcceptBatch={async (batchId, orders) => {
-              try {
-                console.log('🚀 Accepting batch from available orders card:', batchId);
-                const response = await apiService.acceptBatchOrder(batchId);
-                if (response.success) {
-                  Alert.alert('Success', 'Batch accepted successfully');
-                  
-                  // Invalidate caches for batch acceptance
-                  await cacheService.invalidateByEvent('batchAccepted');
-                  
-                  // Force refresh to update both available and active orders
-                  await Promise.all([
-                    refreshOrders(true),
-                    getDriverOrders(true)
-                  ]);
-                } else {
-                  Alert.alert('Error', response.error || 'Failed to accept batch');
-                }
-              } catch (error) {
-                console.error('Failed to accept batch:', error);
-                Alert.alert('Error', 'Failed to accept batch order');
-              }
-            }}
-          />
+          {/* Active deliveries */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <View>
+                <View style={styles.sectionPill}>
+                  <Ionicons name="bicycle" size={14} color={Design.colors.primary} />
+                  <View style={styles.dot} />
+                  <Ionicons name="navigate-outline" size={14} color={Design.colors.primary} />
+                </View>
+                <View style={styles.titleRow}>
+                  <Ionicons name="flash" size={18} color={Design.colors.primary} />
+                  <Animated.Text style={styles.sectionTitle}>On the move</Animated.Text>
+                  <View style={styles.counterPill}>
+                    <Ionicons name="cube-outline" size={12} color={Design.colors.white} />
+                    <Animated.Text style={styles.counterText}>{activeOrders?.length || 0}</Animated.Text>
+                  </View>
+                </View>
+                <Animated.Text style={styles.sectionSubtitle}>Deliveries you’re working on right now</Animated.Text>
+              </View>
+              <Ionicons.Button
+                name="map-outline"
+                size={16}
+                color={Design.colors.primary}
+                backgroundColor="transparent"
+                underlayColor="transparent"
+                onPress={() => navigation.navigate('Navigation')}
+                iconStyle={{ marginRight: 6 }}
+              >
+                View map
+              </Ionicons.Button>
+            </View>
+
+            {activePreview.length > 0 ? (
+              <View style={styles.cardGrid}>
+                {activePreview.map(order => (
+                  <LinearGradient
+                    key={order.id}
+                    colors={['#FFF3E6', '#FFE7CC']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.deliveryCard}
+                  >
+                    <View style={styles.deliveryHeader}>
+                      <View style={styles.badge}>
+                        <Ionicons name="time-outline" size={14} color={Design.colors.primary} />
+                        <Animated.Text style={styles.badgeText}>{getStatusLabel(order.status)}</Animated.Text>
+                      </View>
+                      <Animated.Text style={styles.orderId}>#{order.order_number || order.id}</Animated.Text>
+                    </View>
+
+                    <Animated.Text style={styles.restaurantName} numberOfLines={1}>
+                      {order.restaurant_name || 'Restaurant'}
+                    </Animated.Text>
+                    <Animated.Text style={styles.addressText} numberOfLines={1}>
+                      {order.delivery_address && typeof order.delivery_address === 'string'
+                        ? order.delivery_address
+                        : order.delivery_address?.street_address}
+                    </Animated.Text>
+
+                    <View style={styles.deliveryMetaRow}>
+                      <View style={styles.metaItem}>
+                        <Ionicons name="cash-outline" size={14} color={Design.colors.textSecondary} />
+                        <Animated.Text style={styles.metaText}>{formatCurrency(order.total_amount || order.total)}</Animated.Text>
+                      </View>
+                      <View style={styles.metaItem}>
+                        <Ionicons name="people-outline" size={14} color={Design.colors.textSecondary} />
+                        <Animated.Text style={styles.metaText}>{order.items?.length || 0} items</Animated.Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.cardActions}>
+                      <View style={[styles.statusDot, { backgroundColor: getStatusColor(order.status) }]} />
+                      <Animated.Text style={[styles.statusLabel, { color: getStatusColor(order.status) }]}>
+                        {getStatusLabel(order.status)}
+                      </Animated.Text>
+                      <View style={{ flex: 1 }} />
+                      <Ionicons.Button
+                        name="trail-sign-outline"
+                        size={16}
+                        color={Design.colors.white}
+                        backgroundColor={Design.colors.primary}
+                        underlayColor={Design.colors.primaryDark}
+                        style={styles.smallButton}
+                        onPress={() => handleShowOrderDetails(order)}
+                      >
+                        Manage
+                      </Ionicons.Button>
+                    </View>
+                  </LinearGradient>
+                ))}
+              </View>
+            ) : (
+              <View style={styles.emptyCard}>
+                <Ionicons name="navigate-outline" size={22} color={Design.colors.textSecondary} />
+                <Animated.Text style={styles.emptyText}>No active deliveries yet</Animated.Text>
+                <Animated.Text style={styles.emptySubtext}>Start by accepting a new order</Animated.Text>
+              </View>
+            )}
+          </View>
+
+          {/* Available orders */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <View>
+                <View style={styles.sectionPill}>
+                  <Ionicons name="flash-outline" size={14} color={Design.colors.primary} />
+                  <View style={styles.dot} />
+                  <Ionicons name="cube-outline" size={14} color={Design.colors.primary} />
+                </View>
+                <View style={styles.titleRow}>
+                  <Ionicons name="bag-handle" size={18} color={Design.colors.primary} />
+                  <Animated.Text style={styles.sectionTitle}>Ready for pickup</Animated.Text>
+                  <View style={styles.counterPill}>
+                    <Ionicons name="albums-outline" size={12} color={Design.colors.white} />
+                    <Animated.Text style={styles.counterText}>{availableOrders?.length || 0}</Animated.Text>
+                  </View>
+                </View>
+                <Animated.Text style={styles.sectionSubtitle}>Newest orders near you</Animated.Text>
+              </View>
+              <Ionicons.Button
+                name="list-outline"
+                size={16}
+                color={Design.colors.primary}
+                backgroundColor="transparent"
+                underlayColor="transparent"
+                onPress={() => navigation.navigate('AvailableOrders')}
+                iconStyle={{ marginRight: 6 }}
+              >
+                View all
+              </Ionicons.Button>
+            </View>
+
+            {!driver?.isOnline && (
+              <View style={styles.offlineBanner}>
+                <Ionicons name="power-outline" size={16} color={Design.colors.error} />
+                <Animated.Text style={styles.offlineText}>Go online to accept orders</Animated.Text>
+              </View>
+            )}
+
+            {availablePreview.length > 0 ? (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.horizontalList}
+              >
+                {availablePreview.map(order => (
+                  <View key={order.id} style={styles.availableCard}>
+                    <View style={styles.availableHeader}>
+                      <Animated.Text style={styles.badgeMuted}>#{order.order_number || order.id}</Animated.Text>
+                      <Ionicons name="location-outline" size={16} color={Design.colors.textSecondary} />
+                    </View>
+                    <Animated.Text style={styles.restaurantName} numberOfLines={1}>
+                      {order.restaurant_name || 'Restaurant'}
+                    </Animated.Text>
+                    <Animated.Text style={styles.addressText} numberOfLines={1}>
+                      {order.delivery_address && typeof order.delivery_address === 'string'
+                        ? order.delivery_address
+                        : order.delivery_address?.street_address}
+                    </Animated.Text>
+
+                    <View style={styles.orderMetaRow}>
+                      <View style={styles.metaItem}>
+                        <Ionicons name="cash-outline" size={14} color={Design.colors.primary} />
+                        <Animated.Text style={styles.metaBold}>{formatCurrency(order.total_amount || order.total)}</Animated.Text>
+                      </View>
+                      <View style={styles.metaItem}>
+                        <Ionicons name="timer-outline" size={14} color={Design.colors.textSecondary} />
+                        <Animated.Text style={styles.metaText}>ASAP</Animated.Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.cardActions}>
+                      <Ionicons.Button
+                        name="eye-outline"
+                        size={16}
+                        color={Design.colors.textPrimary}
+                        backgroundColor="transparent"
+                        underlayColor="transparent"
+                        onPress={() => handleShowOrderDetails(order)}
+                        iconStyle={{ marginRight: 6 }}
+                      >
+                        View
+                      </Ionicons.Button>
+                      <Ionicons.Button
+                        name="checkmark-circle-outline"
+                        size={16}
+                        color={Design.colors.white}
+                        backgroundColor={driver?.isOnline ? Design.colors.primary : Design.colors.textTertiary}
+                        underlayColor={Design.colors.primaryDark}
+                        style={styles.primaryButton}
+                        disabled={!driver?.isOnline || !canAcceptOrder}
+                        onPress={() => handleAcceptOrder(order.id)}
+                      >
+                        Accept
+                      </Ionicons.Button>
+                    </View>
+                  </View>
+                ))}
+              </ScrollView>
+            ) : (
+              <View style={styles.emptyCard}>
+                <Ionicons name="bag-outline" size={22} color={Design.colors.textSecondary} />
+                <Animated.Text style={styles.emptyText}>No available orders nearby</Animated.Text>
+                <Animated.Text style={styles.emptySubtext}>We’ll surface new ones as they arrive</Animated.Text>
+              </View>
+            )}
+          </View>
         </ScrollView>
       </SafeAreaView>
 
@@ -769,7 +1001,7 @@ const DashboardScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: flatColors.backgrounds.secondary,
+    backgroundColor: flatColors.brand.lighter,
   },
   safeArea: {
     flex: 1,
@@ -779,6 +1011,229 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     paddingBottom: Design.spacing[4],
+  },
+  decorativeBlob: {
+    position: 'absolute',
+    width: 240,
+    height: 240,
+    borderRadius: 120,
+    backgroundColor: 'rgba(245, 166, 35, 0.12)',
+  },
+  blobTopLeft: {
+    top: -60,
+    left: -40,
+  },
+  blobBottomRight: {
+    bottom: -80,
+    right: -40,
+  },
+  ring: {
+    position: 'absolute',
+    width: 360,
+    height: 360,
+    borderRadius: 180,
+    borderWidth: 16,
+    borderColor: 'rgba(245, 166, 35, 0.06)',
+    top: '12%',
+    right: '-18%',
+  },
+  section: {
+    marginTop: Design.spacing[4],
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Design.spacing[4],
+    marginBottom: Design.spacing[2],
+  },
+  sectionPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  dot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Design.colors.primary,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Design.colors.textPrimary,
+  },
+  sectionSubtitle: {
+    fontSize: 13,
+    color: Design.colors.textSecondary,
+    marginTop: 4,
+  },
+  counterPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Design.colors.primary,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginLeft: 6,
+  },
+  counterText: {
+    color: Design.colors.white,
+    fontWeight: '700',
+    marginLeft: 4,
+    fontSize: 12,
+  },
+  cardGrid: {
+    paddingHorizontal: Design.spacing[4],
+  },
+  deliveryCard: {
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    ...(Design.shadows ? Design.shadows.md : {}),
+  },
+  deliveryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.04)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  badgeText: {
+    marginLeft: 6,
+    color: Design.colors.textPrimary,
+    fontWeight: '600',
+    fontSize: 12,
+  },
+  orderId: {
+    fontWeight: '700',
+    color: Design.colors.textPrimary,
+  },
+  restaurantName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Design.colors.textPrimary,
+  },
+  addressText: {
+    fontSize: 13,
+    color: Design.colors.textSecondary,
+    marginTop: 2,
+  },
+  deliveryMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  metaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  metaText: {
+    fontSize: 13,
+    color: Design.colors.textSecondary,
+  },
+  cardActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  statusDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginRight: 6,
+  },
+  statusLabel: {
+    fontWeight: '700',
+  },
+  smallButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
+  },
+  emptyCard: {
+    backgroundColor: Design.colors.backgroundSecondary,
+    borderRadius: 16,
+    padding: 18,
+    marginHorizontal: Design.spacing[4],
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Design.colors.border,
+  },
+  emptyText: {
+    marginTop: 8,
+    fontWeight: '700',
+    color: Design.colors.textPrimary,
+  },
+  emptySubtext: {
+    color: Design.colors.textSecondary,
+    fontSize: 13,
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  offlineBanner: {
+    marginHorizontal: Design.spacing[4],
+    marginBottom: 12,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: 'rgba(220, 38, 38, 0.08)',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  offlineText: {
+    color: Design.colors.error,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  horizontalList: {
+    paddingHorizontal: Design.spacing[4],
+  },
+  availableCard: {
+    width: 260,
+    backgroundColor: Design.colors.white,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: Design.colors.border,
+    marginRight: 12,
+  },
+  availableHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  badgeMuted: {
+    fontSize: 12,
+    color: Design.colors.textSecondary,
+  },
+  orderMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 12,
+  },
+  metaBold: {
+    fontWeight: '700',
+    color: Design.colors.primary,
+  },
+  primaryButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
   },
 });
 

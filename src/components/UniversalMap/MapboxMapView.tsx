@@ -173,7 +173,7 @@ export const MapboxMapView: React.FC<MapboxMapViewProps> = ({
             <Mapbox.LineLayer
               id="routeLineFill"
               style={{
-                lineColor: '#007AFF',
+                lineColor: '#FF6B00',
                 lineWidth: 3,
                 lineCap: 'round',
                 lineJoin: 'round',

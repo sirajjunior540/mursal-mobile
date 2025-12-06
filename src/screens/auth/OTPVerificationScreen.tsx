@@ -176,14 +176,17 @@ const OTPVerificationScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={flatColors.backgrounds.secondary} />
+      <StatusBar barStyle="dark-content" backgroundColor={flatColors.brand.light} />
       <SafeAreaView style={styles.safeArea}>
         <LinearGradient
-          colors={[flatColors.primary[50], flatColors.backgrounds.secondary]}
+          colors={[flatColors.brand.lighter, '#FFE7C7']}
           style={styles.backgroundGradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
         />
         <View style={[styles.decorativeBlob, styles.blobTopRight]} />
         <View style={[styles.decorativeBlob, styles.blobBottomLeft]} />
+        <View style={styles.ring} />
 
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -202,13 +205,13 @@ const OTPVerificationScreen: React.FC = () => {
               style={styles.backButton}
               onPress={() => navigation.goBack()}
             >
-              <Ionicons name="arrow-back" size={24} color={flatColors.neutral[700]} />
+              <Ionicons name="arrow-back" size={24} color={flatColors.brand.text} />
             </TouchableOpacity>
 
             <View style={styles.heroCard}>
               <View style={styles.heroHeader}>
                 <View style={styles.logoBadge}>
-                  <Ionicons name="chatbubbles" size={32} color={flatColors.accent.blue} />
+                  <Ionicons name="chatbubbles" size={32} color={flatColors.brand.secondary} />
                 </View>
               </View>
 
@@ -271,7 +274,7 @@ const OTPVerificationScreen: React.FC = () => {
                 ) : (
                   <TouchableOpacity onPress={handleResendOTP} disabled={resending}>
                     {resending ? (
-                      <ActivityIndicator size="small" color={flatColors.accent.blue} />
+                      <ActivityIndicator size="small" color={flatColors.brand.secondary} />
                     ) : (
                       <Text style={styles.resendLink}>Resend Code</Text>
                     )}
@@ -283,7 +286,7 @@ const OTPVerificationScreen: React.FC = () => {
                 style={styles.changeNumberButton}
                 onPress={() => navigation.goBack()}
               >
-                <Ionicons name="pencil" size={16} color={flatColors.accent.blue} />
+                <Ionicons name="pencil" size={16} color={flatColors.brand.text} />
                 <Text style={styles.changeNumberText}>Change Phone Number</Text>
               </TouchableOpacity>
             </View>
@@ -318,8 +321,8 @@ const styles = StyleSheet.create({
     width: 180,
     height: 180,
     borderRadius: 90,
-    backgroundColor: flatColors.primary[100],
-    opacity: 0.6,
+    backgroundColor: 'rgba(245, 166, 35, 0.14)',
+    opacity: 1,
   },
   blobTopRight: {
     top: -40,
@@ -329,27 +332,37 @@ const styles = StyleSheet.create({
     bottom: -50,
     left: -20,
   },
+  ring: {
+    position: 'absolute',
+    width: 320,
+    height: 320,
+    borderRadius: 160,
+    borderWidth: 16,
+    borderColor: 'rgba(245, 166, 35, 0.08)',
+    top: '18%',
+    left: '-18%',
+  },
   backButton: {
     width: 44,
     height: 44,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: flatColors.backgrounds.primary,
+    backgroundColor: flatColors.brand.lighter,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: flatColors.neutral[200],
+    borderColor: flatColors.brand.border,
   },
   heroCard: {
-    backgroundColor: flatColors.backgrounds.primary,
+    backgroundColor: 'rgba(255, 255, 255, 0.94)',
     borderRadius: 18,
     padding: 20,
     borderWidth: 1,
-    borderColor: flatColors.neutral[200],
-    shadowColor: flatColors.neutral[800],
-    shadowOpacity: 0.06,
+    borderColor: flatColors.brand.border,
+    shadowColor: flatColors.brand.secondary,
+    shadowOpacity: 0.08,
     shadowRadius: 18,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 6,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 7,
     alignItems: 'center',
   },
   heroHeader: {
@@ -361,37 +374,37 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: 36,
-    backgroundColor: flatColors.cards.blue.background,
+    backgroundColor: flatColors.brand.light,
     borderWidth: 1,
-    borderColor: flatColors.neutral[200],
+    borderColor: flatColors.brand.border,
   },
   heroTitle: {
     ...premiumTypography.display.small,
-    color: flatColors.neutral[800],
+    color: flatColors.brand.text,
     marginBottom: 8,
     textAlign: 'center',
   },
   heroSubtitle: {
     ...premiumTypography.body.medium,
-    color: flatColors.neutral[600],
+    color: flatColors.neutral[700],
     textAlign: 'center',
     lineHeight: 22,
   },
   phoneHighlight: {
     fontWeight: '700',
-    color: flatColors.neutral[800],
+    color: flatColors.brand.secondary,
   },
   formCard: {
-    backgroundColor: flatColors.backgrounds.primary,
+    backgroundColor: 'rgba(255, 255, 255, 0.94)',
     borderRadius: 18,
     padding: 20,
     borderWidth: 1,
-    borderColor: flatColors.neutral[200],
-    shadowColor: flatColors.neutral[800],
-    shadowOpacity: 0.06,
+    borderColor: flatColors.brand.border,
+    shadowColor: flatColors.brand.secondary,
+    shadowOpacity: 0.08,
     shadowRadius: 18,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 6,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 7,
   },
   otpContainer: {
     flexDirection: 'row',
@@ -403,26 +416,26 @@ const styles = StyleSheet.create({
     width: 48,
     height: 56,
     borderWidth: 2,
-    borderColor: flatColors.neutral[200],
+    borderColor: flatColors.brand.border,
     borderRadius: 12,
     fontSize: 24,
     fontWeight: '700',
-    color: flatColors.neutral[800],
+    color: flatColors.brand.text,
     textAlign: 'center',
-    backgroundColor: flatColors.backgrounds.secondary,
+    backgroundColor: flatColors.brand.lighter,
   },
   otpInputFilled: {
-    borderColor: flatColors.accent.blue,
-    backgroundColor: flatColors.cards.blue.background,
+    borderColor: flatColors.brand.secondary,
+    backgroundColor: flatColors.brand.light,
   },
   verifyButton: {
-    backgroundColor: flatColors.accent.blue,
+    backgroundColor: flatColors.brand.primary,
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: flatColors.accent.blue,
-    shadowOpacity: 0.25,
+    shadowColor: flatColors.brand.secondary,
+    shadowOpacity: 0.22,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
     elevation: 6,
@@ -450,16 +463,16 @@ const styles = StyleSheet.create({
   },
   resendText: {
     ...premiumTypography.body.small,
-    color: flatColors.neutral[600],
+    color: flatColors.neutral[700],
   },
   timerText: {
     ...premiumTypography.body.small,
-    color: flatColors.neutral[500],
+    color: flatColors.neutral[600],
     fontWeight: '600',
   },
   resendLink: {
     ...premiumTypography.body.small,
-    color: flatColors.accent.blue,
+    color: flatColors.brand.secondary,
     fontWeight: '700',
   },
   changeNumberButton: {
@@ -471,7 +484,7 @@ const styles = StyleSheet.create({
   },
   changeNumberText: {
     ...premiumTypography.body.small,
-    color: flatColors.accent.blue,
+    color: flatColors.brand.text,
     fontWeight: '600',
   },
 });

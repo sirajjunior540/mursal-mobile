@@ -133,8 +133,8 @@ export const premiumColors = {
       background: 'rgba(16, 185, 129, 0.1)',
     },
     good: {
-      color: '#3B82F6',
-      background: 'rgba(59, 130, 246, 0.1)',
+      color: '#F5A623',
+      background: 'rgba(245, 166, 35, 0.1)',
     },
     average: {
       color: '#F59E0B',

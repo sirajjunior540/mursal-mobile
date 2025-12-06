@@ -116,14 +116,17 @@ const LoginScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={flatColors.backgrounds.secondary} />
+      <StatusBar barStyle="dark-content" backgroundColor={flatColors.brand.light} />
       <SafeAreaView style={styles.safeArea}>
         <LinearGradient
-          colors={[flatColors.primary[50], flatColors.backgrounds.secondary]}
+          colors={[flatColors.brand.lighter, '#FFE7C7']}
           style={styles.backgroundGradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
         />
         <View style={[styles.decorativeBlob, styles.blobTopRight]} />
         <View style={[styles.decorativeBlob, styles.blobBottomLeft]} />
+        <View style={styles.ring} />
 
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -146,10 +149,10 @@ const LoginScreen: React.FC = () => {
               <View style={styles.heroCard}>
                 <View style={styles.heroHeader}>
                   <View style={styles.logoBadge}>
-                    <AppLogo size="small" color={flatColors.accent.blue} />
+                    <AppLogo size="small" color={flatColors.brand.secondary} />
                   </View>
                   <View style={styles.tagBadge}>
-                    <Ionicons name="sparkles" size={16} color={flatColors.accent.blue} />
+                    <Ionicons name="sparkles" size={16} color={flatColors.brand.secondary} />
                     <Text style={styles.tagText}>Driver Home Look</Text>
                   </View>
                 </View>
@@ -161,11 +164,11 @@ const LoginScreen: React.FC = () => {
 
                 <View style={styles.heroPills}>
                   <View style={styles.pill}>
-                    <Ionicons name="flash" size={16} color={flatColors.accent.blue} />
+                    <Ionicons name="flash" size={16} color={flatColors.brand.secondary} />
                     <Text style={styles.pillText}>Live dispatch ready</Text>
                   </View>
                   <View style={styles.pill}>
-                    <Ionicons name="shield-checkmark" size={16} color={flatColors.accent.green} />
+                    <Ionicons name="shield-checkmark" size={16} color={flatColors.brand.text} />
                     <Text style={styles.pillText}>Secure session</Text>
                   </View>
                 </View>
@@ -259,8 +262,8 @@ const styles = StyleSheet.create({
     width: 180,
     height: 180,
     borderRadius: 90,
-    backgroundColor: flatColors.primary[100],
-    opacity: 0.6,
+    backgroundColor: 'rgba(245, 166, 35, 0.14)',
+    opacity: 1,
   },
   blobTopRight: {
     top: -40,
@@ -270,17 +273,27 @@ const styles = StyleSheet.create({
     bottom: -50,
     left: -20,
   },
+  ring: {
+    position: 'absolute',
+    width: 320,
+    height: 320,
+    borderRadius: 160,
+    borderWidth: 16,
+    borderColor: 'rgba(245, 166, 35, 0.08)',
+    top: '12%',
+    right: '-20%',
+  },
   heroCard: {
-    backgroundColor: flatColors.backgrounds.primary,
+    backgroundColor: 'rgba(255, 255, 255, 0.94)',
     borderRadius: 18,
     padding: 20,
     borderWidth: 1,
-    borderColor: flatColors.neutral[200],
-    shadowColor: flatColors.neutral[800],
-    shadowOpacity: 0.06,
+    borderColor: flatColors.brand.border,
+    shadowColor: flatColors.brand.secondary,
+    shadowOpacity: 0.08,
     shadowRadius: 18,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 6,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 7,
   },
   heroHeader: {
     flexDirection: 'row',
@@ -291,32 +304,39 @@ const styles = StyleSheet.create({
   logoBadge: {
     padding: 12,
     borderRadius: 16,
-    backgroundColor: flatColors.cards.blue.background,
+    backgroundColor: flatColors.brand.light,
     borderWidth: 1,
-    borderColor: flatColors.neutral[200],
+    borderColor: flatColors.brand.border,
   },
   tagBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: flatColors.backgrounds.secondary,
+    backgroundColor: flatColors.brand.lighter,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 12,
     gap: 6,
+    borderWidth: 1,
+    borderColor: flatColors.brand.border,
+    shadowColor: flatColors.brand.secondary,
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
   },
   tagText: {
     ...premiumTypography.caption.medium,
-    color: flatColors.neutral[700],
+    color: flatColors.brand.text,
     fontWeight: '600',
   },
   heroTitle: {
     ...premiumTypography.display.small,
-    color: flatColors.neutral[800],
+    color: flatColors.brand.text,
     marginBottom: 6,
   },
   heroSubtitle: {
     ...premiumTypography.body.medium,
-    color: flatColors.neutral[600],
+    color: flatColors.neutral[700],
     marginBottom: 14,
   },
   heroPills: {
@@ -327,16 +347,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: flatColors.cards.blue.background,
+    backgroundColor: flatColors.brand.light,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderWidth: 1,
-    borderColor: flatColors.neutral[200],
+    borderColor: flatColors.brand.border,
   },
   pillText: {
     ...premiumTypography.caption.medium,
-    color: flatColors.accent.blue,
+    color: flatColors.brand.text,
     fontWeight: '700',
   },
   formCard: {
@@ -382,14 +402,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   loginButton: {
-    backgroundColor: flatColors.accent.blue,
+    backgroundColor: flatColors.brand.primary,
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 4,
-    shadowColor: flatColors.accent.blue,
-    shadowOpacity: 0.25,
+    shadowColor: flatColors.brand.secondary,
+    shadowOpacity: 0.22,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
     elevation: 6,

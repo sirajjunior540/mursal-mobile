@@ -16,9 +16,9 @@ export const FlatLoginHeader: React.FC<FlatLoginHeaderProps> = ({
   return (
     <View style={styles.container}>
       <View style={styles.logoContainer}>
-        <AppLogo size="large" color={flatColors.accent.blue} />
+        <AppLogo size="large" color={flatColors.brand.primary} />
       </View>
-      
+
       <View style={styles.textContainer}>
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.subtitle}>{subtitle}</Text>
@@ -36,10 +36,15 @@ const styles = StyleSheet.create({
   logoContainer: {
     marginBottom: 24,
     padding: 16,
-    backgroundColor: flatColors.cards.blue.background,
+    backgroundColor: flatColors.brand.light,
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: flatColors.neutral[200],
+    borderColor: flatColors.brand.border,
+    shadowColor: flatColors.brand.secondary,
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
   },
   textContainer: {
     alignItems: 'center',
@@ -49,14 +54,14 @@ const styles = StyleSheet.create({
     fontSize: premiumTypography.headline.large.fontSize,
     fontWeight: '700',
     lineHeight: premiumTypography.headline.large.lineHeight,
-    color: flatColors.neutral[800],
+    color: flatColors.brand.text,
     textAlign: 'center',
   },
   subtitle: {
     fontSize: premiumTypography.callout.fontSize,
     fontWeight: premiumTypography.callout.fontWeight,
     lineHeight: premiumTypography.callout.lineHeight,
-    color: flatColors.neutral[600],
+    color: flatColors.neutral[700],
     textAlign: 'center',
   },
 });

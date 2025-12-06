@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
+import LinearGradient from 'react-native-linear-gradient';
 
 import {
   RouteHeader,
@@ -513,7 +514,16 @@ const RouteNavigationScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={flatColors.backgrounds.primary} />
+      <StatusBar barStyle="dark-content" backgroundColor={flatColors.brand.light} />
+      <LinearGradient
+        colors={[flatColors.brand.lighter, '#FFE7C7']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      <View style={[styles.decorativeBlob, styles.blobTopLeft]} />
+      <View style={[styles.decorativeBlob, styles.blobBottomRight]} />
+      <View style={styles.ring} />
       
       {/* Header */}
       <RouteHeader
@@ -530,7 +540,7 @@ const RouteNavigationScreen: React.FC = () => {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor={flatColors.accent.blue}
+            tintColor={flatColors.brand.secondary}
           />
         }
       >
@@ -613,13 +623,38 @@ const RouteNavigationScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: flatColors.backgrounds.secondary,
+    backgroundColor: flatColors.brand.lighter,
   },
   content: {
     flex: 1,
   },
   section: {
     marginBottom: 8,
+  },
+  decorativeBlob: {
+    position: 'absolute',
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    backgroundColor: 'rgba(245, 166, 35, 0.14)',
+  },
+  blobTopLeft: {
+    top: -40,
+    left: -30,
+  },
+  blobBottomRight: {
+    bottom: -60,
+    right: -20,
+  },
+  ring: {
+    position: 'absolute',
+    width: 340,
+    height: 340,
+    borderRadius: 170,
+    borderWidth: 16,
+    borderColor: 'rgba(245, 166, 35, 0.08)',
+    top: '20%',
+    right: '-16%',
   },
   emptyContainer: {
     flex: 1,
@@ -630,14 +665,14 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 18,
-    color: flatColors.neutral[600],
+    color: flatColors.brand.text,
     fontWeight: '600',
     marginBottom: 8,
     textAlign: 'center',
   },
   emptySubtext: {
     fontSize: 16,
-    color: flatColors.neutral[500],
+    color: flatColors.neutral[700],
     textAlign: 'center',
     lineHeight: 22,
   },

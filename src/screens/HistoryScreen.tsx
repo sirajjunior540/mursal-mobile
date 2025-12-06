@@ -6,7 +6,9 @@ import {
   StyleSheet,
   RefreshControl,
   ActivityIndicator,
+  StatusBar,
 } from 'react-native';
+import LinearGradient from 'react-native-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, NavigationProp, useRoute } from '@react-navigation/native';
 
@@ -26,7 +28,8 @@ import { OrderHistoryDetailsModal } from '../components/History/OrderHistoryDeta
 import EmptyState from '../components/EmptyState';
 
 type RootStackParamList = {
-  OrderDetails: { orderId: string };
+  PickupScreen: { orderId: string };
+  DeliveryScreen: { order: Order };
   HistoryScreen: { tab?: 'history' | 'earnings' };
 };
 
@@ -211,7 +214,16 @@ const HistoryScreen: React.FC = () => {
   }, [getOrderHistory, loadEarningsData, loadTransactionHistory]);
 
   const handleOrderPress = useCallback((order: Order) => {
-    navigation.navigate('OrderDetails', { orderId: order.id });
+    // For completed orders, show details modal
+    // For active orders, navigate to pickup/delivery screen
+    if (order.status === 'delivered' || order.status === 'cancelled' || order.status === 'failed') {
+      setSelectedOrder(order);
+      setDetailsModalVisible(true);
+    } else if (order.status === 'picked_up' || order.status === 'in_transit') {
+      navigation.navigate('DeliveryScreen', { order });
+    } else {
+      navigation.navigate('PickupScreen', { orderId: order.id });
+    }
   }, [navigation]);
 
   const handleCardPress = useCallback((order: Order) => {
@@ -292,6 +304,16 @@ const HistoryScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor={flatColors.brand.light} />
+      <LinearGradient
+        colors={[flatColors.brand.lighter, '#FFE7C7']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      <View style={[styles.decorativeBlob, styles.blobTopLeft]} />
+      <View style={[styles.decorativeBlob, styles.blobBottomRight]} />
+      <View style={styles.ring} />
       <HistoryHeader
         currentTab={currentTab}
         onTabChange={handleTabChange}
@@ -312,7 +334,7 @@ const HistoryScreen: React.FC = () => {
       {/* Loading overlay */}
       {isLoading && !refreshing && (
         <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color={flatColors.accent.blue} />
+          <ActivityIndicator size="large" color={flatColors.brand.secondary} />
         </View>
       )}
 
@@ -335,7 +357,32 @@ const HistoryScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: flatColors.backgrounds.secondary,
+    backgroundColor: flatColors.brand.lighter,
+  },
+  decorativeBlob: {
+    position: 'absolute',
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    backgroundColor: 'rgba(245, 166, 35, 0.14)',
+  },
+  blobTopLeft: {
+    top: -40,
+    left: -30,
+  },
+  blobBottomRight: {
+    bottom: -60,
+    right: -20,
+  },
+  ring: {
+    position: 'absolute',
+    width: 320,
+    height: 320,
+    borderRadius: 160,
+    borderWidth: 16,
+    borderColor: 'rgba(245, 166, 35, 0.08)',
+    top: '14%',
+    right: '-16%',
   },
   content: {
     flex: 1,

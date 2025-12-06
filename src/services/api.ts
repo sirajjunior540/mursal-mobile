@@ -118,9 +118,11 @@ export class HttpClient {
     options: RequestInit = {}
   ): Promise<ApiResponse<T>> {
     try {
-      const url = `${this.baseUrl}${endpoint}`;
+      // Ensure endpoint has a leading slash
+      const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+      const url = `${this.baseUrl}${cleanEndpoint}`;
       const headers = await this.getAuthHeaders();
-      
+
       // Log the full URL for debugging
       console.log(`[HttpClient] Making ${options.method || 'GET'} request to: ${url}`);
 

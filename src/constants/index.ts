@@ -8,6 +8,36 @@ export * from './designSystem';
 // Export spacing as SPACING for consistency
 export { spacing as SPACING } from './theme';
 
+// Export typography as TYPOGRAPHY for consistency
+export { typography as TYPOGRAPHY } from './theme';
+
+// Create COLORS constant with flat structure for SettingsScreen compatibility
+import { lightTheme } from './theme';
+export const COLORS = {
+  primary: lightTheme.colors.primary,
+  secondary: lightTheme.colors.secondary,
+  background: lightTheme.colors.background,
+  surface: lightTheme.colors.surface,
+  text: lightTheme.colors.text,
+  textPrimary: lightTheme.colors.text,
+  textSecondary: lightTheme.colors.textSecondary,
+  border: lightTheme.colors.border,
+  success: lightTheme.colors.success,
+  warning: lightTheme.colors.warning,
+  error: lightTheme.colors.error,
+  white: lightTheme.colors.white,
+  black: lightTheme.colors.black,
+  gray100: '#F3F4F6',
+  gray200: '#E5E7EB',
+  gray300: '#D1D5DB',
+  gray400: '#9CA3AF',
+  gray500: '#6B7280',
+  gray600: '#4B5563',
+  gray700: '#374151',
+  gray800: '#1F2937',
+  gray900: '#111827',
+} as const;
+
 // API Configuration (now using centralized ENV)
 export const API_CONFIG = {
   BASE_URL: ENV.API_BASE_URL,
@@ -53,11 +83,11 @@ export const APP_SETTINGS = {
  */
 export const ORDER_STATUS_COLORS = {
   pending: '#FF9800',      // Orange - waiting
-  confirmed: '#2196F3',    // Blue - confirmed by restaurant
+  confirmed: '#FF6B00',    // Brand orange - confirmed by restaurant
   preparing: '#9C27B0',    // Purple - being prepared
   ready: '#3F51B5',        // Indigo - ready for pickup
   picked_up: '#9C27B0',    // Purple - picked up by driver
-  in_transit: '#3F51B5',   // Indigo - on the way
+  in_transit: '#FF6B00',   // Brand orange - on the way
   delivered: '#4CAF50',    // Green - completed
   cancelled: '#F44336',    // Red - cancelled
   failed: '#F44336',       // Red - failed

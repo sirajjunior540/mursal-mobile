@@ -154,7 +154,7 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
         <View style={styles.cameraContainer}>
           {hasPermission === null ? (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#007AFF" />
+              <ActivityIndicator size="large" color="#FF6B00" />
               <Text style={styles.loadingText}>{t('qrScanner.checkingPermission')}</Text>
             </View>
           ) : hasPermission === false ? (

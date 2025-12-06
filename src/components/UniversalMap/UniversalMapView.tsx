@@ -316,7 +316,7 @@ export const UniversalMapView: React.FC<UniversalMapViewProps> = ({
     const markerColors = {
       pickup: '#FF9F43',
       delivery: '#10B981',
-      current: '#3B82F6',
+      current: '#FF6B00',
     };
 
     // Force a valid initial region

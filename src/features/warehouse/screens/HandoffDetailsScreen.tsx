@@ -51,7 +51,7 @@ const HandoffDetailsScreen: React.FC = () => {
   const route = useRoute();
   const { handoffId, fromScanner } = route.params as { handoffId: string; fromScanner?: boolean };
   const { tenantSettings } = useTenant();
-  const currency = tenantSettings?.currency || 'SAR';
+  const currency = tenantSettings?.currency || 'SDG';
   
   const [handoff, setHandoff] = useState<HandoffDetails | null>(null);
   const [loading, setLoading] = useState(true);

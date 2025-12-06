@@ -1,17 +1,6 @@
 import { HistoryFilter } from '../types';
 
 /**
- * Format currency with proper locale formatting
- */
-export const formatCurrency = (amount: number, currency = 'SDG'): string => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency,
-    minimumFractionDigits: 2,
-  }).format(amount);
-};
-
-/**
  * Format date to display string
  */
 export const formatDate = (date: Date): string => {

@@ -8,6 +8,7 @@ import {
   Animated,
   StatusBar,
 } from 'react-native';
+import LinearGradient from 'react-native-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../contexts/AuthContext';
 import { flatColors } from '../../design/dashboard/flatColors';
@@ -22,15 +23,16 @@ const FlatLoginScreen: React.FC = () => {
   const slideAnim = useRef(new Animated.Value(30)).current;
 
   useEffect(() => {
+    // Faster, subtler animations
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 600,
+        duration: 250,
         useNativeDriver: true,
       }),
       Animated.timing(slideAnim, {
         toValue: 0,
-        duration: 600,
+        duration: 250,
         useNativeDriver: true,
       }),
     ]).start();
@@ -40,10 +42,19 @@ const FlatLoginScreen: React.FC = () => {
     <>
       <StatusBar 
         barStyle="dark-content" 
-        backgroundColor={flatColors.backgrounds.secondary} 
+        backgroundColor={flatColors.brand.light} 
         translucent={false}
       />
       <View style={styles.container}>
+        <LinearGradient
+          colors={[flatColors.brand.lighter, '#FFE7C7', '#FFF7ED']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+        <View style={[styles.decorativeBlob, styles.blobTopLeft]} />
+        <View style={[styles.decorativeBlob, styles.blobBottomRight]} />
+        <View style={styles.ring} />
         <SafeAreaView style={styles.safeArea}>
           <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -91,7 +102,7 @@ const FlatLoginScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: flatColors.backgrounds.secondary,
+    backgroundColor: flatColors.brand.lighter,
   },
   safeArea: {
     flex: 1,
@@ -103,6 +114,31 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: 'center',
     paddingVertical: 40,
+  },
+  decorativeBlob: {
+    position: 'absolute',
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: 'rgba(245, 166, 35, 0.10)',
+  },
+  blobTopLeft: {
+    top: -40,
+    left: -30,
+  },
+  blobBottomRight: {
+    bottom: -50,
+    right: -20,
+  },
+  ring: {
+    position: 'absolute',
+    width: 340,
+    height: 340,
+    borderRadius: 170,
+    borderWidth: 16,
+    borderColor: 'rgba(245, 166, 35, 0.05)',
+    top: '16%',
+    right: '-16%',
   },
   contentContainer: {
     flex: 1,
@@ -120,10 +156,10 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: flatColors.neutral[300],
+    backgroundColor: flatColors.brand.border,
   },
   activeDot: {
-    backgroundColor: flatColors.accent.blue,
+    backgroundColor: flatColors.brand.secondary,
     width: 20,
     borderRadius: 10,
   },

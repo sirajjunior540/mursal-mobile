@@ -45,7 +45,7 @@ interface DriverBalanceCardProps {
 const DriverBalanceCard: React.FC<DriverBalanceCardProps> = ({ onRefresh, compact = false }) => {
   const navigation = useNavigation();
   const { tenantSettings } = useTenant();
-  const currency = tenantSettings?.currency || 'SAR';
+  const currency = tenantSettings?.currency || 'SDG';
   
   const [balanceData, setBalanceData] = useState<BalanceData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -70,11 +70,15 @@ const DriverBalanceCard: React.FC<DriverBalanceCardProps> = ({ onRefresh, compac
   };
 
   const handleRemitCash = () => {
-    navigation.navigate('CashRemittance' as never);
+    // Navigate to History tab with earnings view
+    // @ts-ignore - nested navigation params
+    navigation.navigate('MainTabs', { screen: 'History', params: { tab: 'earnings' } });
   };
 
   const handleViewTransactions = () => {
-    navigation.navigate('TransactionHistory' as never);
+    // Navigate to History tab with earnings view
+    // @ts-ignore - nested navigation params
+    navigation.navigate('MainTabs', { screen: 'History', params: { tab: 'earnings' } });
   };
 
   if (loading) {

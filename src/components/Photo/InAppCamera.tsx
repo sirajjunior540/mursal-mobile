@@ -333,7 +333,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   instructionText: {
-    fontSize: premiumTypography.body.fontSize,
+    fontSize: premiumTypography.body.medium.fontSize,
     color: '#fff',
     textAlign: 'center',
     marginBottom: 24,
@@ -371,9 +371,9 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   permissionText: {
-    fontSize: premiumTypography.body.fontSize,
-    fontWeight: premiumTypography.body.fontWeight,
-    lineHeight: premiumTypography.body.lineHeight,
+    fontSize: premiumTypography.body.medium.fontSize,
+    fontWeight: premiumTypography.body.medium.fontWeight,
+    lineHeight: premiumTypography.body.medium.lineHeight,
     color: flatColors.neutral[600],
     textAlign: 'center',
     marginBottom: 32,

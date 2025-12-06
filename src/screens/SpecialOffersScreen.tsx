@@ -280,7 +280,7 @@ const SpecialOffersScreen: React.FC = () => {
               <Text style={styles.originalRate}>
                 ${item.originalPrice.toFixed(2)}
               </Text>
-              <Ionicons name="arrow-forward" size={16} color="#3B82F6" />
+              <Ionicons name="arrow-forward" size={16} color="#FF6B00" />
               <Text style={styles.enhancedRate}>
                 ${item.discountedPrice.toFixed(2)}
               </Text>
@@ -372,8 +372,8 @@ const SpecialOffersScreen: React.FC = () => {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor="#3B82F6"
-            colors={['#3B82F6']}
+            tintColor="#FF6B00"
+            colors={['#FF6B00']}
           />
         }
         showsVerticalScrollIndicator={false}
@@ -452,7 +452,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F3F4F6',
   },
   categoryButtonActive: {
-    backgroundColor: '#3B82F6',
+    backgroundColor: '#FF6B00',
   },
   categoryButtonText: {
     marginLeft: 6,
@@ -477,7 +477,7 @@ const styles = StyleSheet.create({
   },
   selectedDealCard: {
     borderWidth: 2,
-    borderColor: '#3B82F6',
+    borderColor: '#FF6B00',
   },
   cardContent: {
     borderRadius: 16,

@@ -266,6 +266,11 @@ export interface Order {
   delivery_contact_name?: string;
   delivery_contact_phone?: string;
   delivery_instructions?: string;
+  // Backend uses dropoff_ prefix for these fields
+  dropoff_address?: string;
+  dropoff_contact_name?: string;
+  dropoff_contact_phone?: string;
+  dropoff_instructions?: string;
   
   // Additional constraints
   requires_signature?: boolean;

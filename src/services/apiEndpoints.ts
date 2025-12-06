@@ -1299,13 +1299,13 @@ export class ApiEndpoints {
 
   async getOrderHistory(filter?: 'today' | 'week' | 'month' | 'all'): Promise<ApiResponse<Order[]>> {
     try {
-      // Use the new dedicated order_history endpoint
+      // Use the driver order_history endpoint
       const params = new URLSearchParams();
       if (filter) {
         params.append('filter', filter);
       }
-      
-      const endpoint = `/api/v1/delivery/deliveries/order_history/?${params.toString()}`;
+
+      const endpoint = `/api/v1/drivers/order_history/?${params.toString()}`;
       const response = await this.client.get<{
         orders: BackendDelivery[],
         count: number,
@@ -1528,6 +1528,22 @@ export class ApiEndpoints {
 
   async smartUpdateStatus(deliveryId: string, data: SmartStatusUpdateData): Promise<ApiResponse<void>> {
     return this.client.post<void>(`/api/v1/delivery/deliveries/${deliveryId}/smart_update_status/`, data);
+  }
+
+  async verifyOrderPickup(orderId: string, data: {
+    qr_code_data?: string;
+    current_location?: {
+      lat: number;
+      lng: number;
+      accuracy?: number;
+    };
+    manual_confirmation?: boolean;
+    manual_reason?: string;
+  }): Promise<ApiResponse<{ status: string; message?: string }>> {
+    return this.client.post<{ status: string; message?: string }>(
+      `/api/v1/orders/${orderId}/pickup/`,
+      data
+    );
   }
 
   async estimatePickupTime(deliveryId: string): Promise<ApiResponse<EstimatePickupResponse>> {

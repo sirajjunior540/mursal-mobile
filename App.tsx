@@ -39,6 +39,11 @@ import BatchLegsScreen from './src/screens/BatchLegsScreen';
 import DriverProfileSettingsScreen from './src/screens/DriverProfileSettingsScreen';
 import SpecialOffersScreen from './src/screens/SpecialOffersScreen';
 import NotificationsScreen from './src/screens/NotificationsScreen';
+import PickupScreen from './src/screens/PickupScreen';
+import DeliveryScreen from './src/screens/DeliveryScreen';
+import HelpSupportScreen from './src/screens/HelpSupportScreen';
+import TermsOfServiceScreen from './src/screens/TermsOfServiceScreen';
+import PrivacyPolicyScreen from './src/screens/PrivacyPolicyScreen';
 
 // Context providers
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
@@ -76,6 +81,16 @@ interface RootStackParamList extends Record<string, object | undefined> {
     selectedDealId?: string;
     category?: 'all' | 'surge' | 'bonus' | 'incentive';
   };
+  PickupScreen: {
+    orderId: string;
+    deliveryId: string;
+  };
+  DeliveryScreen: {
+    order: any;
+  };
+  HelpSupport: undefined;
+  TermsOfService: undefined;
+  PrivacyPolicy: undefined;
 }
 
 interface TabParamList extends Record<string, object | undefined> {
@@ -120,7 +135,7 @@ const MainTabs = () => {
 
           return <Ionicons name={iconName as React.ComponentProps<typeof Ionicons>['name']} size={size} color={color} />;
         },
-        tabBarActiveTintColor: '#3B82F6',
+        tabBarActiveTintColor: '#F5A623',
         tabBarInactiveTintColor: '#6B7280',
         tabBarStyle: {
           backgroundColor: '#FFFFFF',
@@ -151,10 +166,10 @@ const MainTabs = () => {
         component={DashboardScreen} 
         options={{ tabBarLabel: 'Home' }}
       />
-      <Tab.Screen 
-        name="Navigation" 
-        component={RouteNavigationScreen} 
-        options={{ tabBarLabel: 'Navigation' }}
+      <Tab.Screen
+        name="Navigation"
+        component={PickupScreen}
+        options={{ tabBarLabel: 'Active Order' }}
       />
       <Tab.Screen 
         name="History" 
@@ -276,6 +291,20 @@ const IncomingOrderManager = () => {
       if (success) {
         setShowModal(false);
         setIncomingOrder(null);
+
+        // Refresh driver orders to get the latest data
+        await getDriverOrders();
+
+        // Navigate to PickupScreen after accepting (use reset to prevent back navigation)
+        if (navigationRef.current) {
+          navigationRef.current.reset({
+            index: 0,
+            routes: [
+              { name: 'MainTabs' as never },
+              { name: 'PickupScreen' as never, params: { orderId: _orderId, deliveryId: _orderId } as never }
+            ],
+          });
+        }
       }
     } catch (error) {
       // Error handled silently
@@ -448,6 +477,51 @@ const AppNavigator = () => {
             <Stack.Screen
               name="SpecialOffers"
               component={SpecialOffersScreen}
+              options={{
+                headerShown: false,
+                presentation: 'card',
+                animation: 'slide_from_right'
+              }}
+            />
+            <Stack.Screen
+              name="PickupScreen"
+              component={PickupScreen}
+              options={{
+                headerShown: false,
+                presentation: 'card',
+                animation: 'slide_from_right'
+              }}
+            />
+            <Stack.Screen
+              name="DeliveryScreen"
+              component={DeliveryScreen}
+              options={{
+                headerShown: false,
+                presentation: 'card',
+                animation: 'slide_from_right'
+              }}
+            />
+            <Stack.Screen
+              name="HelpSupport"
+              component={HelpSupportScreen}
+              options={{
+                headerShown: false,
+                presentation: 'card',
+                animation: 'slide_from_right'
+              }}
+            />
+            <Stack.Screen
+              name="TermsOfService"
+              component={TermsOfServiceScreen}
+              options={{
+                headerShown: false,
+                presentation: 'card',
+                animation: 'slide_from_right'
+              }}
+            />
+            <Stack.Screen
+              name="PrivacyPolicy"
+              component={PrivacyPolicyScreen}
               options={{
                 headerShown: false,
                 presentation: 'card',

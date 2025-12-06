@@ -60,7 +60,7 @@ const EnhancedOrderCard: React.FC<EnhancedOrderCardProps> = ({
     const colors = {
       'pending': '#6B7280',
       'assigned': '#F59E0B',
-      'accepted': '#3B82F6',
+      'accepted': '#FF6B00',
       'picked_up': '#8B5CF6',
       'in_transit': '#10B981',
       'delivered': '#059669',

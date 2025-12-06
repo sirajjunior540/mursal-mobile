@@ -32,7 +32,7 @@ interface FilterOption {
 const filterOptions: FilterOption[] = [
   { id: 'all', label: 'All Orders', value: 'all', icon: 'list-outline', color: '#6B7280' },
   { id: 'assigned', label: 'Assigned', value: 'assigned', icon: 'hourglass-outline', color: '#F59E0B' },
-  { id: 'in_transit', label: 'Picked Up', value: 'in_transit', icon: 'car-outline', color: '#3B82F6' },
+  { id: 'in_transit', label: 'Picked Up', value: 'in_transit', icon: 'car-outline', color: '#FF6B00' },
   { id: 'delivered', label: 'Delivered', value: 'delivered', icon: 'checkmark-circle-outline', color: '#10B981' },
 ];
 
@@ -120,7 +120,7 @@ const AcceptedOrdersScreen: React.FC = () => {
     switch (status) {
       case 'pending': return '#6B7280';
       case 'assigned': return '#F59E0B';
-      case 'in_transit': return '#3B82F6';
+      case 'in_transit': return '#FF6B00';
       case 'delivered': return '#10B981';
       case 'cancelled': return '#EF4444';
       default: return '#6B7280';
@@ -229,7 +229,7 @@ const AcceptedOrdersScreen: React.FC = () => {
             <Text style={styles.customerName}>{order.customer_details?.name || order.customer?.name || 'Unknown Customer'}</Text>
             {(order.customer_details?.phone || order.customer?.phone) && (
               <TouchableOpacity style={styles.phoneButton}>
-                <Ionicons name="call-outline" size={14} color="#3B82F6" />
+                <Ionicons name="call-outline" size={14} color="#FF6B00" />
               </TouchableOpacity>
             )}
           </View>
@@ -253,7 +253,7 @@ const AcceptedOrdersScreen: React.FC = () => {
               onPress={() => handleOrderPress(order)}
             >
               <Text style={styles.detailsButtonText}>View Details</Text>
-              <Ionicons name="chevron-forward" size={16} color="#3B82F6" />
+              <Ionicons name="chevron-forward" size={16} color="#FF6B00" />
             </TouchableOpacity>
           </View>
         </LinearGradient>
@@ -272,7 +272,7 @@ const AcceptedOrdersScreen: React.FC = () => {
         }
       </Text>
       <TouchableOpacity style={styles.refreshButton} onPress={handleRefresh}>
-        <Ionicons name="refresh-outline" size={20} color="#3B82F6" />
+        <Ionicons name="refresh-outline" size={20} color="#FF6B00" />
         <Text style={styles.refreshButtonText}>Refresh</Text>
       </TouchableOpacity>
     </View>
@@ -337,7 +337,7 @@ const AcceptedOrdersScreen: React.FC = () => {
       
       {isLoading && !refreshing && (
         <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color="#3B82F6" />
+          <ActivityIndicator size="large" color="#FF6B00" />
         </View>
       )}
     </SafeAreaView>
@@ -517,7 +517,7 @@ const styles = StyleSheet.create({
   detailsButtonText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#3B82F6',
+    color: '#FF6B00',
     marginRight: 4,
   },
   emptyState: {
@@ -546,7 +546,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 24,
     paddingVertical: 12,
-    backgroundColor: '#3B82F6',
+    backgroundColor: '#FF6B00',
     borderRadius: 24,
   },
   refreshButtonText: {

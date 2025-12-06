@@ -37,7 +37,7 @@ const OrderCard: React.FC<OrderCardProps> = memo(({
   const { tenantSettings } = useTenant();
   
   // Get currency from order or tenant settings
-  const currency = order?.currency || tenantSettings?.currency || 'SAR';
+  const currency = order?.currency || tenantSettings?.currency || 'SDG';
 
   // Entry animation
   React.useEffect(() => {

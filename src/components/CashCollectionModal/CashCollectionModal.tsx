@@ -42,7 +42,7 @@ const CashCollectionModal: React.FC<CashCollectionModalProps> = ({
   order,
 }) => {
   const { tenantSettings } = useTenant();
-  const currency = order.currency || tenantSettings?.currency || 'SAR';
+  const currency = order.currency || tenantSettings?.currency || 'SDG';
   
   // Calculate total to collect
   const totalToCollect = (order.cod_amount || order.total) + order.delivery_fee;

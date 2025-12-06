@@ -12,7 +12,16 @@ export interface CurrencyConfig {
 }
 
 // Currency configurations for supported currencies
+// SDG is the primary currency - must be first and default
 export const CURRENCY_CONFIGS: Record<string, CurrencyConfig> = {
+  SDG: {
+    code: 'SDG',
+    symbol: 'ج.س',
+    position: 'after',
+    decimals: 2,
+    thousandsSeparator: ',',
+    decimalSeparator: '.'
+  },
   SAR: {
     code: 'SAR',
     symbol: 'ر.س',
@@ -37,16 +46,8 @@ export const CURRENCY_CONFIGS: Record<string, CurrencyConfig> = {
     thousandsSeparator: ',',
     decimalSeparator: '.'
   },
-  SDG: {
-    code: 'SDG',
-    symbol: 'ج.س',
-    position: 'after',
-    decimals: 2,
-    thousandsSeparator: ',',
-    decimalSeparator: '.'
-  },
   USD: {
-    code: 'SDG',
+    code: 'USD',
     symbol: '$',
     position: 'before',
     decimals: 2,
@@ -74,12 +75,12 @@ export const CURRENCY_CONFIGS: Record<string, CurrencyConfig> = {
 /**
  * Format amount with currency
  * @param amount The numeric amount
- * @param currencyCode The currency code (e.g., 'SAR', 'SDG')
+ * @param currencyCode The currency code (e.g., 'SDG', 'SAR', 'USD')
  * @param options Optional formatting options
  */
 export function formatCurrency(
   amount: number | string | undefined | null,
-  currencyCode: string = 'SAR',
+  currencyCode: string = 'SDG',
   options?: {
     showCode?: boolean;
     showSymbol?: boolean;
@@ -90,12 +91,12 @@ export function formatCurrency(
   if (amount === null || amount === undefined) {
     amount = 0;
   }
-  
+
   // Convert to number
   const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
-  
+
   // Get currency config
-  const config = CURRENCY_CONFIGS[currencyCode] || CURRENCY_CONFIGS.SAR;
+  const config = CURRENCY_CONFIGS[currencyCode] || CURRENCY_CONFIGS.SDG;
   
   // Format the number
   const formatted = numAmount.toFixed(config.decimals);
@@ -136,8 +137,8 @@ export function formatCurrency(
 /**
  * Get currency symbol for a currency code
  */
-export function getCurrencySymbol(currencyCode: string = 'SAR'): string {
-  const config = CURRENCY_CONFIGS[currencyCode] || CURRENCY_CONFIGS.SAR;
+export function getCurrencySymbol(currencyCode: string = 'SDG'): string {
+  const config = CURRENCY_CONFIGS[currencyCode] || CURRENCY_CONFIGS.SDG;
   return config.symbol;
 }
 
@@ -146,7 +147,7 @@ export function getCurrencySymbol(currencyCode: string = 'SAR'): string {
  */
 export function formatOrderAmount(
   amount: number | string | undefined | null,
-  currencyCode: string = 'SAR'
+  currencyCode: string = 'SDG'
 ): string {
   return formatCurrency(amount, currencyCode, { compact: true });
 }

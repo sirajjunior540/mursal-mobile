@@ -6,9 +6,9 @@ import { Platform } from 'react-native';
 export const theme = {
   colors: {
     // Primary palette
-    primary: '#007AFF',
-    primaryLight: '#4DA6FF',
-    primaryDark: '#0056CC',
+    primary: '#F5A623',
+    primaryLight: '#FED7AA',
+    primaryDark: '#E8941D',
     
     // Secondary palette
     secondary: '#5856D6',
@@ -76,7 +76,7 @@ export const theme = {
     
     // Status-specific colors for orders
     statusPending: '#FF9500',
-    statusAccepted: '#007AFF',
+    statusAccepted: '#F5A623',
     statusPickedUp: '#5856D6',
     statusDelivered: '#34C759',
     statusCancelled: '#FF3B30',

@@ -6,9 +6,9 @@ export const Design = {
   // High-contrast colors for maximum readability
   colors: {
     // Primary brand colors with high contrast
-    primary: '#667eea',      // Main brand purple-blue
-    primaryLight: '#a5b8fc', // Light variant
-    primaryDark: '#4c61c7',  // Dark variant
+    primary: '#F5A623',      // Main brand orange
+    primaryLight: '#FED7AA', // Light variant
+    primaryDark: '#E8941D',  // Dark variant
     
     // Semantic colors with high contrast
     success: '#48bb78',      // Green
@@ -18,9 +18,9 @@ export const Design = {
     
     // Background colors for clean interfaces
     white: '#FFFFFF',
-    background: '#FFFFFF',
-    backgroundSecondary: '#f8fafc',
-    backgroundTertiary: '#f1f5f9',
+    background: '#FFF7ED',
+    backgroundSecondary: '#FFF1E6',
+    backgroundTertiary: '#FFEBD9',
     surface: '#FFFFFF',        // Surface color for cards, modals, etc.
     
     // Text colors for maximum readability (WCAG AAA)
@@ -36,7 +36,7 @@ export const Design = {
     divider: '#edf2f7',       // Very light gray for dividers
     inputBackground: '#ffffff', // White for input backgrounds
     inputBorder: '#d1d5db',   // Medium gray for input borders
-    inputFocus: '#667eea',    // Brand color for focused inputs
+    inputFocus: '#F5A623',    // Brand color for focused inputs
     disabled: '#f7fafc',      // Very light gray for disabled elements
     
     // System grays (updated for better contrast)
@@ -74,7 +74,7 @@ export const Design = {
     assigned: '#4299e1',     // Blue
     accepted: '#4299e1',     // Blue
     picked_up: '#9f7aea',    // Purple
-    in_transit: '#667eea',   // Brand blue
+    in_transit: '#F5A623',   // Brand orange
     delivered: '#48bb78',    // Green
     cancelled: '#f56565',    // Red
     failed: '#f56565',       // Red

@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Image, Text, StyleSheet, ImageStyle, ViewStyle, TextStyle } from 'react-native';
 import { Design } from '../constants/designSystem';
+import { flatColors } from '../design/dashboard/flatColors';
 
 interface AppLogoProps {
   size?: 'small' | 'medium' | 'large' | 'xlarge';
@@ -70,17 +71,21 @@ const AppLogo: React.FC<AppLogoProps> = ({
     );
   }
 
+  const sharedRadius = variant === 'minimal' ? 12 : config.containerSize * 0.28;
+
   const logoContainerStyle: ViewStyle = {
     width: config.containerSize,
     height: config.containerSize,
-    borderRadius: variant === 'minimal' ? 0 : config.containerSize / 2,
-    backgroundColor: variant === 'minimal' ? 'transparent' : 'rgba(255, 255, 255, 0.1)',
+    borderRadius: sharedRadius,
+    backgroundColor: variant === 'minimal' ? flatColors.brand.light : flatColors.brand.lighter,
+    borderWidth: variant === 'minimal' ? 1 : 1,
+    borderColor: flatColors.brand.border,
   };
 
   const logoImageStyle: ImageStyle = {
     width: config.logoSize,
     height: config.logoSize,
-    borderRadius: variant === 'minimal' ? 0 : config.logoSize / 2,
+    borderRadius: sharedRadius * 0.75,
   };
 
   return (

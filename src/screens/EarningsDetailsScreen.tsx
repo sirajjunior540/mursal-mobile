@@ -99,7 +99,7 @@ const EarningsDetailsScreen: React.FC = () => {
   const renderEarningSummary = () => (
     <View style={styles.summaryContainer}>
       <LinearGradient
-        colors={['#3B82F6', '#1D4ED8']}
+        colors={['#FF6B00', '#1D4ED8']}
         style={styles.summaryGradient}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
@@ -167,7 +167,7 @@ const EarningsDetailsScreen: React.FC = () => {
       <View style={styles.statsGrid}>
         <View style={styles.statCard}>
           <View style={[styles.statIcon, { backgroundColor: '#EBF4FF' }]}>
-            <Ionicons name="receipt-outline" size={24} color="#3B82F6" />
+            <Ionicons name="receipt-outline" size={24} color="#FF6B00" />
           </View>
           <Text style={styles.statValue}>{detailedEarnings?.completedOrders || 0}</Text>
           <Text style={styles.statLabel}>Completed Orders</Text>
@@ -277,7 +277,7 @@ const EarningsDetailsScreen: React.FC = () => {
       <SafeAreaView style={styles.container}>
         {renderHeader()}
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#3B82F6" />
+          <ActivityIndicator size="large" color="#FF6B00" />
           <Text style={styles.loadingText}>Loading earnings details...</Text>
         </View>
       </SafeAreaView>
@@ -416,7 +416,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   activeTab: {
-    backgroundColor: '#3B82F6',
+    backgroundColor: '#FF6B00',
   },
   tabText: {
     fontSize: 14,

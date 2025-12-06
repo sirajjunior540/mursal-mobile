@@ -14,10 +14,12 @@ import {
   SafeAreaView,
   StatusBar,
 } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { notificationApiService, NotificationData, NotificationSummary } from '../services/api/notificationService';
 import { theme } from '../shared/styles/theme';
+import { useOrders } from '../features/orders/context/OrderProvider';
 
 // Notification Card Component
 interface NotificationCardProps {
@@ -67,11 +69,11 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
       case 'high':
         return '#FF9500';
       case 'normal':
-        return '#007AFF';
+        return '#FF6B00';
       case 'low':
         return '#8E8E93';
       default:
-        return '#007AFF';
+        return '#FF6B00';
     }
   };
 
@@ -179,6 +181,8 @@ const getActionText = (actionType: string) => {
 
 // Main NotificationsScreen Component
 const NotificationsScreen: React.FC = () => {
+  const navigation = useNavigation<StackNavigationProp<any>>();
+  const { driverOrders } = useOrders();
   const [notifications, setNotifications] = useState<NotificationData[]>([]);
   const [summary, setSummary] = useState<NotificationSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -278,19 +282,52 @@ const NotificationsScreen: React.FC = () => {
       handleMarkAsRead(notification.id);
     }
 
+    // Find the order from driverOrders if order_id is present
+    const relatedOrder = notification.order_id
+      ? driverOrders.find(o => o.id === notification.order_id || o.order_number === notification.order_id)
+      : null;
+
     // Handle notification actions based on type
     switch (notification.action_type) {
       case 'order_detail':
-        // Navigate to order details
-        break;
       case 'track_order':
-        // Navigate to order tracking
+        // Navigate to order details/pickup screen
+        if (relatedOrder) {
+          navigation.navigate('PickupScreen', { orderId: relatedOrder.id });
+        } else if (notification.order_id) {
+          navigation.navigate('PickupScreen', { orderId: notification.order_id });
+        } else {
+          Alert.alert(
+            notification.localized_content.title,
+            notification.localized_content.message
+          );
+        }
         break;
       case 'pickup_order':
         // Navigate to pickup screen
+        if (relatedOrder) {
+          navigation.navigate('PickupScreen', { orderId: relatedOrder.id });
+        } else if (notification.order_id) {
+          navigation.navigate('PickupScreen', { orderId: notification.order_id });
+        } else {
+          // Go to active orders tab
+          navigation.navigate('MainTabs', { screen: 'Navigation' });
+        }
         break;
       case 'view_batch':
         // Navigate to batch details
+        if (notification.batch_id) {
+          navigation.navigate('BatchOrderScreen', { batchId: notification.batch_id });
+        } else {
+          Alert.alert(
+            notification.localized_content.title,
+            notification.localized_content.message
+          );
+        }
+        break;
+      case 'view_offers':
+        // Navigate to special offers screen
+        navigation.navigate('SpecialOffersScreen');
         break;
       default:
         // Show notification details
@@ -554,7 +591,7 @@ const styles = StyleSheet.create({
   },
   headerButtonText: {
     fontSize: 14,
-    color: '#007AFF',
+    color: '#FF6B00',
     fontWeight: '500',
   },
   summaryContainer: {
@@ -617,7 +654,7 @@ const styles = StyleSheet.create({
   },
   unreadCard: {
     borderLeftWidth: 4,
-    borderLeftColor: '#007AFF',
+    borderLeftColor: '#FF6B00',
   },
   cardHeader: {
     flexDirection: 'row',
@@ -654,7 +691,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#007AFF',
+    backgroundColor: '#FF6B00',
   },
   notificationMessage: {
     fontSize: 14,
@@ -678,7 +715,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   actionButton: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#FF6B00',
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 8,

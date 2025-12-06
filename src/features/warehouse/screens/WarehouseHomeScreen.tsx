@@ -38,7 +38,7 @@ const WarehouseHomeScreen: React.FC = () => {
   const navigation = useNavigation();
   const { user } = useAuth();
   const { tenantSettings } = useTenant();
-  const currency = tenantSettings?.currency || 'SAR';
+  const currency = tenantSettings?.currency || 'SDG';
   
   const [refreshing, setRefreshing] = useState(false);
   const [stats, setStats] = useState<WarehouseStats>({

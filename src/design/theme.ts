@@ -8,12 +8,12 @@ export const theme = {
   colors: {
     // Primary Brand Colors
     primary: {
-      50: '#EBF8FF',
-      100: '#BEE3F8',
-      500: '#3182CE', // Main brand color
-      600: '#2C5282',
-      700: '#2A4365',
-      900: '#1A202C',
+      50: '#FFFBF5',
+      100: '#FFF7ED',
+      500: '#F5A623', // Main brand color (orange)
+      600: '#E8941D',
+      700: '#C2410C',
+      900: '#7C2D12',
     },
     
     // Semantic Colors
@@ -42,11 +42,11 @@ export const theme = {
     },
     
     info: {
-      50: '#EBF4FF',
-      100: '#DBEAFE',
-      500: '#3B82F6',
-      600: '#2563EB',
-      700: '#1D4ED8',
+      50: '#FFF7ED',
+      100: '#FFEDD5',
+      500: '#F5A623',
+      600: '#E8941D',
+      700: '#C2410C',
     },
     
     // Neutral Colors
@@ -67,7 +67,7 @@ export const theme = {
     // Status Colors for Delivery States
     status: {
       pending: '#F59E0B',
-      assigned: '#3B82F6',
+      assigned: '#F5A623',
       accepted: '#10B981',
       enRoute: '#8B5CF6',
       arrived: '#F97316',

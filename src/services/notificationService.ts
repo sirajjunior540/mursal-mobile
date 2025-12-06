@@ -219,6 +219,7 @@ class NotificationService {
             // Instructions
             pickup_instructions: data.pickup_instructions || '',
             dropoff_instructions: data.dropoff_instructions || data.delivery_instructions || '',
+            delivery_instructions: data.dropoff_instructions || data.delivery_instructions || '',
             notes: data.notes || data.special_instructions || '',
             // Payment info
             payment_method: data.payment_method || (deliveryFee > 0 ? 'cash' : ''),

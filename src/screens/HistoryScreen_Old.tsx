@@ -227,7 +227,7 @@ const HistoryScreen: React.FC = () => {
     switch (status) {
       case 'delivered': return '#10B981';
       case 'cancelled': return '#EF4444';
-      case 'in_transit': return '#3B82F6';
+      case 'in_transit': return '#FF6B00';
       default: return '#6B7280';
     }
   };
@@ -290,7 +290,7 @@ const HistoryScreen: React.FC = () => {
         <Ionicons 
           name={item.icon} 
           size={16} 
-          color={isSelected ? '#3B82F6' : '#6B7280'} 
+          color={isSelected ? '#FF6B00' : '#6B7280'} 
         />
         <Text style={[
           styles.dateRangeButtonText,
@@ -317,7 +317,7 @@ const HistoryScreen: React.FC = () => {
       activeOpacity={0.8}
     >
       <LinearGradient
-        colors={['#3B82F6', '#1D4ED8']}
+        colors={['#FF6B00', '#1D4ED8']}
         style={styles.earningsGradient}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
@@ -375,7 +375,7 @@ const HistoryScreen: React.FC = () => {
       <View style={styles.transactionSection}>
         <View style={styles.transactionHeader}>
           <Text style={styles.transactionTitle}>Recent Transactions</Text>
-          {transactionsLoading && <ActivityIndicator size="small" color="#3B82F6" />}
+          {transactionsLoading && <ActivityIndicator size="small" color="#FF6B00" />}
         </View>
         
         {transactions.length > 0 ? (
@@ -419,7 +419,7 @@ const HistoryScreen: React.FC = () => {
                 })}
               >
                 <Text style={styles.viewAllText}>View All {transactions.length} Transactions</Text>
-                <Ionicons name="chevron-forward" size={16} color="#3B82F6" />
+                <Ionicons name="chevron-forward" size={16} color="#FF6B00" />
               </TouchableOpacity>
             )}
           </View>
@@ -504,7 +504,7 @@ const HistoryScreen: React.FC = () => {
                 onPress={() => handleOrderPress(order)}
               >
                 <Text style={styles.viewDetailsText}>View Full Details</Text>
-                <Ionicons name="chevron-forward" size={16} color="#3B82F6" />
+                <Ionicons name="chevron-forward" size={16} color="#FF6B00" />
               </TouchableOpacity>
             </View>
           )}
@@ -533,7 +533,7 @@ const HistoryScreen: React.FC = () => {
         }
       </Text>
       <TouchableOpacity style={styles.refreshButton} onPress={handleRefresh}>
-        <Ionicons name="refresh-outline" size={20} color="#3B82F6" />
+        <Ionicons name="refresh-outline" size={20} color="#FF6B00" />
         <Text style={styles.refreshButtonText}>Refresh</Text>
       </TouchableOpacity>
     </View>
@@ -601,7 +601,7 @@ const HistoryScreen: React.FC = () => {
       
       {isLoading && !refreshing && (
         <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color="#3B82F6" />
+          <ActivityIndicator size="large" color="#FF6B00" />
         </View>
       )}
     </SafeAreaView>
@@ -657,7 +657,7 @@ const styles = StyleSheet.create({
   },
   dateRangeButtonActive: {
     backgroundColor: '#EBF4FF',
-    borderColor: '#3B82F6',
+    borderColor: '#FF6B00',
     borderWidth: 1.5,
   },
   dateRangeButtonText: {
@@ -667,14 +667,14 @@ const styles = StyleSheet.create({
     color: '#6B7280',
   },
   dateRangeButtonTextActive: {
-    color: '#3B82F6',
+    color: '#FF6B00',
     fontWeight: '600',
   },
   orderCountBadge: {
     marginLeft: 6,
     paddingHorizontal: 6,
     paddingVertical: 2,
-    backgroundColor: '#3B82F6',
+    backgroundColor: '#FF6B00',
     borderRadius: 10,
     minWidth: 20,
     alignItems: 'center',
@@ -852,7 +852,7 @@ const styles = StyleSheet.create({
   viewDetailsText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#3B82F6',
+    color: '#FF6B00',
     marginRight: 4,
   },
   expandIndicator: {
@@ -894,7 +894,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 24,
     paddingVertical: 12,
-    backgroundColor: '#3B82F6',
+    backgroundColor: '#FF6B00',
     borderRadius: 24,
   },
   refreshButtonText: {
@@ -1019,7 +1019,7 @@ const styles = StyleSheet.create({
   viewAllText: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#3B82F6',
+    color: '#FF6B00',
     marginRight: 4,
   },
   noTransactions: {

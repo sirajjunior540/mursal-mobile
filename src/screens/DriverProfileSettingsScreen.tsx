@@ -8,11 +8,11 @@ import {
   Alert,
   ActivityIndicator,
   Switch,
+  StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { Picker } from '@react-native-picker/picker';
 import { Design } from '../constants/designSystem';
 import { apiService } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -181,41 +181,71 @@ const DriverProfileSettingsScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={Design.colors.textPrimary} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Driver Profile Settings</Text>
-        <TouchableOpacity 
-          onPress={handleSave} 
-          style={styles.saveButton}
-          disabled={saving}
-        >
-          {saving ? (
-            <ActivityIndicator size="small" color={Design.colors.primary} />
-          ) : (
-            <Text style={styles.saveButtonText}>Save</Text>
-          )}
-        </TouchableOpacity>
-      </View>
+      <StatusBar barStyle="dark-content" backgroundColor={Design.colors.background} />
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        <View style={styles.hero}>
+          <View style={styles.heroHeader}>
+            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+              <Ionicons name="arrow-back" size={22} color={Design.colors.textPrimary} />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Vehicle & Delivery</Text>
+            <TouchableOpacity
+              onPress={handleSave}
+              style={[styles.primaryButton, saving && styles.primaryButtonDisabled]}
+              disabled={saving}
+            >
+              {saving ? (
+                <ActivityIndicator size="small" color={Design.colors.white} />
+              ) : (
+                <Text style={styles.primaryButtonText}>Save</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+          <View style={styles.heroCard}>
+            <View style={styles.heroRow}>
+              <View style={styles.heroIcon}>
+                <Ionicons name="car-sport-outline" size={28} color={Design.colors.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.heroLabel}>Current vehicle</Text>
+                <Text style={styles.heroValue}>{profile.vehicle_type || 'Not set'}</Text>
+              </View>
+              <View style={styles.heroStat}>
+                <Text style={styles.heroStatLabel}>Stops</Text>
+                <Text style={styles.heroStatValue}>{profile.max_stops_per_route}</Text>
+              </View>
+              <View style={styles.heroStat}>
+                <Text style={styles.heroStatLabel}>Range</Text>
+                <Text style={styles.heroStatValue}>{profile.max_distance_km} km</Text>
+              </View>
+            </View>
+          </View>
+        </View>
+
         {/* Vehicle Type Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Vehicle Type</Text>
-          <View style={styles.vehicleTypeContainer}>
-            {VEHICLE_TYPES.map((vehicle) => (
+          <Text style={styles.sectionTitle}>Choose your vehicle</Text>
+          <Text style={styles.sectionSubtitle}>We’ll tailor limits and delivery options automatically</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.vehicleScroller}
+          >
+            {VEHICLE_TYPES.map((vehicle, idx) => (
               <TouchableOpacity
                 key={vehicle.value}
                 style={[
                   styles.vehicleTypeCard,
                   profile.vehicle_type === vehicle.value && styles.vehicleTypeCardActive,
+                  idx === 0 && { marginLeft: 0 },
                 ]}
                 onPress={() => updateVehicleType(vehicle.value)}
+                activeOpacity={0.9}
               >
                 <Ionicons 
                   name={vehicle.icon as any} 
-                  size={32} 
+                  size={28} 
                   color={profile.vehicle_type === vehicle.value ? Design.colors.primary : Design.colors.textSecondary} 
                 />
                 <Text style={[
@@ -226,38 +256,32 @@ const DriverProfileSettingsScreen: React.FC = () => {
                 </Text>
               </TouchableOpacity>
             ))}
-          </View>
+          </ScrollView>
         </View>
 
         {/* Capabilities Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Vehicle Capabilities</Text>
-          
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Max Weight Capacity (kg)</Text>
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputValue}>{profile.max_weight_capacity}</Text>
+          <Text style={styles.sectionTitle}>Capabilities</Text>
+          <View style={styles.capRow}>
+            <View style={styles.capCard}>
+              <Text style={styles.capLabel}>Weight</Text>
+              <Text style={styles.capValue}>{profile.max_weight_capacity} kg</Text>
             </View>
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Max Distance (km)</Text>
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputValue}>{profile.max_distance_km}</Text>
+            <View style={styles.capCard}>
+              <Text style={styles.capLabel}>Distance</Text>
+              <Text style={styles.capValue}>{profile.max_distance_km} km</Text>
             </View>
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Max Stops per Route</Text>
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputValue}>{profile.max_stops_per_route}</Text>
+            <View style={styles.capCard}>
+              <Text style={styles.capLabel}>Stops/Route</Text>
+              <Text style={styles.capValue}>{profile.max_stops_per_route}</Text>
             </View>
           </View>
         </View>
 
         {/* Delivery Types Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Allowed Delivery Types</Text>
+          <Text style={styles.sectionTitle}>Allowed delivery types</Text>
+          <Text style={styles.sectionSubtitle}>Tap to toggle. We’ll match you with the right jobs.</Text>
           <View style={styles.deliveryTypesContainer}>
             {DELIVERY_TYPES.map((type) => (
               <TouchableOpacity
@@ -281,10 +305,13 @@ const DriverProfileSettingsScreen: React.FC = () => {
 
         {/* Preferences Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Delivery Preferences</Text>
+          <Text style={styles.sectionTitle}>Delivery preferences</Text>
           
           <View style={styles.switchRow}>
-            <Text style={styles.switchLabel}>Accept Cash on Delivery</Text>
+            <View style={styles.switchTextCol}>
+              <Text style={styles.switchLabel}>Accept cash on delivery</Text>
+              <Text style={styles.switchSub}>Enable to receive COD jobs</Text>
+            </View>
             <Switch
               value={profile.accepts_cash_on_delivery}
               onValueChange={(value) => setProfile({ ...profile, accepts_cash_on_delivery: value })}
@@ -294,7 +321,10 @@ const DriverProfileSettingsScreen: React.FC = () => {
           </View>
 
           <View style={styles.switchRow}>
-            <Text style={styles.switchLabel}>Accept Fragile Items</Text>
+            <View style={styles.switchTextCol}>
+              <Text style={styles.switchLabel}>Handle fragile items</Text>
+              <Text style={styles.switchSub}>Glass, electronics, or delicate goods</Text>
+            </View>
             <Switch
               value={profile.accepts_fragile_items}
               onValueChange={(value) => setProfile({ ...profile, accepts_fragile_items: value })}
@@ -304,7 +334,10 @@ const DriverProfileSettingsScreen: React.FC = () => {
           </View>
 
           <View style={styles.switchRow}>
-            <Text style={styles.switchLabel}>Temperature Controlled Delivery</Text>
+            <View style={styles.switchTextCol}>
+              <Text style={styles.switchLabel}>Temperature control</Text>
+              <Text style={styles.switchSub}>Coolers or heated bags</Text>
+            </View>
             <Switch
               value={profile.accepts_temperature_controlled}
               onValueChange={(value) => setProfile({ ...profile, accepts_temperature_controlled: value })}
@@ -314,7 +347,10 @@ const DriverProfileSettingsScreen: React.FC = () => {
           </View>
 
           <View style={styles.switchRow}>
-            <Text style={styles.switchLabel}>Prefer Single Pickup Location</Text>
+            <View style={styles.switchTextCol}>
+              <Text style={styles.switchLabel}>Prefer single pickup</Text>
+              <Text style={styles.switchSub}>One pickup, multiple drops</Text>
+            </View>
             <Switch
               value={profile.prefers_single_pickup}
               onValueChange={(value) => setProfile({ ...profile, prefers_single_pickup: value })}
@@ -324,7 +360,7 @@ const DriverProfileSettingsScreen: React.FC = () => {
           </View>
         </View>
 
-        <View style={{ height: 50 }} />
+        <View style={{ height: 80 }} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -339,20 +375,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: Design.spacing.md,
-    paddingVertical: Design.spacing.md,
-    backgroundColor: Design.colors.background,
-    borderBottomWidth: 1,
-    borderBottomColor: Design.colors.border,
   },
   backButton: {
     padding: Design.spacing.xs,
+    borderRadius: Design.borderRadius.full,
+    backgroundColor: Design.colors.background,
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   headerTitle: {
     ...Design.typography.h3,
     color: Design.colors.textPrimary,
     flex: 1,
-    textAlign: 'center',
     marginHorizontal: Design.spacing.md,
   },
   saveButton: {
@@ -377,39 +413,133 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
   },
+  hero: {
+    padding: Design.spacing.md,
+    paddingTop: Design.spacing.lg,
+    backgroundColor: Design.colors.background,
+  },
+  heroHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: Design.spacing.lg,
+  },
+  primaryButton: {
+    backgroundColor: Design.colors.primary,
+    paddingHorizontal: Design.spacing.lg,
+    paddingVertical: Design.spacing.sm + 2,
+    borderRadius: Design.borderRadius.lg,
+    minWidth: 80,
+    alignItems: 'center',
+    ...Design.shadows.small,
+  },
+  primaryButtonDisabled: {
+    opacity: 0.5,
+  },
+  primaryButtonText: {
+    color: Design.colors.white,
+    fontWeight: '700',
+    fontSize: 16,
+  },
+  heroCard: {
+    backgroundColor: Design.colors.backgroundSecondary,
+    borderRadius: Design.borderRadius.lg,
+    padding: Design.spacing.lg,
+    borderWidth: 1,
+    borderColor: Design.colors.border,
+    ...Design.shadows.small,
+  },
+  heroRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  heroIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: Design.borderRadius.full,
+    backgroundColor: Design.colors.primary + '15',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: Design.spacing.md,
+  },
+  heroLabel: {
+    ...Design.typography.caption,
+    color: Design.colors.textSecondary,
+    marginBottom: 4,
+  },
+  heroValue: {
+    ...Design.typography.h4,
+    color: Design.colors.textPrimary,
+    textTransform: 'capitalize',
+  },
+  heroStat: {
+    alignItems: 'flex-start',
+    marginLeft: Design.spacing.md,
+  },
+  heroStatLabel: {
+    ...Design.typography.caption,
+    color: Design.colors.textSecondary,
+    fontSize: 11,
+  },
+  heroStatValue: {
+    ...Design.typography.body,
+    fontWeight: '700',
+    color: Design.colors.textPrimary,
+    marginTop: 2,
+  },
   section: {
     backgroundColor: Design.colors.background,
-    marginVertical: Design.spacing.sm,
-    padding: Design.spacing.md,
+    marginHorizontal: Design.spacing.md,
+    marginTop: Design.spacing.md,
+    padding: Design.spacing.lg,
+    borderRadius: Design.borderRadius.lg,
+    borderWidth: 1,
+    borderColor: Design.colors.border,
+    ...Design.shadows.small,
   },
   sectionTitle: {
     ...Design.typography.h4,
     color: Design.colors.textPrimary,
+    marginBottom: Design.spacing.xs,
+    fontWeight: '600',
+  },
+  sectionSubtitle: {
+    ...Design.typography.caption,
+    color: Design.colors.textSecondary,
     marginBottom: Design.spacing.md,
+    lineHeight: 18,
   },
   vehicleTypeContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Design.spacing.sm,
+  },
+  vehicleScroller: {
+    paddingVertical: Design.spacing.sm,
+    paddingRight: Design.spacing.md,
   },
   vehicleTypeCard: {
-    flex: 1,
-    minWidth: 80,
-    alignItems: 'center',
+    width: 100,
+    height: 90,
     padding: Design.spacing.md,
-    borderRadius: Design.borderRadius.md,
-    borderWidth: 2,
+    borderRadius: Design.borderRadius.lg,
+    borderWidth: 1.5,
     borderColor: Design.colors.border,
     backgroundColor: Design.colors.backgroundSecondary,
+    marginRight: Design.spacing.md,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   vehicleTypeCardActive: {
     borderColor: Design.colors.primary,
-    backgroundColor: Design.colors.primary + '10',
+    backgroundColor: Design.colors.primary + '15',
+    borderWidth: 2,
   },
   vehicleTypeLabel: {
     ...Design.typography.caption,
     color: Design.colors.textSecondary,
     marginTop: Design.spacing.xs,
+    fontSize: 12,
+    textAlign: 'center',
   },
   vehicleTypeLabelActive: {
     color: Design.colors.primary,
@@ -438,23 +568,31 @@ const styles = StyleSheet.create({
   deliveryTypesContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    marginTop: Design.spacing.sm,
     gap: Design.spacing.sm,
   },
   deliveryTypeChip: {
     paddingHorizontal: Design.spacing.md,
-    paddingVertical: Design.spacing.sm,
+    paddingVertical: Design.spacing.sm + 2,
     borderRadius: Design.borderRadius.full,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: Design.colors.border,
     backgroundColor: Design.colors.backgroundSecondary,
+    marginBottom: Design.spacing.xs,
+    flexBasis: '48%',
+    flexGrow: 0,
+    flexShrink: 0,
   },
   deliveryTypeChipActive: {
     borderColor: Design.colors.primary,
     backgroundColor: Design.colors.primary,
+    borderWidth: 1.5,
   },
   deliveryTypeChipText: {
     ...Design.typography.caption,
     color: Design.colors.textSecondary,
+    fontSize: 12,
+    textAlign: 'center',
   },
   deliveryTypeChipTextActive: {
     color: Design.colors.white,
@@ -464,14 +602,53 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: Design.spacing.sm,
+    paddingVertical: Design.spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: Design.colors.border,
+    borderBottomColor: Design.colors.border + '50',
   },
   switchLabel: {
     ...Design.typography.body,
     color: Design.colors.textPrimary,
     flex: 1,
+    fontWeight: '500',
+  },
+  switchSub: {
+    ...Design.typography.caption,
+    color: Design.colors.textSecondary,
+    marginTop: 4,
+    lineHeight: 16,
+  },
+  switchTextCol: {
+    flex: 1,
+    marginRight: Design.spacing.md,
+  },
+  capRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: Design.spacing.sm,
+    gap: Design.spacing.sm,
+  },
+  capCard: {
+    flex: 1,
+    backgroundColor: Design.colors.primary + '10',
+    borderRadius: Design.borderRadius.md,
+    padding: Design.spacing.md,
+    borderWidth: 1,
+    borderColor: Design.colors.primary + '30',
+    alignItems: 'center',
+  },
+  capLabel: {
+    ...Design.typography.caption,
+    color: Design.colors.textSecondary,
+    fontSize: 11,
+    textAlign: 'center',
+  },
+  capValue: {
+    ...Design.typography.h4,
+    color: Design.colors.textPrimary,
+    marginTop: Design.spacing.xs,
+    fontWeight: '700',
+    fontSize: 18,
   },
 });
 

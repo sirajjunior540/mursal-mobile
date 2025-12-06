@@ -96,7 +96,7 @@ export const AvailableOrdersCard: React.FC<AvailableOrdersCardProps> = ({
     <CollapsibleCard
       title="Available Orders"
       icon="compass"
-      iconColor="#3B82F6"
+      iconColor="#FF6B00"
       isExpanded={isExpanded}
       onToggle={onToggle}
       summaryText={

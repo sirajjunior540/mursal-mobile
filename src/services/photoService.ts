@@ -110,12 +110,14 @@ class PhotoService {
       if (!deliveryId || deliveryId === 'undefined' || deliveryId === 'null') {
         throw new Error('Invalid delivery ID');
       }
-      
-      // Changed from /delivery/deliveries/ to /orders/ for delivery-service
-      const url = getApiUrl(`/api/v1/orders/${deliveryId}/upload-photo/`);
+
+      // Build tenant-specific URL: https://{tenant}.delivery.murrsal.com/api/v1/orders/{id}/upload-photo/
+      // Clean tenantId (remove quotes if present)
+      const cleanTenantId = tenantId?.replace(/"/g, '') || 'sirajjunior';
+      const url = `https://${cleanTenantId}.delivery.murrsal.com/api/v1/orders/${deliveryId}/upload-photo/`;
       console.log('Upload URL:', url);
       console.log('Delivery ID:', deliveryId);
-      console.log('Tenant:', { tenantId, tenantHost });
+      console.log('Tenant:', { tenantId: cleanTenantId, tenantHost });
       console.log('FormData fields:', {
         reason: photo.reason,
         notes: photo.notes || '',
@@ -127,8 +129,8 @@ class PhotoService {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Accept': 'application/json',
-          'Host': tenantHost,
-          'X-Tenant-ID': tenantId || '',
+          'Host': `${cleanTenantId}.delivery.murrsal.com`,
+          'X-Tenant-ID': cleanTenantId,
           // Do NOT set Content-Type for FormData - let browser set it with boundary
         },
         body: formData,

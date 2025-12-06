@@ -92,7 +92,7 @@ const FloatingQRButton: React.FC<FloatingQRButtonProps> = ({
           activeOpacity={0.8}
         >
           <LinearGradient
-            colors={['#3B82F6', '#1D4ED8']}
+            colors={['#FF6B00', '#1D4ED8']}
             style={styles.gradient}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
@@ -154,7 +154,7 @@ const styles = StyleSheet.create({
     height: 64,
     borderRadius: 32,
     borderWidth: 2,
-    borderColor: '#3B82F6',
+    borderColor: '#FF6B00',
     opacity: 0.3,
     top: 0,
     left: 0,

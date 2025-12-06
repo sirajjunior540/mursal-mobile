@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Modal, View, ScrollView, TouchableOpacity, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import LinearGradient from 'react-native-linear-gradient';
 import { Order, isBatchOrder as checkIsBatchOrder, getBatchProperties } from '../../types';
 import { flatModalStyles } from '../../design/orderDetails/flatModalStyles';
 import { flatColors } from '../../design/dashboard/flatColors';
@@ -115,6 +116,33 @@ export const FlatOrderDetailsModal: React.FC<FlatOrderDetailsModalProps> = ({
     batchId: batchProps?.batchId || order.id,
   } : undefined;
 
+  const formatCurrency = (amount?: number | string, currency = 'SDG') => {
+    if (amount === undefined || amount === null) return `${currency} 0.00`;
+    const value = typeof amount === 'string' ? parseFloat(amount) : amount;
+    return `${currency} ${value.toFixed(2)}`;
+  };
+
+  const statusBadge = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return { label: 'Pending', color: flatColors.accent.yellow };
+      case 'confirmed':
+      case 'preparing':
+        return { label: 'Preparing', color: flatColors.accent.orange };
+      case 'ready':
+      case 'picked_up':
+      case 'in_transit':
+        return { label: 'On the way', color: flatColors.brand.primary };
+      case 'delivered':
+        return { label: 'Delivered', color: flatColors.accent.green };
+      case 'failed':
+      case 'cancelled':
+        return { label: 'Issue', color: flatColors.accent.red };
+      default:
+        return { label: status, color: flatColors.accent.blue };
+    }
+  };
+
   return (
     <Modal
       visible={visible}
@@ -151,7 +179,7 @@ export const FlatOrderDetailsModal: React.FC<FlatOrderDetailsModalProps> = ({
             style={flatModalStyles.backButton} 
             onPress={handleBackToBatch}
           >
-            <Ionicons name="chevron-back" size={20} color="#007AFF" />
+            <Ionicons name="chevron-back" size={20} color="#FF6B00" />
             <Text style={flatModalStyles.backButtonText}>Back to Batch</Text>
           </TouchableOpacity>
         )}
@@ -168,6 +196,70 @@ export const FlatOrderDetailsModal: React.FC<FlatOrderDetailsModalProps> = ({
           nestedScrollEnabled={true}
           keyboardShouldPersistTaps="handled"
         >
+            <View style={styles.heroWrapper}>
+              <LinearGradient
+                colors={[flatColors.brand.primary, flatColors.brand.secondary]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.heroCard}
+              >
+                <View style={styles.heroHeader}>
+                  <View>
+                    <Text style={styles.heroTitle}>Order #{currentOrder.order_number || currentOrder.id}</Text>
+                    <Text style={styles.heroSubtitle}>
+                      {currentOrder.restaurant_name || currentOrder.restaurant?.name || 'Restaurant'}
+                    </Text>
+                  </View>
+                  <View style={[styles.statusChip, { backgroundColor: statusBadge(currentOrder.status).color + '30' }]}>
+                    <Ionicons name="time-outline" size={14} color="#fff" />
+                    <Text style={styles.statusChipText}>{statusBadge(currentOrder.status).label}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.heroStatsRow}>
+                  <View style={styles.heroStat}>
+                    <Text style={styles.heroStatLabel}>Total</Text>
+                    <Text style={styles.heroStatValue}>
+                      {formatCurrency(currentOrder.total_amount || currentOrder.total, currentOrder.currency || 'SDG')}
+                    </Text>
+                  </View>
+                  <View style={styles.heroDivider} />
+                  <View style={styles.heroStat}>
+                    <Text style={styles.heroStatLabel}>Items</Text>
+                    <Text style={styles.heroStatValue}>{currentOrder.items?.length || 0}</Text>
+                  </View>
+                  <View style={styles.heroDivider} />
+                  <View style={styles.heroStat}>
+                    <Text style={styles.heroStatLabel}>Payment</Text>
+                    <Text style={styles.heroStatValue}>
+                      {(currentOrder.payment_method || 'cash').toString().toUpperCase()}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.heroActions}>
+                  {onNavigate && (
+                    <TouchableOpacity style={styles.heroGhostButton} onPress={() => onNavigate(currentOrder)}>
+                      <Ionicons name="navigate-outline" size={16} color={flatColors.brand.primary} />
+                      <Text style={styles.heroGhostText}>Navigate</Text>
+                    </TouchableOpacity>
+                  )}
+                  {onCall && currentOrder.customer_details?.phone && (
+                    <TouchableOpacity style={styles.heroGhostButton} onPress={() => onCall?.(currentOrder.customer_details?.phone)}>
+                      <Ionicons name="call-outline" size={16} color={flatColors.brand.primary} />
+                      <Text style={styles.heroGhostText}>Call</Text>
+                    </TouchableOpacity>
+                  )}
+                  <TouchableOpacity
+                    style={styles.heroPrimaryButton}
+                    onPress={() => setShowQRCode(true)}
+                  >
+                    <Ionicons name="qr-code-outline" size={16} color="#fff" />
+                    <Text style={styles.heroPrimaryText}>Show QR</Text>
+                  </TouchableOpacity>
+                </View>
+              </LinearGradient>
+            </View>
 
             {/* Batch Orders List */}
             {isShowingBatchList && (
@@ -301,7 +393,7 @@ const BatchOrdersList: React.FC<BatchOrdersListProps> = ({
             
             <View style={batchListStyles.viewButton}>
               <Text style={batchListStyles.viewButtonText}>View Details</Text>
-              <Ionicons name="chevron-forward" size={16} color="#007AFF" />
+              <Ionicons name="chevron-forward" size={16} color="#FF6B00" />
             </View>
           </TouchableOpacity>
         ))}
@@ -435,5 +527,109 @@ const batchListStyles = StyleSheet.create({
     fontWeight: '700',
     lineHeight: premiumTypography.button.medium.lineHeight,
     color: '#FFFFFF',
+  },
+});
+
+const styles = StyleSheet.create({
+  heroWrapper: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+  },
+  heroCard: {
+    borderRadius: 16,
+    padding: 16,
+    ...premiumShadows.medium,
+  },
+  heroGradient: {
+    borderRadius: 16,
+  },
+  heroHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  heroTitle: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  heroSubtitle: {
+    color: 'rgba(255,255,255,0.8)',
+    marginTop: 4,
+  },
+  statusChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  statusChipText: {
+    color: '#fff',
+    fontWeight: '700',
+    marginLeft: 6,
+    fontSize: 12,
+  },
+  heroStatsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 14,
+    paddingVertical: 8,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 12,
+  },
+  heroStat: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  heroStatLabel: {
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 12,
+  },
+  heroStatValue: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  heroDivider: {
+    width: 1,
+    height: 36,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+  },
+  heroActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  heroGhostButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    marginRight: 8,
+  },
+  heroGhostText: {
+    color: flatColors.brand.primary,
+    fontWeight: '700',
+    marginLeft: 6,
+  },
+  heroPrimaryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#111',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    marginLeft: 'auto',
+  },
+  heroPrimaryText: {
+    color: '#fff',
+    fontWeight: '700',
+    marginLeft: 6,
   },
 });

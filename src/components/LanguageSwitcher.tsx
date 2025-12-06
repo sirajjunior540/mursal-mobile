@@ -164,7 +164,7 @@ const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({
           <Icon
             name="check"
             size={24}
-            color="#007AFF"
+            color="#FF6B00"
             style={styles.checkIcon}
           />
         )}
@@ -181,7 +181,7 @@ const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({
             onPress={() => setModalVisible(true)}
             disabled={isChanging}
           >
-            <Icon name="language" size={24} color="#007AFF" />
+            <Icon name="language" size={24} color="#FF6B00" />
           </TouchableOpacity>
         );
 
@@ -205,13 +205,13 @@ const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({
             onPress={() => setModalVisible(true)}
             disabled={isChanging}
           >
-            <Icon name="language" size={20} color="#007AFF" />
+            <Icon name="language" size={20} color="#FF6B00" />
             {showLabel && (
               <Text style={styles.buttonLabel}>
                 {currentLanguage.nativeName}
               </Text>
             )}
-            <Icon name="expand-more" size={20} color="#007AFF" />
+            <Icon name="expand-more" size={20} color="#FF6B00" />
           </TouchableOpacity>
         );
     }
@@ -240,13 +240,13 @@ const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({
               style={styles.detectButton}
               onPress={detectDeviceLanguage}
             >
-              <Icon name="auto-fix-high" size={20} color="#007AFF" />
+              <Icon name="auto-fix-high" size={20} color="#FF6B00" />
             </TouchableOpacity>
           </View>
 
           {isChanging && (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator size="small" color="#007AFF" />
+              <ActivityIndicator size="small" color="#FF6B00" />
               <Text style={styles.loadingText}>{t('common.loading')}</Text>
             </View>
           )}
@@ -285,7 +285,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     marginRight: 4,
     fontSize: 16,
-    color: '#007AFF',
+    color: '#FF6B00',
     fontWeight: '500',
   },
   iconButton: {
@@ -299,7 +299,7 @@ const styles = StyleSheet.create({
   },
   textButtonLabel: {
     fontSize: 16,
-    color: '#007AFF',
+    color: '#FF6B00',
     fontWeight: '500',
   },
   modalContainer: {
@@ -321,7 +321,7 @@ const styles = StyleSheet.create({
   },
   modalCloseText: {
     fontSize: 16,
-    color: '#007AFF',
+    color: '#FF6B00',
   },
   modalTitle: {
     fontSize: 18,
@@ -377,7 +377,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   selectedLanguageName: {
-    color: '#007AFF',
+    color: '#FF6B00',
   },
   languageSubtitle: {
     fontSize: 14,

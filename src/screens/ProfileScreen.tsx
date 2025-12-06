@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   StatusBar,
 } from 'react-native';
+import LinearGradient from 'react-native-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
@@ -20,6 +21,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useDriver } from '../contexts/DriverContext';
 import { useTenant } from '../contexts/TenantContext';
 import { notificationDebugUtils } from '../utils/notificationDebugUtils';
+import { flatColors } from '../design/dashboard/flatColors';
 
 interface ProfileItemProps {
   icon: string;
@@ -39,7 +41,7 @@ const ProfileItem: React.FC<ProfileItemProps> = ({ icon, label, value, onPress, 
     >
       <View style={styles.profileItemContent}>
         <View style={styles.iconContainer}>
-          <Ionicons name={icon as any} size={20} color="#3B82F6" />
+          <Ionicons name={icon as any} size={20} color={flatColors.brand.secondary} />
         </View>
         <View style={styles.profileItemText}>
           <Text style={styles.profileItemLabel}>{label}</Text>
@@ -47,7 +49,7 @@ const ProfileItem: React.FC<ProfileItemProps> = ({ icon, label, value, onPress, 
         </View>
       </View>
       {onPress && (
-        <Ionicons name="chevron-forward" size={16} color="#6B7280" />
+        <Ionicons name="chevron-forward" size={16} color={flatColors.neutral[600]} />
       )}
       {showDivider && <View style={styles.itemDivider} />}
     </TouchableOpacity>
@@ -63,35 +65,35 @@ const BalanceCard: React.FC<BalanceCardProps> = ({ balance, onPress }) => (
   <TouchableOpacity style={styles.balanceCard} onPress={onPress} activeOpacity={0.7}>
     <View style={styles.balanceHeader}>
       <View style={styles.balanceHeaderIcon}>
-        <Ionicons name="wallet-outline" size={24} color="#3B82F6" />
+        <Ionicons name="wallet-outline" size={24} color={flatColors.brand.secondary} />
       </View>
       <Text style={styles.balanceCardTitle}>Balance Overview</Text>
     </View>
     {balance ? (
       <View style={styles.balanceGrid}>
         <View style={styles.balanceItem}>
-          <View style={[styles.balanceIconContainer, { backgroundColor: '#10B981' }]}>
+          <View style={[styles.balanceIconContainer, { backgroundColor: flatColors.brand.secondary }]}>
             <Ionicons name="cash-outline" size={16} color="#ffffff" />
           </View>
           <Text style={styles.balanceValue}>${balance.cashOnHand?.toFixed(2) || '0.00'}</Text>
           <Text style={styles.balanceLabel}>Cash on Hand</Text>
         </View>
         <View style={styles.balanceItem}>
-          <View style={[styles.balanceIconContainer, { backgroundColor: '#3B82F6' }]}>
+          <View style={[styles.balanceIconContainer, { backgroundColor: flatColors.brand.primary }]}>
             <Ionicons name="card-outline" size={16} color="#ffffff" />
           </View>
           <Text style={styles.balanceValue}>${balance.depositBalance?.toFixed(2) || '0.00'}</Text>
           <Text style={styles.balanceLabel}>Deposit Balance</Text>
         </View>
         <View style={styles.balanceItem}>
-          <View style={[styles.balanceIconContainer, { backgroundColor: '#F59E0B' }]}>
+          <View style={[styles.balanceIconContainer, { backgroundColor: flatColors.brand.text }]}>
             <Ionicons name="trending-up-outline" size={16} color="#ffffff" />
           </View>
           <Text style={styles.balanceValue}>${balance.todayEarnings?.toFixed(2) || '0.00'}</Text>
           <Text style={styles.balanceLabel}>Today's Earnings</Text>
         </View>
         <View style={styles.balanceItem}>
-          <View style={[styles.balanceIconContainer, { backgroundColor: '#6B7280' }]}>
+          <View style={[styles.balanceIconContainer, { backgroundColor: flatColors.neutral[600] }]}>
             <Ionicons name="calendar-outline" size={16} color="#ffffff" />
           </View>
           <Text style={styles.balanceValue}>${balance.weekEarnings?.toFixed(2) || '0.00'}</Text>
@@ -115,6 +117,7 @@ const BalanceCard: React.FC<BalanceCardProps> = ({ balance, onPress }) => (
 type ProfileStackParamList = {
   Profile: undefined;
   DriverProfileSettings: undefined;
+  HelpSupport: undefined;
 };
 
 type NavigationProp = StackNavigationProp<ProfileStackParamList, 'Profile'>;
@@ -182,10 +185,10 @@ const ProfileScreen: React.FC = () => {
   if (isLoading && !driver) {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="dark-content" backgroundColor="#F9FAFB" />
+        <StatusBar barStyle="dark-content" backgroundColor={flatColors.brand.light} />
         <SafeAreaView style={styles.safeArea}>
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#3B82F6" />
+            <ActivityIndicator size="large" color={flatColors.brand.secondary} />
             <Text style={styles.loadingText}>Loading profile...</Text>
           </View>
         </SafeAreaView>
@@ -195,7 +198,16 @@ const ProfileScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#F9FAFB" />
+      <StatusBar barStyle="dark-content" backgroundColor={flatColors.brand.light} />
+      <LinearGradient
+        colors={[flatColors.brand.lighter, '#FFE7C7']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      <View style={[styles.decorativeBlob, styles.blobTopLeft]} />
+      <View style={[styles.decorativeBlob, styles.blobBottomRight]} />
+      <View style={styles.ring} />
       <SafeAreaView style={styles.safeArea}>
         {/* Profile Header */}
         <View style={styles.header}>
@@ -236,7 +248,7 @@ const ProfileScreen: React.FC = () => {
           <RefreshControl 
             refreshing={refreshing} 
             onRefresh={handleRefresh}
-            tintColor="#3B82F6"
+            tintColor="#FF6B00"
           />
         }
         showsVerticalScrollIndicator={false}
@@ -274,7 +286,7 @@ const ProfileScreen: React.FC = () => {
             <Text style={styles.statLabel}>Total Orders</Text>
           </View>
           <View style={styles.statCard}>
-            <View style={[styles.statIcon, { backgroundColor: '#3B82F6' }]}>
+            <View style={[styles.statIcon, { backgroundColor: '#FF6B00' }]}>
               <Ionicons name="time" size={20} color="#ffffff" />
             </View>
             <Text style={styles.statValue}>
@@ -327,12 +339,12 @@ const ProfileScreen: React.FC = () => {
                 </Text>
               </View>
               {onlineLoading ? (
-                <ActivityIndicator size="small" color="#3B82F6" />
+                <ActivityIndicator size="small" color="#FF6B00" />
               ) : (
                 <Switch
                   value={driver?.isOnline || false}
                   onValueChange={handleToggleOnlineStatus}
-                  trackColor={{ false: '#E5E7EB', true: '#3B82F6' }}
+                  trackColor={{ false: '#E5E7EB', true: '#FF6B00' }}
                   thumbColor={driver?.isOnline ? '#ffffff' : '#ffffff'}
                   ios_backgroundColor="#E5E7EB"
                 />
@@ -366,13 +378,19 @@ const ProfileScreen: React.FC = () => {
               icon="help-circle-outline"
               label="Help & Support"
               value="Get assistance"
-              onPress={() => Alert.alert('Coming Soon', 'Help section will be available soon.')}
+              onPress={() => navigation.navigate('HelpSupport' as any)}
             />
             <ProfileItem
               icon="document-text-outline"
-              label="Terms & Privacy"
-              value="Legal information"
-              onPress={() => Alert.alert('Coming Soon', 'Legal documents will be available soon.')}
+              label="Terms of Service"
+              value="View terms and conditions"
+              onPress={() => navigation.navigate('TermsOfService' as any)}
+            />
+            <ProfileItem
+              icon="shield-checkmark-outline"
+              label="Privacy Policy"
+              value="How we protect your data"
+              onPress={() => navigation.navigate('PrivacyPolicy' as any)}
             />
             <ProfileItem
               icon="bug-outline"
@@ -402,10 +420,35 @@ const ProfileScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: flatColors.brand.lighter,
   },
   safeArea: {
     flex: 1,
+  },
+  decorativeBlob: {
+    position: 'absolute',
+    width: 260,
+    height: 260,
+    borderRadius: 130,
+    backgroundColor: 'rgba(245, 166, 35, 0.14)',
+  },
+  blobTopLeft: {
+    top: -60,
+    left: -40,
+  },
+  blobBottomRight: {
+    bottom: -60,
+    right: -20,
+  },
+  ring: {
+    position: 'absolute',
+    width: 360,
+    height: 360,
+    borderRadius: 180,
+    borderWidth: 16,
+    borderColor: 'rgba(245, 166, 35, 0.08)',
+    top: '10%',
+    right: '-18%',
   },
   loadingContainer: {
     flex: 1,
@@ -414,7 +457,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 16,
-    color: '#6B7280',
+    color: flatColors.neutral[700],
     marginTop: 16,
     fontWeight: '500',
   },
@@ -422,14 +465,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 20,
     paddingBottom: 24,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(255, 255, 255, 0.94)',
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: flatColors.brand.border,
   },
   headerTitle: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#111827',
+    color: flatColors.brand.text,
     marginBottom: 20,
   },
   profileSection: {
@@ -440,20 +483,20 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: '#3B82F6',
+    backgroundColor: flatColors.brand.secondary,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowColor: flatColors.brand.secondary,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.16,
+    shadowRadius: 10,
+    elevation: 6,
   },
   avatarText: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: flatColors.backgrounds.primary,
   },
   profileInfo: {
     flex: 1,
@@ -461,22 +504,24 @@ const styles = StyleSheet.create({
   profileName: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#111827',
+    color: flatColors.brand.text,
     marginBottom: 4,
   },
   profileEmail: {
     fontSize: 14,
-    color: '#6B7280',
+    color: flatColors.neutral[700],
     marginBottom: 8,
   },
   onlineStatusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F3F4F6',
+    backgroundColor: flatColors.brand.light,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
     alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: flatColors.brand.border,
   },
   statusDot: {
     width: 8,
@@ -497,9 +542,9 @@ const styles = StyleSheet.create({
   errorContainer: {
     margin: 24,
     borderRadius: 12,
-    backgroundColor: '#FEF2F2',
+    backgroundColor: flatColors.cards.orange.background,
     borderWidth: 1,
-    borderColor: '#FECACA',
+    borderColor: flatColors.brand.border,
   },
   errorContent: {
     flexDirection: 'row',
@@ -534,17 +579,17 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(255, 255, 255, 0.94)',
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    shadowColor: flatColors.brand.secondary,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 14,
+    elevation: 6,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: flatColors.brand.border,
   },
   statIcon: {
     width: 40,
@@ -557,12 +602,12 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#111827',
+    color: flatColors.brand.text,
     marginBottom: 4,
   },
   statLabel: {
     fontSize: 12,
-    color: '#6B7280',
+    color: flatColors.neutral[700],
     textAlign: 'center',
   },
   section: {
@@ -571,21 +616,21 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#111827',
+    color: flatColors.brand.text,
     marginHorizontal: 24,
     marginBottom: 12,
   },
   card: {
     marginHorizontal: 24,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(255, 255, 255, 0.94)',
     borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    shadowColor: flatColors.brand.secondary,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 14,
+    elevation: 6,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: flatColors.brand.border,
   },
   profileItem: {
     flexDirection: 'row',
@@ -603,7 +648,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#EBF4FF',
+    backgroundColor: flatColors.brand.light,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -613,18 +658,18 @@ const styles = StyleSheet.create({
   },
   profileItemLabel: {
     fontSize: 13,
-    color: '#6B7280',
+    color: flatColors.neutral[700],
     marginBottom: 2,
     fontWeight: '500',
   },
   profileItemValue: {
     fontSize: 16,
-    color: '#111827',
+    color: flatColors.brand.text,
     fontWeight: '600',
   },
   itemDivider: {
     height: 1,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: flatColors.brand.border,
     marginLeft: 60,
   },
   statusControlItem: {
@@ -640,25 +685,25 @@ const styles = StyleSheet.create({
   statusControlLabel: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#111827',
+    color: flatColors.brand.text,
     marginBottom: 2,
   },
   statusControlDescription: {
     fontSize: 13,
-    color: '#6B7280',
+    color: flatColors.neutral[700],
   },
   balanceCard: {
     marginHorizontal: 24,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(255, 255, 255, 0.94)',
     borderRadius: 12,
     padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    shadowColor: flatColors.brand.secondary,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 14,
+    elevation: 6,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: flatColors.brand.border,
   },
   balanceHeader: {
     flexDirection: 'row',
@@ -669,7 +714,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#EBF4FF',
+    backgroundColor: flatColors.brand.light,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -677,7 +722,7 @@ const styles = StyleSheet.create({
   balanceCardTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#111827',
+    color: flatColors.brand.text,
   },
   balanceGrid: {
     flexDirection: 'row',
@@ -700,12 +745,12 @@ const styles = StyleSheet.create({
   balanceValue: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#111827',
+    color: flatColors.brand.text,
     marginBottom: 4,
   },
   balanceLabel: {
     fontSize: 12,
-    color: '#6B7280',
+    color: flatColors.neutral[700],
     textAlign: 'center',
   },
   balanceLoading: {
@@ -714,7 +759,7 @@ const styles = StyleSheet.create({
     paddingVertical: 32,
   },
   balanceLoadingText: {
-    color: '#6B7280',
+    color: flatColors.neutral[700],
     fontSize: 14,
   },
   balanceFooter: {
@@ -729,20 +774,20 @@ const styles = StyleSheet.create({
   },
   balanceFooterText: {
     fontSize: 12,
-    color: '#6B7280',
+    color: flatColors.neutral[700],
     fontWeight: '500',
   },
   logoutButton: {
     marginHorizontal: 24,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(255, 255, 255, 0.94)',
     borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    shadowColor: flatColors.brand.secondary,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 14,
+    elevation: 6,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: flatColors.brand.border,
   },
   logoutButtonContent: {
     flexDirection: 'row',

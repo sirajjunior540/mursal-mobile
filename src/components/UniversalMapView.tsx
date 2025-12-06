@@ -72,7 +72,7 @@ const UniversalMapView: React.FC<UniversalMapViewProps> = ({
   if (loading) {
     return (
       <View style={[styles.container, style]}>
-        <ActivityIndicator size="large" color="#007AFF" />
+        <ActivityIndicator size="large" color="#FF6B00" />
         <Text style={styles.loadingText}>Loading map...</Text>
       </View>
     );

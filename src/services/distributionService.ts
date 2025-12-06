@@ -354,7 +354,7 @@ class DistributionService {
         return '#4CAF50'; // Green
       case 'dispatched':
       case 'in_transit':
-        return '#2196F3'; // Blue
+        return '#FF6B00'; // Brand orange
       case 'arrived':
       case 'delivering':
         return '#9C27B0'; // Purple

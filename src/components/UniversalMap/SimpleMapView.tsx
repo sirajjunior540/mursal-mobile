@@ -194,7 +194,7 @@ export const SimpleMapView: React.FC<SimpleMapViewProps> = ({ points, height = 3
               latitude: p.latitude,
               longitude: p.longitude,
             }))}
-            strokeColor="#007AFF"
+            strokeColor="#FF6B00"
             strokeWidth={3}
           />
         )}

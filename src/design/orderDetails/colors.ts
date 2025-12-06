@@ -3,7 +3,7 @@ export const orderDetailsColors = {
     fragile: { bg: '#FFEBEE', text: '#FF6B6B', icon: 'alert-octagram' },
     temperature: { bg: '#E0F7FA', text: '#4ECDC4', icon: 'thermometer' },
     hazardous: { bg: '#FFE5E5', text: '#FF4757', icon: 'radioactive' },
-    liquid: { bg: '#E3F2FD', text: '#3B82F6', icon: 'water' },
+    liquid: { bg: '#E3F2FD', text: '#FF6B00', icon: 'water' },
     perishable: { bg: '#FFF3E0', text: '#FF9F43', icon: 'clock-fast' },
   },
   requirements: {

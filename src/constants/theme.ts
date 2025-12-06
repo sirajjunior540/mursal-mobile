@@ -3,10 +3,10 @@ import { Theme } from '../types';
 export const lightTheme: Theme = {
   isDark: false,
   colors: {
-    primary: '#2196F3',
+    primary: '#F5A623',
     secondary: '#FFC107',
-    background: '#FFFFFF',
-    surface: '#F5F5F5',
+    background: '#FFF7ED',
+    surface: '#FFFFFF',
     text: '#212121',
     textSecondary: '#757575',
     border: '#E0E0E0',
@@ -21,7 +21,7 @@ export const lightTheme: Theme = {
 export const darkTheme: Theme = {
   isDark: true,
   colors: {
-    primary: '#2196F3',
+    primary: '#F5A623',
     secondary: '#FFC107',
     background: '#121212',
     surface: '#1E1E1E',

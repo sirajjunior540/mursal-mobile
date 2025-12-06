@@ -1,18 +1,18 @@
 import { Design } from '../../constants/designSystem';
 
 export const flatColors = {
-  // Primary palette with flat colors
+  // Primary palette with brand orange colors
   primary: {
-    50: '#F0F9FF',
-    100: '#E0F2FE',
-    200: '#BAE6FD',
-    300: '#7DD3FC',
-    400: '#38BDF8',
-    500: '#0EA5E9',
-    600: '#0284C7',
-    700: '#0369A1',
-    800: '#075985',
-    900: '#0C4A6E',
+    50: '#FFFBF5',
+    100: '#FFF7ED',
+    200: '#FED7AA',
+    300: '#FDBA74',
+    400: '#FB923C',
+    500: '#F5A623',  // Brand orange (logo background)
+    600: '#E8941D',
+    700: '#C2410C',
+    800: '#9A3412',
+    900: '#7C2D12',
   },
   
   // Sophisticated neutrals
@@ -31,7 +31,7 @@ export const flatColors = {
   
   // Flat accent colors
   accent: {
-    blue: '#3B82F6',
+    blue: '#F5A623',  // Changed to brand orange (logo background color)
     green: '#10B981',
     yellow: '#F59E0B',
     red: '#EF4444',
@@ -83,6 +83,16 @@ export const flatColors = {
     },
   },
   
+  // Murrsal brand colors (orange/gold)
+  brand: {
+    primary: '#F5A623',      // Main orange/gold
+    secondary: '#E8941D',    // Darker orange
+    light: '#FFF7ED',        // Light orange background
+    lighter: '#FFFBF5',      // Very light orange
+    border: '#FED7AA',       // Orange border
+    text: '#9A3412',         // Dark orange text
+  },
+
   // Card themes with flat colors
   cards: {
     white: {
@@ -96,9 +106,14 @@ export const flatColors = {
       shadow: 'rgba(0, 0, 0, 0.05)',
     },
     blue: {
-      background: '#EFF6FF',
-      border: '#DBEAFE',
-      shadow: 'rgba(59, 130, 246, 0.1)',
+      background: '#FFF7ED',  // Orange background to match brand
+      border: '#FED7AA',      // Orange border
+      shadow: 'rgba(245, 166, 35, 0.1)',
+    },
+    orange: {
+      background: '#FFF7ED',
+      border: '#FED7AA',
+      shadow: 'rgba(245, 166, 35, 0.1)',
     },
     green: {
       background: '#F0FDF4',
@@ -125,8 +140,8 @@ export const flatColors = {
   // Stat card themes with flat colors
   statsCards: {
     deliveries: {
-      primary: '#3B82F6',
-      background: '#EFF6FF',
+      primary: '#F5A623',  // Brand orange
+      background: '#FFF7ED',
       text: '#FFFFFF',
       icon: '#FFFFFF',
     },
@@ -164,9 +179,9 @@ export const flatColors = {
       light: '#D1FAE5',
     },
     good: {
-      color: '#3B82F6',
-      background: '#EFF6FF',
-      light: '#DBEAFE',
+      color: '#F5A623',  // Brand orange
+      background: '#FFF7ED',
+      light: '#FED7AA',
     },
     average: {
       color: '#F59E0B',
@@ -182,7 +197,7 @@ export const flatColors = {
   
   // Icon colors
   icons: {
-    primary: '#3B82F6',
+    primary: '#F5A623',  // Brand orange
     success: '#10B981',
     warning: '#F59E0B',
     error: '#EF4444',
@@ -197,6 +212,6 @@ export const flatColors = {
     primary: '#FFFFFF',
     secondary: '#F9FAFB',
     tertiary: '#F3F4F6',
-    accent: '#EFF6FF',
+    accent: '#FFF7ED',  // Orange accent background
   },
 };

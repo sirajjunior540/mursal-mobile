@@ -6,6 +6,7 @@ import {
   StatusBar,
   Text,
 } from 'react-native';
+import LinearGradient from 'react-native-linear-gradient';
 import { flatColors } from '../design/dashboard/flatColors';
 import { FlatSplashLogo } from '../components/Splash/FlatSplashLogo';
 import { FlatSplashText } from '../components/Splash/FlatSplashText';
@@ -28,128 +29,127 @@ export const FlatSplashScreen: React.FC<FlatSplashScreenProps> = ({
 
   useEffect(() => {
     const animateEntrance = (): void => {
-      // Animate progress bar
+      // Animate progress bar (faster)
       const progressInterval = setInterval(() => {
         setProgress(prev => {
           if (prev >= 1) {
             clearInterval(progressInterval);
             return 1;
           }
-          return prev + 0.02;
+          return prev + 0.05; // Faster progress
         });
-      }, 50);
+      }, 30);
 
-      // Main animation sequence
-      Animated.sequence([
-        // 1. Fade in background
+      // Simplified and faster animation sequence
+      Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 1,
-          duration: 400,
+          duration: 200,
           useNativeDriver: true,
         }),
-        // 2. Show logo with scale
-        Animated.parallel([
-          Animated.timing(logoOpacity, {
-            toValue: 1,
-            duration: 600,
-            useNativeDriver: true,
-          }),
-          Animated.spring(logoScale, {
-            toValue: 1,
-            tension: 60,
-            friction: 8,
-            useNativeDriver: true,
-          }),
-        ]),
-        // 3. Show text
+        Animated.timing(logoOpacity, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.timing(logoScale, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
         Animated.timing(textOpacity, {
           toValue: 1,
-          duration: 500,
+          duration: 300,
           useNativeDriver: true,
         }),
-        // 4. Show loading indicator
         Animated.timing(indicatorOpacity, {
           toValue: 1,
-          duration: 400,
+          duration: 300,
           useNativeDriver: true,
         }),
       ]).start(() => {
-        // Wait for progress to complete
+        // Reduced wait time
         setTimeout(() => {
           onAnimationComplete();
-        }, 800);
+        }, 400);
       });
 
       return () => clearInterval(progressInterval);
     };
 
-    const timeoutId = setTimeout(animateEntrance, 100);
+    const timeoutId = setTimeout(animateEntrance, 50);
     return () => clearTimeout(timeoutId);
   }, [fadeAnim, logoScale, logoOpacity, textOpacity, indicatorOpacity, onAnimationComplete]);
 
   return (
     <>
       <StatusBar
-        backgroundColor={flatColors.backgrounds.secondary}
+        backgroundColor={flatColors.brand.light}
         barStyle="dark-content"
         translucent={false}
       />
       <View style={styles.container}>
-        <Animated.View
-          style={[
-            styles.gradientOverlay,
-            {
-              opacity: fadeAnim,
-            },
-          ]}
+        <LinearGradient
+          colors={[flatColors.brand.lighter, '#FFE7C7', '#FFF7ED']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
         />
+        <Animated.View style={[styles.backdrop, { opacity: fadeAnim }]}>
+          <View style={[styles.accentBlob, styles.accentTopLeft]} />
+          <View style={[styles.accentBlob, styles.accentBottomRight]} />
+          <View style={styles.accentRing} />
+        </Animated.View>
 
-        <Animated.View
-          style={[
-            styles.backgroundOverlay,
-            {
-              opacity: fadeAnim,
-            },
-          ]}
-        />
-
-        {/* Main Content */}
         <View style={styles.content}>
           <Animated.View
             style={[
-              styles.logoContainer,
+              styles.card,
               {
-                opacity: logoOpacity,
-                transform: [{ scale: logoScale }],
+                opacity: fadeAnim,
+                transform: [{ translateY: fadeAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [16, 0],
+                }) }],
               },
             ]}
           >
-            <FlatSplashLogo />
+            <Animated.View
+              style={[
+                styles.logoContainer,
+                {
+                  opacity: logoOpacity,
+                  transform: [{ scale: logoScale }],
+                },
+              ]}
+            >
+              <FlatSplashLogo />
+            </Animated.View>
+
+            <Animated.View
+              style={[
+                styles.textContainer,
+                {
+                  opacity: textOpacity,
+                },
+              ]}
+            >
+              <FlatSplashText tagline="On-time, every mile" />
+            </Animated.View>
           </Animated.View>
 
+          {/* Loading Indicator */}
           <Animated.View
             style={[
-              styles.textContainer,
+              styles.footer,
               {
-                opacity: textOpacity,
+                opacity: indicatorOpacity,
               },
             ]}
           >
-            <FlatSplashText />
+            <FlatSplashIndicator progress={progress} />
           </Animated.View>
         </View>
-
-        {/* Loading Indicator */}
-        <Animated.View
-          style={[
-            styles.footer,
-            {
-              opacity: indicatorOpacity,
-            },
-          ]}
-        >
-          <FlatSplashIndicator progress={progress} />
-        </Animated.View>
       </View>
     </>
   );
@@ -158,32 +158,60 @@ export const FlatSplashScreen: React.FC<FlatSplashScreenProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#050911',
+    backgroundColor: flatColors.brand.lighter,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  gradientOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: '#0b1220',
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
   },
-  backgroundOverlay: {
+  accentBlob: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'transparent',
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    backgroundColor: 'rgba(245, 166, 35, 0.10)',
+  },
+  accentTopLeft: {
+    top: -40,
+    left: -60,
+  },
+  accentBottomRight: {
+    bottom: -60,
+    right: -40,
+  },
+  accentRing: {
+    position: 'absolute',
+    width: 300,
+    height: 300,
+    borderRadius: 150,
+    borderWidth: 18,
+    borderColor: 'rgba(245, 166, 35, 0.05)',
+    top: '26%',
+    left: '14%',
   },
   content: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 32,
-    gap: 40,
+    gap: 28,
+  },
+  card: {
+    width: '92%',
+    maxWidth: 380,
+    paddingVertical: 36,
+    paddingHorizontal: 28,
+    borderRadius: 32,
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
+    borderWidth: 1,
+    borderColor: flatColors.brand.border,
+    alignItems: 'center',
+    shadowColor: flatColors.brand.secondary,
+    shadowOpacity: 0.12,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 14 },
+    elevation: 10,
   },
   logoContainer: {
     alignItems: 'center',
@@ -195,5 +223,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 80,
     alignItems: 'center',
+    width: '100%',
   },
 });
