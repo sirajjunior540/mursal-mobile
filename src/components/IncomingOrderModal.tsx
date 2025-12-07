@@ -684,6 +684,10 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
   
   // TypeScript type narrowing helper
   const orderDeliveryType = order.delivery_type;
+  const orderItems = Array.isArray(order.items) ? order.items : [];
+  const hasItems = orderItems.length > 0;
+  const topItems = orderItems.slice(0, 3);
+  const codAmount = order.cash_on_delivery ? Number(order.cod_amount || order.total || 0) : 0;
 
   return (
     <Modal
@@ -692,12 +696,7 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
       animationType="none"
       statusBarTranslucent
     >
-      <Animated.View 
-        style={[
-          styles.overlay,
-          { opacity: opacityAnim }
-        ]}
-      >
+      <Animated.View style={[styles.overlay, { opacity: opacityAnim }]}>
         <Animated.View
           style={[
             styles.container,
@@ -709,318 +708,257 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
             },
           ]}
         >
-          {/* Timer Header */}
-          <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-            <LinearGradient
-              colors={['#FF6B00', '#FF8F33']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.timerHeader}
-            >
-              <View style={styles.timerContainer}>
-                <View style={[styles.timerIconContainer, isBatchOrder && styles.batchTimerIcon]}>
+          <LinearGradient
+            colors={['#FF7A1A', '#FFB347']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.headerGradient}
+          >
+            <View style={styles.headerRow}>
+              <View style={styles.badgeRow}>
+                <View style={styles.orderTypePill}>
                   <Ionicons
-                    name={isBatchOrder ? "map" : "cube"}
-                    size={20}
-                    color="#FFFFFF"
+                    name={isBatchOrder ? 'map' : orderDeliveryType === 'food' ? 'restaurant' : 'cube'}
+                    size={16}
+                    color={flatColors.backgrounds.primary}
                   />
-                </View>
-                <View style={styles.timerInfo}>
-                  <Text style={styles.timerTitle}>
-                    {isBatchOrder ? 'New Route Available' : 'New Order Available'}
-                  </Text>
-                  <Text style={styles.timerSubtitle}>
-                    {timeRemaining > 0 ? `Auto-skip in ${timeRemaining}s` : 'Skipped'}
+                  <Text style={styles.pillText}>
+                    {isBatchOrder ? 'Route request' : 'Incoming order'}
                   </Text>
                 </View>
-                <View style={[styles.timerCircle, { borderColor: '#fff' }]}>
-                  <Text style={[styles.timerText, { color: '#fff' }]}>
-                    {timeRemaining}
-                  </Text>
-                </View>
+                {order.priority && order.priority !== 'normal' && (
+                  <View style={[styles.priorityPill, order.priority === 'urgent' && styles.priorityPillUrgent]}>
+                    <Text style={styles.priorityText}>{order.priority.toUpperCase()}</Text>
+                  </View>
+                )}
               </View>
-            </LinearGradient>
-          </Animated.View>
-
-          {/* Order Type Badge */}
-          <View style={styles.orderTypeContainer}>
-            {isBatchOrder ? (
-              <View style={[styles.orderTypeBadge, styles.batchBadge, isWarehouseConsolidation && styles.warehouseBadge]}>
-                <Ionicons 
-                  name={isWarehouseConsolidation ? "business" : (isDistributionBatch ? "git-branch" : "layers")} 
-                  size={16} 
-                  color={isWarehouseConsolidation ? "#FF9F43" : "#FF6B6B"} 
-                />
-                <Text style={[styles.orderTypeText, isWarehouseConsolidation ? styles.warehouseOrderTypeText : styles.batchOrderTypeText]}>
-                  {isWarehouseConsolidation ? 'WAREHOUSE CONSOLIDATION' : (isDistributionBatch ? 'DISTRIBUTION' : 'BATCH')} ({batchTotalOrders} ORDERS)
-                </Text>
+              <View style={styles.timerCircle}>
+                <Animated.Text style={styles.timerText}>
+                  {timeRemaining > 0 ? timeRemaining : 0}
+                </Animated.Text>
+                <Text style={styles.timerSub}>sec</Text>
               </View>
-            ) : (
-              <View style={[
-                styles.orderTypeBadge,
-                orderDeliveryType === 'food' && styles.foodBadge,
-                orderDeliveryType === 'fast' && styles.fastBadge,
-              ]}>
-                <Ionicons 
-                  name={orderDeliveryType === 'food' ? 'restaurant' : orderDeliveryType === 'fast' ? 'flash' : 'cube'} 
-                  size={16} 
-                  color="#fff" 
-                />
-                <Text style={styles.orderTypeText}>
-                  {(orderDeliveryType || 'regular').toUpperCase()} ORDER
-                </Text>
-              </View>
-            )}
-            {order.priority && order.priority !== 'normal' && (
-              <View style={[styles.priorityBadge, order.priority === 'urgent' && styles.urgentBadge]}>
-                <Text style={styles.priorityText}>
-                  {order.priority === 'urgent' ? '🔴' : '🟡'} {order.priority.toUpperCase()}
-                </Text>
-              </View>
-            )}
-            {isBatchOrder && (
-              <TouchableOpacity 
-                style={styles.routeDetailsButton}
-                onPress={() => setShowRouteDetails(!showRouteDetails)}
-              >
-                <Text style={styles.routeDetailsText}>
-                  {showRouteDetails ? 'Hide Route' : 'View Route'}
-                </Text>
-                <Ionicons 
-                  name={showRouteDetails ? 'chevron-up' : 'chevron-down'} 
-                  size={16} 
-                  color={flatColors.accent.blue} 
-                />
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {/* Special Handling Indicators */}
-          {(order?.special_handling && order.special_handling !== 'none' || 
-            order?.cash_on_delivery || 
-            order?.requires_signature || 
-            order?.requires_id_verification) && (
-            <View style={styles.specialHandlingContainer}>
-              {order?.special_handling && (typeof order.special_handling === 'string' ? order.special_handling !== 'none' : true) && (
-                <View style={[
-                  styles.specialHandlingBadge,
-                  order.special_handling === 'fragile' && styles.fragileBadge,
-                  order.special_handling === 'temperature_controlled' && styles.temperatureBadge,
-                  order.special_handling === 'hazardous' && styles.hazardousBadge,
-                ]}>
-                  <Ionicons 
-                    name={
-                      order.special_handling === 'fragile' ? 'warning' :
-                      order.special_handling === 'temperature_controlled' ? 'thermometer' :
-                      order.special_handling === 'liquid' ? 'water' :
-                      order.special_handling === 'hazardous' ? 'nuclear' :
-                      order.special_handling === 'perishable' ? 'time' : 'alert-circle'
-                    } 
-                    size={14} 
-                    color="#fff" 
-                  />
-                  <Text style={styles.specialHandlingText}>
-                    {typeof order.special_handling === 'string' 
-                      ? order.special_handling.replace(/_/g, ' ').toUpperCase()
-                      : isSpecialHandlingObject(order.special_handling)
-                        ? (order.special_handling.fragile ? 'FRAGILE' : 
-                           order.special_handling.temperature_controlled ? 'TEMPERATURE CONTROLLED' :
-                           order.special_handling.hazardous ? 'HAZARDOUS' :
-                           order.special_handling.liquid ? 'LIQUID' :
-                           order.special_handling.perishable ? 'PERISHABLE' : 'SPECIAL')
-                        : 'SPECIAL'}
-                  </Text>
-                </View>
-              )}
-              {order.cash_on_delivery && (
-                <View style={[styles.specialHandlingBadge, styles.codBadge]}>
-                  <Ionicons name="cash" size={14} color="#fff" />
-                  <Text style={styles.specialHandlingText}>
-                    COD {currency} {Number(order.cod_amount || order.total || 0).toFixed(2)}
-                  </Text>
-                </View>
-              )}
-              {order.requires_signature && (
-                <View style={[styles.specialHandlingBadge, styles.signatureBadge]}>
-                  <Ionicons name="create" size={14} color="#fff" />
-                  <Text style={styles.specialHandlingText}>SIGNATURE</Text>
-                </View>
-              )}
-              {order.requires_id_verification && (
-                <View style={[styles.specialHandlingBadge, styles.idBadge]}>
-                  <Ionicons name="card" size={14} color="#fff" />
-                  <Text style={styles.specialHandlingText}>ID CHECK</Text>
-                </View>
-              )}
             </View>
-          )}
+            <View style={styles.headerMeta}>
+              <View style={styles.headerTitleWrap}>
+                <Text style={styles.headerTitle}>
+                  {orderData?.customerName || 'New delivery'}
+                </Text>
+                <Text style={styles.headerSub}>
+                  Auto-skip if not accepted
+                </Text>
+              </View>
+              <Text style={styles.orderNumber}>#{orderData?.orderNumber}</Text>
+            </View>
+          </LinearGradient>
 
-          {/* Order Summary - Simplified ScrollView */}
           <ScrollView
-            style={styles.orderSummary}
-            contentContainerStyle={styles.orderSummaryContent}
+            style={styles.content}
+            contentContainerStyle={styles.contentInner}
             showsVerticalScrollIndicator={false}
-            bounces={true}
           >
             {orderData && (
               <>
-                {/* Earnings Card - Most Important! */}
-                <View style={styles.earningsCard}>
-                  <View style={styles.earningsRow}>
-                    <Ionicons name="cash" size={32} color={flatColors.brand.primary} />
-                    <View style={styles.earningsInfo}>
-                      <Text style={styles.earningsLabel}>TOTAL EARNINGS</Text>
-                      <Text style={styles.earningsAmount}>
+                <View style={styles.payoutCard}>
+                  <View style={styles.payoutRow}>
+                    <View>
+                      <Text style={styles.payoutLabel}>Payout</Text>
+                      <Text style={styles.payoutAmount}>
                         {currency} {orderData.total.toFixed(2)}
                       </Text>
                     </View>
-                  </View>
-                  {orderData.deliveryFee > 0 && (
-                    <View style={styles.deliveryFeeRow}>
-                      <Ionicons name="car" size={20} color={flatColors.accent.green} />
-                      <Text style={styles.deliveryFeeText}>
-                        Delivery Fee: +{currency} {orderData.deliveryFee.toFixed(2)}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-
-                {/* Distance & Time - Quick Metrics */}
-                <View style={styles.quickMetrics}>
-                  <View style={styles.quickMetric}>
-                    <Ionicons name="location" size={20} color={flatColors.brand.primary} />
-                    <Text style={styles.quickMetricText}>{orderData.distance}</Text>
-                  </View>
-                  <View style={styles.metricDivider} />
-                  <View style={styles.quickMetric}>
-                    <Ionicons name="time" size={20} color={flatColors.brand.primary} />
-                    <Text style={styles.quickMetricText}>{orderData.estimatedTime}</Text>
-                  </View>
-                  {orderData.isBatch && (
-                    <>
-                      <View style={styles.metricDivider} />
-                      <View style={styles.quickMetric}>
-                        <Ionicons name="layers" size={20} color={flatColors.accent.orange} />
-                        <Text style={styles.quickMetricText}>{orderData.batchCount} orders</Text>
-                      </View>
-                    </>
-                  )}
-                </View>
-
-                {/* Pickup Location */}
-                <View style={styles.locationCard}>
-                  <View style={styles.locationHeader}>
-                    <View style={[styles.locationDot, styles.pickupDot]} />
-                    <Text style={styles.locationLabelText}>PICKUP</Text>
-                  </View>
-                  <Text style={styles.locationAddressText} numberOfLines={2}>
-                    {orderData.pickupAddress}
-                  </Text>
-                </View>
-
-                {/* Delivery Location */}
-                <View style={styles.locationCard}>
-                  <View style={styles.locationHeader}>
-                    <View style={[styles.locationDot, styles.deliveryDot]} />
-                    <Text style={styles.locationLabelText}>
-                      {isWarehouseConsolidation ? 'WAREHOUSE DROP-OFF' : 'DELIVERY'}
-                    </Text>
-                  </View>
-                  {!orderData.isBatch && (
-                    <Text style={styles.customerNameText}>{orderData.customerName}</Text>
-                  )}
-                  <Text style={styles.locationAddressText} numberOfLines={2}>
-                    {orderData.deliveryAddress}
-                  </Text>
-                </View>
-
-                {/* Order Number */}
-                <View style={styles.orderInfoCard}>
-                  <Text style={styles.orderNumberText}>Order {orderData.orderNumber}</Text>
-                </View>
-
-                {/* Batch Orders Details - Collapsible */}
-                {isBatchOrder && batchProperties?.orders && batchProperties.orders.length > 0 && (
-                  <TouchableOpacity
-                    style={styles.batchToggleButton}
-                    onPress={() => setShowRouteDetails(!showRouteDetails)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.batchToggleHeader}>
-                      <Ionicons name="list" size={20} color={flatColors.brand.primary} />
-                      <Text style={styles.batchToggleText}>
-                        {showRouteDetails ? 'Hide' : 'Show'} {batchProperties.orders.length} Orders
-                      </Text>
-                      <Ionicons
-                        name={showRouteDetails ? 'chevron-up' : 'chevron-down'}
-                        size={20}
-                        color={flatColors.brand.primary}
-                      />
-                    </View>
-                  </TouchableOpacity>
-                )}
-
-                {showRouteDetails && batchProperties?.orders && (
-                  <View style={styles.batchOrdersList}>
-                    {batchProperties.orders.map((batchOrder, index) => (
-                      <View key={batchOrder.id || index} style={styles.batchOrderItem}>
-                        <View style={styles.batchOrderHeader}>
-                          <Text style={styles.batchOrderNumber}>
-                            #{batchOrder.order_number || `Order ${index + 1}`}
-                          </Text>
-                          <Text style={styles.batchOrderAmount}>
-                            {currency} {Number(batchOrder.total || 0).toFixed(2)}
+                    <View style={styles.metaPills}>
+                      {order.cash_on_delivery && (
+                        <View style={[styles.metaPill, styles.codPill]}>
+                          <Ionicons name="cash" size={14} color="#fff" />
+                          <Text style={styles.metaPillText}>COD {currency} {codAmount.toFixed(2)}</Text>
+                        </View>
+                      )}
+                      {orderData.deliveryFee > 0 && (
+                        <View style={styles.metaPill}>
+                          <Ionicons name="car" size={14} color={flatColors.brand.secondary} />
+                          <Text style={[styles.metaPillText, { color: flatColors.brand.text }]}>
+                            +{currency} {orderData.deliveryFee.toFixed(2)} fee
                           </Text>
                         </View>
-                        <Text style={styles.batchOrderCustomer} numberOfLines={1}>
-                          {batchOrder.customer?.name || batchOrder.customer_name || 'Customer'}
+                      )}
+                    </View>
+                  </View>
+                  <View style={styles.metricRow}>
+                    <View style={styles.metricItem}>
+                      <Ionicons name="location-outline" size={18} color={flatColors.brand.secondary} />
+                      <Text style={styles.metricLabel}>Distance</Text>
+                      <Text style={styles.metricValue}>{orderData.distance}</Text>
+                    </View>
+                    <View style={styles.metricItem}>
+                      <Ionicons name="time-outline" size={18} color={flatColors.brand.secondary} />
+                      <Text style={styles.metricLabel}>ETA</Text>
+                      <Text style={styles.metricValue}>{orderData.estimatedTime}</Text>
+                    </View>
+                    {orderData.isBatch && (
+                      <View style={styles.metricItem}>
+                        <Ionicons name="layers-outline" size={18} color={flatColors.brand.secondary} />
+                        <Text style={styles.metricLabel}>Orders</Text>
+                        <Text style={styles.metricValue}>{orderData.batchCount}</Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+
+                <View style={styles.detailCard}>
+                  <View style={styles.locationRow}>
+                    <View style={[styles.dot, styles.pickupDot]} />
+                    <View style={styles.locationTextWrap}>
+                      <Text style={styles.locationLabel}>Pickup</Text>
+                      <Text style={styles.locationValue} numberOfLines={2}>{orderData.pickupAddress}</Text>
+                    </View>
+                  </View>
+                  <View style={styles.divider} />
+                  <View style={styles.locationRow}>
+                    <View style={[styles.dot, styles.dropoffDot]} />
+                    <View style={styles.locationTextWrap}>
+                      <Text style={styles.locationLabel}>{isWarehouseConsolidation ? 'Warehouse drop-off' : 'Delivery'}</Text>
+                      {!orderData.isBatch && (
+                        <Text style={styles.customerName}>{orderData.customerName}</Text>
+                      )}
+                      <Text style={styles.locationValue} numberOfLines={2}>{orderData.deliveryAddress}</Text>
+                    </View>
+                  </View>
+                </View>
+
+                {(order.special_handling && order.special_handling !== 'none') || order.requires_signature || order.requires_id_verification ? (
+                  <View style={styles.chipRow}>
+                    {order.special_handling && (typeof order.special_handling === 'string' ? order.special_handling !== 'none' : true) && (
+                      <View style={[styles.chip, styles.alertChip]}>
+                        <Ionicons name="alert-circle" size={14} color="#fff" />
+                        <Text style={styles.chipText}>
+                          {typeof order.special_handling === 'string'
+                            ? order.special_handling.replace(/_/g, ' ')
+                            : 'Special handling'}
                         </Text>
-                        {batchOrder.cash_on_delivery && (
-                          <View style={styles.codBadgeSmall}>
-                            <Ionicons name="cash" size={12} color="#fff" />
-                            <Text style={styles.codBadgeText}>COD</Text>
-                          </View>
-                        )}
+                      </View>
+                    )}
+                    {order.requires_signature && (
+                      <View style={styles.chip}>
+                        <Ionicons name="create" size={14} color={flatColors.brand.secondary} />
+                        <Text style={[styles.chipText, { color: flatColors.brand.text }]}>Signature</Text>
+                      </View>
+                    )}
+                    {order.requires_id_verification && (
+                      <View style={styles.chip}>
+                        <Ionicons name="card" size={14} color={flatColors.brand.secondary} />
+                        <Text style={[styles.chipText, { color: flatColors.brand.text }]}>ID Check</Text>
+                      </View>
+                    )}
+                  </View>
+                ) : null}
+
+                {hasItems && (
+                  <View style={styles.detailCard}>
+                    <View style={styles.cardHeader}>
+                      <Text style={styles.cardTitle}>Items ({orderItems.length})</Text>
+                      <Ionicons name="cube-outline" size={18} color={flatColors.brand.secondary} />
+                    </View>
+                    {topItems.map((item, idx) => (
+                      <View key={idx} style={[styles.itemRow, idx !== topItems.length - 1 && styles.itemDivider]}>
+                        <Text style={styles.itemName} numberOfLines={1}>{item.name || item.title || `Item ${idx + 1}`}</Text>
+                        {item.quantity && <Text style={styles.itemQty}>x{item.quantity}</Text>}
                       </View>
                     ))}
+                    {orderItems.length > topItems.length && (
+                      <Text style={styles.moreItemsText}>+{orderItems.length - topItems.length} more</Text>
+                    )}
+                  </View>
+                )}
+
+                {isBatchOrder && batchProperties?.orders?.length ? (
+                  <View style={styles.detailCard}>
+                    <TouchableOpacity
+                      style={styles.cardHeader}
+                      onPress={() => setShowRouteDetails(!showRouteDetails)}
+                      activeOpacity={0.8}
+                    >
+                      <View style={styles.cardHeaderLeft}>
+                        <Ionicons name="map-outline" size={18} color={flatColors.brand.secondary} />
+                        <Text style={styles.cardTitle}>Route orders ({batchProperties.orders.length})</Text>
+                      </View>
+                      <Ionicons
+                        name={showRouteDetails ? 'chevron-up' : 'chevron-down'}
+                        size={18}
+                        color={flatColors.neutral[700]}
+                      />
+                    </TouchableOpacity>
+                    {showRouteDetails && (
+                      <View style={styles.batchList}>
+                        {batchProperties.orders.map((batchOrder, index) => (
+                          <View key={batchOrder.id || index} style={[styles.batchRow, index !== batchProperties.orders.length - 1 && styles.batchDivider]}>
+                            <View style={styles.batchRowLeft}>
+                              <Text style={styles.batchOrderId}>#{batchOrder.order_number || `Order ${index + 1}`}</Text>
+                              <Text style={styles.batchCustomer} numberOfLines={1}>
+                                {batchOrder.customer?.name || batchOrder.customer_name || 'Customer'}
+                              </Text>
+                            </View>
+                            <View style={styles.batchRowRight}>
+                              <Text style={styles.batchAmount}>{currency} {Number(batchOrder.total || 0).toFixed(2)}</Text>
+                              {batchOrder.cash_on_delivery && (
+                                <View style={[styles.metaPill, styles.codPill, { marginTop: 4 }]}>
+                                  <Text style={styles.metaPillText}>COD</Text>
+                                </View>
+                              )}
+                            </View>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                  </View>
+                ) : (
+                  <View style={styles.detailCard}>
+                    <View style={styles.cardHeader}>
+                      <View style={styles.cardHeaderLeft}>
+                        <Ionicons name="information-circle-outline" size={18} color={flatColors.brand.secondary} />
+                        <Text style={styles.cardTitle}>Order details</Text>
+                      </View>
+                      <Text style={styles.orderNumber}>#{orderData.orderNumber}</Text>
+                    </View>
+                    <Text style={styles.detailHint}>Confirm addresses and handling requirements before accepting.</Text>
                   </View>
                 )}
               </>
             )}
           </ScrollView>
 
-          {/* Action Buttons */}
-          <View style={styles.actionButtons}>
-            <TouchableOpacity 
-              style={styles.acceptButton} 
+          <View style={styles.footer}>
+            <TouchableOpacity
+              style={styles.declineButton}
+              onPress={handleDecline}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="close" size={18} color={flatColors.accent.red} />
+              <Text style={styles.declineText}>Decline</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.skipButton}
+              onPress={handleSkip}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="play-forward" size={18} color={flatColors.neutral[700]} />
+              <Text style={styles.skipText}>Skip</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.acceptButton}
               onPress={handleAccept}
               activeOpacity={0.9}
             >
-              <Ionicons name="checkmark" size={20} color="#fff" />
-              <Text style={styles.acceptButtonText}>
-                {isBatchOrder ? 'Accept Route' : 'Accept Order'}
-              </Text>
+              <LinearGradient
+                colors={['#FF7A1A', '#FF9F45']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.acceptGradient}
+              >
+                <Ionicons name="checkmark" size={20} color="#fff" />
+                <Text style={styles.acceptText}>{isBatchOrder ? 'Accept route' : 'Accept order'}</Text>
+              </LinearGradient>
             </TouchableOpacity>
-
-            <View style={styles.secondaryActions}>
-              <TouchableOpacity 
-                style={styles.declineButton} 
-                onPress={handleDecline}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="close" size={18} color="#FF4757" />
-                <Text style={styles.declineButtonText}>Decline</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity 
-                style={styles.skipButton} 
-                onPress={handleSkip}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="play-forward" size={18} color={flatColors.neutral[600]} />
-                <Text style={styles.skipButtonText}>Skip</Text>
-              </TouchableOpacity>
-            </View>
           </View>
         </Animated.View>
       </Animated.View>
@@ -1031,726 +969,409 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: 18,
   },
   container: {
     backgroundColor: flatColors.backgrounds.primary,
     borderRadius: 16,
     width: '100%',
-    maxWidth: 380,
-    maxHeight: SCREEN_HEIGHT * 0.9, // Increased to 90% of screen
+    maxWidth: 400,
+    maxHeight: SCREEN_HEIGHT * 0.9,
     overflow: 'hidden',
     ...premiumShadows.large,
     borderWidth: 1,
     borderColor: flatColors.neutral[200],
-    paddingBottom: 88, // Space for action buttons (68px height + 20px padding)
   },
-  timerHeader: {
-    borderBottomWidth: 0,
-    borderRadius: 16,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
+  headerGradient: {
+    paddingHorizontal: 18,
+    paddingTop: 16,
+    paddingBottom: 14,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
   },
-  timerContainer: {
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  timerCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    borderWidth: 3,
-    justifyContent: 'center',
+  badgeRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: flatColors.backgrounds.primary,
+    gap: 8,
   },
-  timerText: {
-    ...premiumTypography.headline.medium,
+  orderTypePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  pillText: {
+    ...premiumTypography.caption.medium,
+    color: '#fff',
     fontWeight: '700',
   },
-  timerInfo: {
-    flex: 1,
-    marginHorizontal: 12,
-  },
-  timerTitle: {
-    ...premiumTypography.callout,
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  timerSubtitle: {
-    ...premiumTypography.caption.medium,
-    color: 'rgba(255, 255, 255, 0.9)',
-    marginTop: 4,
-  },
-  timerIconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  batchTimerIcon: {
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-  },
-  orderTypeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 8,
-    flexWrap: 'wrap',
-  },
-  orderTypeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: flatColors.cards.blue.background,
-    paddingHorizontal: 12,
+  priorityPill: {
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    paddingHorizontal: 10,
     paddingVertical: 8,
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: flatColors.accent.blue,
-    marginRight: 8,
-    marginTop: 4,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
-  foodBadge: {
-    backgroundColor: flatColors.cards.red.background,
-    borderColor: flatColors.accent.red,
-  },
-  fastBadge: {
-    backgroundColor: flatColors.cards.yellow.background,
-    borderColor: flatColors.accent.yellow,
-  },
-  orderTypeText: {
-    ...premiumTypography.caption.medium,
-    fontWeight: '600',
-    color: flatColors.accent.blue,
-  },
-  priorityBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
-    backgroundColor: flatColors.cards.yellow.background,
-    borderWidth: 1,
-    borderColor: flatColors.accent.yellow,
-    marginRight: 8,
-    marginTop: 4,
-  },
-  urgentBadge: {
-    backgroundColor: flatColors.cards.red.background,
-    borderColor: flatColors.accent.red,
+  priorityPillUrgent: {
+    backgroundColor: 'rgba(255,59,48,0.18)',
   },
   priorityText: {
     ...premiumTypography.caption.medium,
-    fontWeight: '600',
-    color: flatColors.neutral[800],
-  },
-  orderSummary: {
-    flex: 1,
-    minHeight: 200, // Ensure minimum height
-    maxHeight: SCREEN_HEIGHT * 0.55, // Increased to 55% of screen for FlatList
-  },
-  orderSummaryContent: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 32, // Extra padding for last item
-  },
-  orderNumber: {
-    ...premiumTypography.callout,
-    fontSize: 16,
+    color: '#fff',
     fontWeight: '700',
-    color: flatColors.neutral[800],
-    marginBottom: 16,
-    textAlign: 'center',
   },
-  locationSection: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-    marginTop: 4,
-  },
-  locationIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: flatColors.backgrounds.secondary,
+  timerCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#fff',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: flatColors.neutral[200],
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 5,
   },
-  locationInfo: {
-    flex: 1,
+  timerText: {
+    ...premiumTypography.title3,
+    color: flatColors.brand.text,
+    fontWeight: '800',
   },
-  locationLabel: {
+  timerSub: {
     ...premiumTypography.caption.medium,
-    fontWeight: '600',
-    color: flatColors.neutral[600],
-    marginBottom: 4,
-    textTransform: 'uppercase',
+    color: flatColors.neutral[700],
+    marginTop: -4,
   },
-  locationAddress: {
-    ...premiumTypography.body,
-    color: flatColors.neutral[800],
-    lineHeight: 20,
-  },
-  metricsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 16,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: flatColors.neutral[200],
-  },
-  metric: {
-    alignItems: 'center',
-    marginHorizontal: 6,
-  },
-  metricText: {
-    ...premiumTypography.caption.medium,
-    color: flatColors.neutral[600],
-    fontWeight: '500',
-  },
-  successMetricText: {
-    color: flatColors.accent.green,
-  },
-  actionButtons: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: flatColors.backgrounds.secondary,
-    borderTopWidth: 1,
-    borderTopColor: flatColors.neutral[200],
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-  },
-  declineButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: flatColors.accent.red,
-    backgroundColor: 'transparent',
-    marginRight: 12,
-    minWidth: 120,
-  },
-  declineButtonText: {
-    ...premiumTypography.button,
-    color: flatColors.accent.red,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  skipButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    minWidth: 80,
-  },
-  skipButtonText: {
-    ...premiumTypography.button,
-    color: flatColors.neutral[600],
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  acceptButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: flatColors.brand.primary,
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    ...premiumShadows.small,
-    width: '100%',
-  },
-  acceptButtonText: {
-    ...premiumTypography.button,
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  secondaryActions: {
+  headerMeta: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginTop: 12,
   },
-  batchBadge: {
-    backgroundColor: flatColors.cards.red.background,
-    borderColor: flatColors.accent.red,
+  headerTitleWrap: {
+    flex: 1,
   },
-  warehouseBadge: {
-    backgroundColor: `${flatColors.accent.orange}15`, // 15% opacity orange
-    borderColor: flatColors.accent.orange,
+  headerTitle: {
+    ...premiumTypography.title3,
+    color: '#fff',
+    fontWeight: '800',
   },
-  batchOrderTypeText: {
-    color: flatColors.accent.red,
+  headerSub: {
+    ...premiumTypography.caption.medium,
+    color: 'rgba(255,255,255,0.92)',
+    marginTop: 4,
   },
-  warehouseOrderTypeText: {
-    color: flatColors.accent.orange,
+  orderNumber: {
+    ...premiumTypography.caption.medium,
+    color: '#fff',
+    fontWeight: '700',
   },
-  routeDetailsButton: {
+  content: {
+    maxHeight: SCREEN_HEIGHT * 0.62,
+  },
+  contentInner: {
+    padding: 18,
+    gap: 12,
+    paddingBottom: 100,
+  },
+  payoutCard: {
+    backgroundColor: flatColors.backgrounds.secondary,
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: flatColors.neutral[200],
+    ...premiumShadows.small,
+  },
+  payoutRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  payoutLabel: {
+    ...premiumTypography.caption.medium,
+    color: flatColors.neutral[700],
+    fontWeight: '600',
+  },
+  payoutAmount: {
+    ...premiumTypography.title2,
+    color: flatColors.neutral[900],
+    fontWeight: '800',
+  },
+  metaPills: {
+    alignItems: 'flex-end',
+    gap: 8,
+  },
+  metaPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
     backgroundColor: flatColors.backgrounds.primary,
     borderWidth: 1,
     borderColor: flatColors.neutral[200],
-    marginTop: 4,
   },
-  routeDetailsText: {
-    ...premiumTypography.caption.medium,
-    color: flatColors.accent.blue,
-    fontWeight: '600',
-  },
-  routeSummaryContainer: {
-    marginBottom: 16,
-  },
-  routeStats: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingVertical: 16,
-    backgroundColor: flatColors.cards.red.background,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: flatColors.cards.red.border,
-  },
-  routeStat: {
-    alignItems: 'center',
-    gap: 4,
-  },
-  routeStatText: {
+  metaPillText: {
     ...premiumTypography.caption.medium,
     color: flatColors.neutral[800],
     fontWeight: '600',
   },
-  routeStopsList: {
-    marginTop: 16,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: flatColors.neutral[200],
-  },
-  routeListTitle: {
-    ...premiumTypography.callout,
-    fontWeight: '600',
-    color: flatColors.neutral[800],
-    marginBottom: 12,
-  },
-  routeStopItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    marginBottom: 8,
-    gap: 12,
-  },
-  stopNumber: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: flatColors.neutral[300],
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  stopNumberText: {
-    ...premiumTypography.caption.medium,
-    fontWeight: '700',
-    color: flatColors.neutral[800],
-  },
-  stopIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  pickupIcon: {
-    backgroundColor: flatColors.accent.blue,
-  },
-  deliveryIcon: {
+  codPill: {
     backgroundColor: flatColors.accent.green,
+    borderColor: flatColors.accent.green,
   },
-  stopDetails: {
-    flex: 1,
-  },
-  stopType: {
-    ...premiumTypography.caption.medium,
-    fontWeight: '600',
-    color: flatColors.neutral[600],
-    marginBottom: 4,
-  },
-  stopAddress: {
-    ...premiumTypography.body,
-    color: flatColors.neutral[800],
-    marginBottom: 4,
-  },
-  stopOrderNumber: {
-    ...premiumTypography.caption.medium,
-    color: flatColors.neutral[600],
-  },
-  stopCustomer: {
-    ...premiumTypography.caption.medium,
-    color: flatColors.accent.blue,
-    fontWeight: '600',
-  },
-  // Special handling styles
-  specialHandlingContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    paddingHorizontal: 20,
-    paddingBottom: 12,
-  },
-  specialHandlingBadge: {
+  metricRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    gap: 4,
-    backgroundColor: flatColors.accent.yellow,
+    justifyContent: 'space-between',
+    marginTop: 6,
   },
-  specialHandlingText: {
+  metricItem: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  metricLabel: {
     ...premiumTypography.caption.medium,
-    fontWeight: '600',
-    color: '#fff',
-    fontSize: 11,
+    color: flatColors.neutral[600],
+    marginTop: 6,
   },
-  fragileBadge: {
-    backgroundColor: '#FF6B6B',
-  },
-  temperatureBadge: {
-    backgroundColor: '#4ECDC4',
-  },
-  hazardousBadge: {
-    backgroundColor: '#FF4757',
-  },
-  codBadge: {
-    backgroundColor: '#00D2D3',
-  },
-  signatureBadge: {
-    backgroundColor: '#8B78E6',
-  },
-  idBadge: {
-    backgroundColor: '#5F3DC4',
-  },
-  // Batch orders list styles
-  batchOrdersList: {
-    marginTop: 16,
-  },
-  batchOrdersHeader: {
-    marginBottom: 12,
-  },
-  batchOrdersTitle: {
-    ...premiumTypography.body.medium,
+  metricValue: {
+    ...premiumTypography.callout,
+    color: flatColors.neutral[900],
     fontWeight: '700',
-    color: flatColors.neutral[800],
-    marginBottom: 4,
+    marginTop: 2,
   },
-  batchOrdersSubtitle: {
-    ...premiumTypography.caption.medium,
-    color: flatColors.neutral[600],
-  },
-  warehouseInfoBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: flatColors.cards.yellow.background,
-    borderWidth: 1,
-    borderColor: flatColors.cards.yellow.border,
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
-    gap: 12,
-  },
-  warehouseInfoContent: {
-    flex: 1,
-  },
-  warehouseInfoLabel: {
-    ...premiumTypography.caption.medium,
-    color: flatColors.neutral[600],
-    marginBottom: 2,
-  },
-  warehouseInfoAddress: {
-    ...premiumTypography.body.small,
-    fontWeight: '600',
-    color: flatColors.neutral[800],
-  },
-  batchOrderItem: {
+  detailCard: {
     backgroundColor: flatColors.backgrounds.secondary,
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 8,
+    borderRadius: 14,
+    padding: 14,
     borderWidth: 1,
     borderColor: flatColors.neutral[200],
   },
-  batchOrderHeader: {
+  locationRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
+    gap: 10,
+    alignItems: 'flex-start',
   },
-  batchOrderNumber: {
-    backgroundColor: flatColors.cards.blue.background,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  batchOrderNumberText: {
-    ...premiumTypography.caption.medium,
-    fontWeight: '600',
-    color: flatColors.accent.blue,
-  },
-  batchOrderAmount: {
-    backgroundColor: flatColors.cards.green.background,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  batchOrderAmountText: {
-    ...premiumTypography.caption.medium,
-    fontWeight: '700',
-    color: flatColors.accent.green,
-  },
-  batchOrderCustomer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 4,
-  },
-  batchOrderCustomerText: {
-    ...premiumTypography.caption.medium,
-    color: flatColors.neutral[700],
-  },
-  batchOrderAddress: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 8,
-  },
-  batchOrderAddressText: {
-    ...premiumTypography.caption.small,
-    color: flatColors.neutral[600],
-    flex: 1,
-  },
-  batchOrderBadges: {
-    flexDirection: 'row',
-    gap: 6,
-    flexWrap: 'wrap',
-  },
-  batchOrderBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    borderRadius: 4,
-    gap: 3,
-  },
-  batchOrderBadgeText: {
-    ...premiumTypography.caption.small,
-    fontWeight: '600',
-    color: '#fff',
-    fontSize: 10,
-  },
-  specialBadge: {
-    backgroundColor: '#FF9F43',
-  },
-  warehouseIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: `${flatColors.accent.orange}15`, // 15% opacity orange
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    marginTop: 4,
-  },
-  warehouseIndicatorText: {
-    ...premiumTypography.caption.small,
-    color: flatColors.accent.orange,
-    fontWeight: '600',
-    fontSize: 11,
-  },
-  // New simplified styles
-  earningsCard: {
-    backgroundColor: flatColors.backgrounds.secondary,
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-    borderWidth: 2,
-    borderColor: flatColors.brand.primary,
-  },
-  earningsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-  },
-  earningsInfo: {
-    flex: 1,
-  },
-  earningsLabel: {
-    ...premiumTypography.caption.medium,
-    fontWeight: '700',
-    color: flatColors.neutral[600],
-    marginBottom: 4,
-    letterSpacing: 0.5,
-  },
-  earningsAmount: {
-    ...premiumTypography.headline.large,
-    fontWeight: '800',
-    color: flatColors.brand.primary,
-    fontSize: 32,
-  },
-  deliveryFeeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: flatColors.neutral[200],
-  },
-  deliveryFeeText: {
-    ...premiumTypography.body,
-    fontWeight: '600',
-    color: flatColors.accent.green,
-  },
-  quickMetrics: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-    backgroundColor: flatColors.backgrounds.secondary,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-  },
-  quickMetric: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  quickMetricText: {
-    ...premiumTypography.body.medium,
-    fontWeight: '600',
-    color: flatColors.neutral[800],
-  },
-  metricDivider: {
-    width: 1,
-    height: 24,
-    backgroundColor: flatColors.neutral[300],
-  },
-  locationCard: {
-    backgroundColor: flatColors.backgrounds.secondary,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    borderLeftWidth: 4,
-    borderLeftColor: flatColors.brand.primary,
-  },
-  locationHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
-  },
-  locationDot: {
+  dot: {
     width: 12,
     height: 12,
     borderRadius: 6,
+    marginTop: 4,
   },
   pickupDot: {
     backgroundColor: flatColors.accent.blue,
   },
-  deliveryDot: {
+  dropoffDot: {
     backgroundColor: flatColors.accent.green,
   },
-  locationLabelText: {
+  locationTextWrap: {
+    flex: 1,
+  },
+  locationLabel: {
     ...premiumTypography.caption.medium,
-    fontWeight: '700',
-    color: flatColors.neutral[600],
-    letterSpacing: 0.5,
-  },
-  customerNameText: {
-    ...premiumTypography.body.medium,
-    fontWeight: '700',
-    color: flatColors.neutral[800],
-    marginBottom: 4,
-  },
-  locationAddressText: {
-    ...premiumTypography.body,
     color: flatColors.neutral[700],
+    fontWeight: '700',
+  },
+  locationValue: {
+    ...premiumTypography.body,
+    color: flatColors.neutral[900],
+    marginTop: 2,
     lineHeight: 20,
   },
-  orderInfoCard: {
-    backgroundColor: flatColors.backgrounds.tertiary,
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 12,
+  customerName: {
+    ...premiumTypography.callout,
+    fontWeight: '700',
+    color: flatColors.neutral[900],
+    marginTop: 4,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: flatColors.neutral[200],
+    marginVertical: 12,
+  },
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  chip: {
+    flexDirection: 'row',
     alignItems: 'center',
-  },
-  orderNumberText: {
-    ...premiumTypography.body.small,
-    fontWeight: '600',
-    color: flatColors.neutral[600],
-  },
-  batchToggleButton: {
-    backgroundColor: flatColors.backgrounds.secondary,
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
+    backgroundColor: flatColors.backgrounds.secondary,
     borderWidth: 1,
     borderColor: flatColors.neutral[200],
   },
-  batchToggleHeader: {
+  alertChip: {
+    backgroundColor: flatColors.accent.red,
+    borderColor: flatColors.accent.red,
+  },
+  chipText: {
+    ...premiumTypography.caption.medium,
+    color: flatColors.brand.text,
+    fontWeight: '700',
+  },
+  cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginBottom: 10,
   },
-  batchToggleText: {
-    ...premiumTypography.body.medium,
-    fontWeight: '600',
-    color: flatColors.brand.primary,
-    flex: 1,
-    marginLeft: 8,
-  },
-  batchOrderNumber: {
-    ...premiumTypography.caption.medium,
-    fontWeight: '600',
-    color: flatColors.accent.blue,
-  },
-  batchOrderCustomer: {
-    ...premiumTypography.caption.medium,
-    color: flatColors.neutral[700],
-    marginTop: 4,
-  },
-  codBadgeSmall: {
+  cardHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: flatColors.accent.green,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-    alignSelf: 'flex-start',
+    gap: 8,
+  },
+  cardTitle: {
+    ...premiumTypography.callout,
+    fontWeight: '700',
+    color: flatColors.neutral[900],
+  },
+  itemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+  },
+  itemDivider: {
+    borderBottomWidth: 1,
+    borderBottomColor: flatColors.neutral[200],
+  },
+  itemName: {
+    ...premiumTypography.body,
+    color: flatColors.neutral[800],
+    flex: 1,
+  },
+  itemQty: {
+    ...premiumTypography.caption.medium,
+    color: flatColors.neutral[700],
+    marginLeft: 10,
+  },
+  moreItemsText: {
+    ...premiumTypography.caption.medium,
+    color: flatColors.neutral[600],
     marginTop: 6,
   },
-  codBadgeText: {
-    ...premiumTypography.caption.small,
-    fontWeight: '600',
+  batchList: {
+    marginTop: 6,
+  },
+  batchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+  },
+  batchDivider: {
+    borderBottomWidth: 1,
+    borderBottomColor: flatColors.neutral[200],
+  },
+  batchRowLeft: {
+    flex: 1,
+  },
+  batchOrderId: {
+    ...premiumTypography.callout,
+    fontWeight: '700',
+    color: flatColors.neutral[900],
+  },
+  batchCustomer: {
+    ...premiumTypography.caption.medium,
+    color: flatColors.neutral[700],
+    marginTop: 2,
+  },
+  batchRowRight: {
+    alignItems: 'flex-end',
+    marginLeft: 10,
+  },
+  batchAmount: {
+    ...premiumTypography.callout,
+    fontWeight: '700',
+    color: flatColors.neutral[900],
+  },
+  detailHint: {
+    ...premiumTypography.caption.medium,
+    color: flatColors.neutral[700],
+  },
+  footer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: flatColors.neutral[200],
+    backgroundColor: flatColors.backgrounds.primary,
+  },
+  declineButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: flatColors.accent.red,
+    backgroundColor: flatColors.backgrounds.primary,
+  },
+  declineText: {
+    ...premiumTypography.button,
+    color: flatColors.accent.red,
+    fontWeight: '700',
+  },
+  skipButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: flatColors.neutral[200],
+    backgroundColor: flatColors.backgrounds.primary,
+  },
+  skipText: {
+    ...premiumTypography.button,
+    color: flatColors.neutral[700],
+    fontWeight: '700',
+  },
+  acceptButton: {
+    flex: 1,
+    marginLeft: 10,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  acceptGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    gap: 8,
+  },
+  acceptText: {
+    ...premiumTypography.button,
     color: '#fff',
-    fontSize: 10,
+    fontWeight: '800',
   },
 });
 

@@ -193,7 +193,114 @@ export class PollingClient {
     }
 
     const data = await response.json();
-    return data as Order[];
+
+    // Handle wrapped response format from delivery-service
+    // API returns: { count: N, results: [...] } or { orders: [...], total_count: N, ... }
+    let orders: any[];
+    if (Array.isArray(data)) {
+      orders = data;
+    } else if (data.results && Array.isArray(data.results)) {
+      orders = data.results;
+    } else if (data.orders && Array.isArray(data.orders)) {
+      orders = data.orders;
+    } else {
+      if (__DEV__) {
+        console.log('[PollingClient] Unexpected response format:', JSON.stringify(data).slice(0, 500));
+      }
+      return [];
+    }
+
+    // Transform API response format to match Order type expected by the app
+    // API returns nested format, app expects flat format
+    const transformedOrders: Order[] = orders.map((order: any) => {
+      // Extract nested pickup/dropoff to flat format
+      const pickupAddress = order.pickup?.address || order.pickup_address || '';
+      const pickupLatitude = order.pickup?.lat || order.pickup_latitude;
+      const pickupLongitude = order.pickup?.lng || order.pickup_longitude;
+
+      const dropoffAddress = order.dropoff?.address || order.dropoff_address || order.delivery_address || '';
+      const dropoffLatitude = order.dropoff?.lat || order.dropoff_latitude || order.delivery_latitude;
+      const dropoffLongitude = order.dropoff?.lng || order.dropoff_longitude || order.delivery_longitude;
+
+      // Extract customer info (can be nested or flat)
+      const customerName = order.customer?.name || order.customer_name || 'Customer';
+      const customerPhone = order.customer?.phone || order.customer_phone || '';
+
+      // Extract amounts
+      const total = order.total_amount || order.total || 0;
+      const deliveryFee = order.delivery_fee || 0;
+
+      // Calculate distance in meters for the app
+      const distanceKm = order.distance_km || order.distance || 0;
+      const distanceMeters = typeof distanceKm === 'number' && distanceKm < 1000
+        ? distanceKm * 1000 // Convert km to meters
+        : distanceKm; // Already in meters or large number
+
+      const transformed: Order = {
+        id: order.id,
+        order_number: order.order_number,
+        status: order.status,
+
+        // Flat pickup fields
+        pickup_address: pickupAddress,
+        pickup_latitude: pickupLatitude,
+        pickup_longitude: pickupLongitude,
+
+        // Flat delivery fields (app uses both dropoff_ and delivery_ prefixes)
+        dropoff_address: dropoffAddress,
+        delivery_address: dropoffAddress,
+        dropoff_latitude: dropoffLatitude,
+        delivery_latitude: dropoffLatitude,
+        dropoff_longitude: dropoffLongitude,
+        delivery_longitude: dropoffLongitude,
+
+        // Customer info in multiple formats for compatibility
+        customer: {
+          name: customerName,
+          phone: customerPhone,
+        },
+        customer_name: customerName,
+        customer_phone: customerPhone,
+
+        // Amounts
+        total: total,
+        total_amount: total,
+        delivery_fee: deliveryFee,
+
+        // Distance and time
+        distance: distanceMeters,
+        distance_km: distanceKm,
+        estimated_delivery_time: order.estimated_duration_minutes
+          ? `${order.estimated_duration_minutes} min`
+          : order.estimated_delivery_time || '15 min',
+        estimated_duration_minutes: order.estimated_duration_minutes,
+
+        // Timestamps
+        created_at: order.created_at ? new Date(order.created_at) : new Date(),
+
+        // Pass through any other fields
+        ...order,
+
+        // Ensure transformed fields take precedence
+        pickup_address: pickupAddress,
+        delivery_address: dropoffAddress,
+        customer_name: customerName,
+        total: total,
+      };
+
+      if (__DEV__) {
+        console.log('[PollingClient] Transformed order:', order.order_number, {
+          pickup_address: transformed.pickup_address,
+          delivery_address: transformed.delivery_address,
+          customer_name: transformed.customer_name,
+          total: transformed.total,
+        });
+      }
+
+      return transformed;
+    });
+
+    return transformedOrders;
   }
 
   /**
