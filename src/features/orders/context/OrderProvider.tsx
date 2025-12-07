@@ -655,16 +655,19 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
           o.id === deliveryId ? { ...o, status } : o
         ));
 
-        // Also update driverOrders state to ensure UI reflects the change immediately
-        setDriverOrders(prev => prev.map(o =>
-          o.id === deliveryId ? { ...o, status } : o
-        ));
-
         // Invalidate caches when status changes
         await cacheService.invalidateByEvent('orderStatusChanged');
 
-        // If order is completed, invalidate history cache too and check if driver needs status reset
+        // If order is completed, remove it from active orders and move to history
         if (status === 'delivered' || status === 'failed' || status === 'cancelled') {
+          console.log('[OrderProvider] Order completed, removing from active orders:', deliveryId);
+
+          // Remove from driverOrders (active orders)
+          setDriverOrders(prev => prev.filter(o => o.id !== deliveryId));
+
+          // Also remove from orders list
+          setOrders(prev => prev.filter(o => o.id !== deliveryId));
+
           await cacheService.invalidateByEvent('orderCompleted');
 
           // Check if driver has any remaining active orders and reset status to available if not
@@ -686,6 +689,11 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({
               console.warn('[OrderProvider] Failed to reset driver status:', err);
             }
           }, 500);
+        } else {
+          // For non-completed statuses, just update the status in the list
+          setDriverOrders(prev => prev.map(o =>
+            o.id === deliveryId ? { ...o, status } : o
+          ));
         }
 
         return true;

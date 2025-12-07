@@ -151,14 +151,22 @@ export const FlatOrderInfoSection: React.FC<FlatOrderInfoSectionProps> = ({
             </View>
           )}
 
-          {order.delivery_notes && (
+          {/* Delivery Instructions - combine multiple sources */}
+          {(order.delivery_notes || order.delivery_instructions || order.dropoff_instructions || order.special_instructions) && (
             <View style={styles.infoRow}>
               <View style={styles.iconContainer}>
-                <Ionicons name="document-text" size={20} color={flatColors.neutral[500]} />
+                <Ionicons name="document-text" size={20} color={flatColors.accent.orange} />
               </View>
               <View style={styles.infoContent}>
-                <Text style={styles.infoLabel}>Delivery Notes</Text>
-                <Text style={styles.infoValue}>{order.delivery_notes}</Text>
+                <Text style={styles.infoLabel}>Delivery Instructions</Text>
+                <Text style={styles.infoValue}>
+                  {[
+                    order.delivery_instructions,
+                    order.delivery_notes,
+                    order.dropoff_instructions,
+                    order.special_instructions,
+                  ].filter(Boolean).join('\n')}
+                </Text>
               </View>
             </View>
           )}
