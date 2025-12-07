@@ -688,6 +688,12 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
   const hasItems = orderItems.length > 0;
   const topItems = orderItems.slice(0, 3);
   const codAmount = order.cash_on_delivery ? Number(order.cod_amount || order.total || 0) : 0;
+  const deliveryInstructions = order.delivery_instructions 
+    || order.dropoff_instructions 
+    || order.delivery_notes 
+    || order.special_instructions 
+    || '';
+  const pickupInstructions = order.pickup_instructions || '';
 
   return (
     <Modal
@@ -823,8 +829,37 @@ const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
                       )}
                       <Text style={styles.locationValue} numberOfLines={2}>{orderData.deliveryAddress}</Text>
                     </View>
-                  </View>
                 </View>
+              </View>
+
+              {(deliveryInstructions || pickupInstructions) && (
+                <View style={styles.detailCard}>
+                  <View style={styles.cardHeader}>
+                    <View style={styles.cardHeaderLeft}>
+                      <Ionicons name="document-text-outline" size={18} color={flatColors.brand.secondary} />
+                      <Text style={styles.cardTitle}>Instructions</Text>
+                    </View>
+                  </View>
+                  {pickupInstructions ? (
+                    <View style={styles.instructionRow}>
+                      <View style={[styles.dot, styles.pickupDot]} />
+                      <View style={styles.instructionTextWrap}>
+                        <Text style={styles.instructionLabel}>Pickup</Text>
+                        <Text style={styles.instructionValue}>{pickupInstructions}</Text>
+                      </View>
+                    </View>
+                  ) : null}
+                  {deliveryInstructions ? (
+                    <View style={[styles.instructionRow, pickupInstructions ? styles.instructionDivider : null]}>
+                      <View style={[styles.dot, styles.dropoffDot]} />
+                      <View style={styles.instructionTextWrap}>
+                        <Text style={styles.instructionLabel}>Delivery</Text>
+                        <Text style={styles.instructionValue}>{deliveryInstructions}</Text>
+                      </View>
+                    </View>
+                  ) : null}
+                </View>
+              )}
 
                 {(order.special_handling && order.special_handling !== 'none') || order.requires_signature || order.requires_id_verification ? (
                   <View style={styles.chipRow}>

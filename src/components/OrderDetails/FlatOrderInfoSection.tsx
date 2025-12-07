@@ -75,6 +75,14 @@ export const FlatOrderInfoSection: React.FC<FlatOrderInfoSectionProps> = ({
     }
   };
 
+  const deliveryInstructions = order.delivery_instructions
+    || order.delivery_notes
+    || order.dropoff_instructions
+    || order.special_instructions
+    || '';
+
+  const pickupInstructions = order.pickup_instructions || '';
+
   return (
     <View style={styles.container}>
       {/* Customer Information */}
@@ -151,22 +159,20 @@ export const FlatOrderInfoSection: React.FC<FlatOrderInfoSectionProps> = ({
             </View>
           )}
 
-          {/* Delivery Instructions - combine multiple sources */}
-          {(order.delivery_notes || order.delivery_instructions || order.dropoff_instructions || order.special_instructions) && (
+          {/* Instructions */}
+          {(pickupInstructions || deliveryInstructions) && (
             <View style={styles.infoRow}>
               <View style={styles.iconContainer}>
                 <Ionicons name="document-text" size={20} color={flatColors.accent.orange} />
               </View>
               <View style={styles.infoContent}>
-                <Text style={styles.infoLabel}>Delivery Instructions</Text>
-                <Text style={styles.infoValue}>
-                  {[
-                    order.delivery_instructions,
-                    order.delivery_notes,
-                    order.dropoff_instructions,
-                    order.special_instructions,
-                  ].filter(Boolean).join('\n')}
-                </Text>
+                <Text style={styles.infoLabel}>Instructions</Text>
+                {pickupInstructions ? (
+                  <Text style={styles.infoValue}>Pickup: {pickupInstructions}</Text>
+                ) : null}
+                {deliveryInstructions ? (
+                  <Text style={styles.infoValue}>Delivery: {deliveryInstructions}</Text>
+                ) : null}
               </View>
             </View>
           )}

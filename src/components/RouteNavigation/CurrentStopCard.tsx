@@ -383,7 +383,7 @@ export const CurrentStopCard: React.FC<CurrentStopCardProps> = ({
         )}
 
         {/* Delivery Instructions */}
-        {(type === 'delivery' && (order.delivery_instructions || order.special_instructions)) && (
+        {(type === 'delivery' && (order.delivery_instructions || order.dropoff_instructions || order.delivery_notes || order.special_instructions)) && (
           <View style={styles.instructionsSection}>
             <View style={styles.instructionsIcon}>
               <Ionicons name="document-text" size={16} color={flatColors.accent.purple} />
@@ -391,7 +391,7 @@ export const CurrentStopCard: React.FC<CurrentStopCardProps> = ({
             <View style={styles.instructionsContent}>
               <Text style={styles.instructionsLabel}>Delivery Instructions</Text>
               <Text style={styles.instructionsText}>
-                {order.delivery_instructions || order.special_instructions}
+                {order.delivery_instructions || order.dropoff_instructions || order.delivery_notes || order.special_instructions}
               </Text>
             </View>
           </View>
