@@ -1,41 +1,19 @@
 /**
  * Driver Balance Card Component
- * Shows driver's cash balance and financial status
+ * Shows driver's earnings and performance stats
+ * Uses existing driver stats endpoint: /api/v1/drivers/{id}/stats/
  */
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { View, Text, ActivityIndicator } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import Card from '../../../shared/components/Card/Card';
 import Button from '../../../shared/components/Button/Button';
 import { theme } from '../../../shared/styles/theme';
 import { formatCurrency } from '../../../utils/currency';
-import { driverFinanceAPI } from '../../../services/api/driverFinanceAPI';
+import { useDriver } from '../../../contexts/DriverContext';
 import { useTenant } from '../../../contexts/TenantContext';
 import { useNavigation } from '@react-navigation/native';
 import styles from './DriverBalanceCard.styles';
-
-interface BalanceData {
-  current_balance: {
-    cash_in_hand: number;
-    company_liability: number;
-    earnings_balance: number;
-    net_position: number;
-  };
-  today_summary: {
-    collections: number;
-    remittances: number;
-    net_change: number;
-  };
-  limits: {
-    daily_limit: number;
-    remaining_capacity: number;
-    can_accept_cod: boolean;
-  };
-  status: {
-    is_blocked: boolean;
-    block_reason: string;
-  };
-}
 
 interface DriverBalanceCardProps {
   onRefresh?: () => void;
@@ -46,39 +24,17 @@ const DriverBalanceCard: React.FC<DriverBalanceCardProps> = ({ onRefresh, compac
   const navigation = useNavigation();
   const { tenantSettings } = useTenant();
   const currency = tenantSettings?.currency || 'SDG';
-  
-  const [balanceData, setBalanceData] = useState<BalanceData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { driver, balance, loading, getDriverBalance } = useDriver();
 
-  useEffect(() => {
-    fetchBalanceData();
-  }, []);
-
-  const fetchBalanceData = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const response = await driverFinanceAPI.getDriverBalance();
-      setBalanceData(response.data);
-    } catch (err) {
-      console.error('Error fetching balance:', err);
-      setError('Failed to load balance');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleRemitCash = () => {
+  const handleViewEarnings = () => {
     // Navigate to History tab with earnings view
     // @ts-ignore - nested navigation params
     navigation.navigate('MainTabs', { screen: 'History', params: { tab: 'earnings' } });
   };
 
-  const handleViewTransactions = () => {
-    // Navigate to History tab with earnings view
-    // @ts-ignore - nested navigation params
-    navigation.navigate('MainTabs', { screen: 'History', params: { tab: 'earnings' } });
+  const handleRefresh = async () => {
+    await getDriverBalance();
+    onRefresh?.();
   };
 
   if (loading) {
@@ -89,40 +45,40 @@ const DriverBalanceCard: React.FC<DriverBalanceCardProps> = ({ onRefresh, compac
     );
   }
 
-  if (error || !balanceData) {
-    return (
-      <Card style={styles.container}>
-        <Text style={styles.errorText}>{error || 'No data available'}</Text>
-      </Card>
-    );
-  }
-
-  const { current_balance, today_summary, limits, status } = balanceData;
-  const isNearLimit = current_balance.cash_in_hand >= limits.daily_limit * 0.8;
-  const limitPercentage = (current_balance.cash_in_hand / limits.daily_limit) * 100;
+  // Use balance from context or driver profile data
+  const totalEarnings = balance?.todayEarnings || driver?.totalEarnings || 0;
+  const totalDeliveries = balance?.totalDeliveries || driver?.totalDeliveries || 0;
+  const successRate = balance?.successRate || driver?.successRate || 0;
+  const averageRating = balance?.averageRating || driver?.rating || 0;
+  const todayCompletedOrders = balance?.todayCompletedOrders || 0;
 
   if (compact) {
     return (
-      <Card style={styles.compactContainer} onPress={handleViewTransactions}>
+      <Card style={styles.compactContainer} onPress={handleViewEarnings}>
         <View style={styles.compactHeader}>
           <View style={styles.balanceIcon}>
             <Ionicons name="wallet" size={24} color={theme.colors.primary} />
           </View>
           <View style={styles.compactInfo}>
-            <Text style={styles.compactLabel}>Cash in Hand</Text>
+            <Text style={styles.compactLabel}>Today's Earnings</Text>
             <Text style={styles.compactAmount}>
-              {formatCurrency(current_balance.cash_in_hand, currency)}
+              {formatCurrency(totalEarnings, currency)}
             </Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color={theme.colors.textSecondary} />
         </View>
-        
-        {status.is_blocked && (
-          <View style={styles.blockedBadge}>
-            <Ionicons name="alert-circle" size={14} color={theme.colors.error} />
-            <Text style={styles.blockedText}>Blocked - Remit Cash</Text>
+
+        {/* Quick Stats Row */}
+        <View style={styles.quickStats}>
+          <View style={styles.quickStatItem}>
+            <Ionicons name="cube-outline" size={14} color={theme.colors.textSecondary} />
+            <Text style={styles.quickStatText}>{todayCompletedOrders} today</Text>
           </View>
-        )}
+          <View style={styles.quickStatItem}>
+            <Ionicons name="star" size={14} color="#FFC107" />
+            <Text style={styles.quickStatText}>{averageRating.toFixed(1)}</Text>
+          </View>
+        </View>
       </Card>
     );
   }
@@ -136,98 +92,60 @@ const DriverBalanceCard: React.FC<DriverBalanceCardProps> = ({ onRefresh, compac
             <Ionicons name="wallet" size={28} color={theme.colors.primary} />
           </View>
           <View>
-            <Text style={styles.headerTitle}>Cash Balance</Text>
-            <Text style={styles.headerSubtitle}>Financial Overview</Text>
+            <Text style={styles.headerTitle}>Earnings</Text>
+            <Text style={styles.headerSubtitle}>Performance Overview</Text>
           </View>
         </View>
         <Button
           variant="text"
           size="small"
           icon={<Ionicons name="refresh" size={20} />}
-          onPress={() => {
-            fetchBalanceData();
-            onRefresh?.();
-          }}
+          onPress={handleRefresh}
         />
       </View>
-
-      {/* Status Alert */}
-      {status.is_blocked && (
-        <View style={styles.alertContainer}>
-          <Ionicons name="alert-circle" size={20} color={theme.colors.error} />
-          <Text style={styles.alertText}>{status.block_reason}</Text>
-        </View>
-      )}
 
       {/* Balance Grid */}
       <View style={styles.balanceGrid}>
         <View style={styles.balanceItem}>
-          <Text style={styles.balanceLabel}>Cash in Hand</Text>
-          <Text style={[styles.balanceAmount, isNearLimit && styles.warningAmount]}>
-            {formatCurrency(current_balance.cash_in_hand, currency)}
+          <Text style={styles.balanceLabel}>Today's Earnings</Text>
+          <Text style={[styles.balanceAmount, styles.positiveAmount]}>
+            {formatCurrency(totalEarnings, currency)}
           </Text>
         </View>
-        
+
         <View style={styles.balanceItem}>
-          <Text style={styles.balanceLabel}>Company Owes</Text>
-          <Text style={[
-            styles.balanceAmount,
-            current_balance.earnings_balance > 0 && styles.positiveAmount
-          ]}>
-            {formatCurrency(current_balance.earnings_balance, currency)}
+          <Text style={styles.balanceLabel}>Total Deliveries</Text>
+          <Text style={styles.balanceAmount}>
+            {totalDeliveries}
           </Text>
         </View>
       </View>
 
-      {/* Daily Limit Progress */}
-      <View style={styles.limitSection}>
-        <View style={styles.limitHeader}>
-          <Text style={styles.limitLabel}>Daily Cash Limit</Text>
-          <Text style={styles.limitText}>
-            {formatCurrency(current_balance.cash_in_hand, currency, { compact: true })} / 
-            {formatCurrency(limits.daily_limit, currency, { compact: true })}
-          </Text>
-        </View>
-        <View style={styles.progressBar}>
-          <View 
-            style={[
-              styles.progressFill,
-              { width: `${Math.min(limitPercentage, 100)}%` },
-              isNearLimit && styles.warningProgress,
-              status.is_blocked && styles.errorProgress,
-            ]} 
-          />
-        </View>
-      </View>
-
-      {/* Today's Summary */}
+      {/* Performance Stats */}
       <View style={styles.todaySummary}>
-        <Text style={styles.todayTitle}>Today's Activity</Text>
+        <Text style={styles.todayTitle}>Performance</Text>
         <View style={styles.todayGrid}>
           <View style={styles.todayItem}>
-            <Ionicons name="arrow-down-circle" size={16} color={theme.colors.success} />
-            <Text style={styles.todayLabel}>Collected</Text>
+            <Ionicons name="checkmark-circle" size={16} color={theme.colors.success} />
+            <Text style={styles.todayLabel}>Success Rate</Text>
             <Text style={styles.todayAmount}>
-              {formatCurrency(today_summary.collections, currency, { compact: true })}
+              {successRate.toFixed(0)}%
             </Text>
           </View>
-          
+
           <View style={styles.todayItem}>
-            <Ionicons name="arrow-up-circle" size={16} color={theme.colors.primary} />
-            <Text style={styles.todayLabel}>Remitted</Text>
+            <Ionicons name="star" size={16} color="#FFC107" />
+            <Text style={styles.todayLabel}>Rating</Text>
             <Text style={styles.todayAmount}>
-              {formatCurrency(today_summary.remittances, currency, { compact: true })}
+              {averageRating.toFixed(1)}
             </Text>
           </View>
-          
+
           <View style={styles.todayItem}>
-            <Ionicons name="trending-up" size={16} color={theme.colors.info} />
-            <Text style={styles.todayLabel}>Net Change</Text>
-            <Text style={[
-              styles.todayAmount,
-              today_summary.net_change > 0 ? styles.positiveAmount : styles.negativeAmount
-            ]}>
-              {formatCurrency(today_summary.net_change, currency, { compact: true })}
+            <Ionicons name="bicycle" size={16} color={theme.colors.primary} />
+            <Text style={styles.todayLabel}>Today</Text>
+            <Text style={styles.todayAmount}>
+              {todayCompletedOrders} orders
             </Text>
           </View>
         </View>
@@ -236,21 +154,20 @@ const DriverBalanceCard: React.FC<DriverBalanceCardProps> = ({ onRefresh, compac
       {/* Actions */}
       <View style={styles.actions}>
         <Button
-          title="Remit Cash"
-          variant={isNearLimit ? 'primary' : 'outline'}
+          title="View Earnings"
+          variant="primary"
           size="medium"
-          icon={<Ionicons name="cash" size={18} color={isNearLimit ? theme.colors.white : theme.colors.primary} />}
-          onPress={handleRemitCash}
+          icon={<Ionicons name="stats-chart" size={18} color={theme.colors.white} />}
+          onPress={handleViewEarnings}
           style={styles.actionButton}
-          disabled={current_balance.cash_in_hand === 0}
         />
-        
+
         <Button
           title="History"
           variant="outline"
           size="medium"
           icon={<Ionicons name="time-outline" size={18} />}
-          onPress={handleViewTransactions}
+          onPress={handleViewEarnings}
           style={styles.actionButton}
         />
       </View>

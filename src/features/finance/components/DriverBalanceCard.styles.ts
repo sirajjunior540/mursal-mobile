@@ -193,4 +193,24 @@ export default StyleSheet.create({
     color: theme.colors.error,
     fontWeight: '500',
   },
+
+  // Quick stats row for compact view
+  quickStats: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    gap: theme.spacing.md,
+    marginTop: theme.spacing.sm,
+    paddingTop: theme.spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+  },
+  quickStatItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  quickStatText: {
+    fontSize: 12,
+    color: theme.colors.textSecondary,
+  },
 });
